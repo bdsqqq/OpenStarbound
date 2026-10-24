@@ -5,6 +5,10 @@
 #endif
 #include <cmath>
 #include "StarBehaviorLab.hpp"
+#include "StarTextProcessLab.hpp"
+#ifdef STAR_USE_RUST_TEXT_SCAN
+#include "StarRustTextScan.h"
+#endif
 #include "StarSha256Lab.hpp"
 #include "StarVlqLab.hpp"
 #include "StarBytesLab.hpp"
@@ -608,6 +612,8 @@ void ClientApplication::render() {
             TextPositioning(Vec2F(m_guiContext->windowSize()) * 0.5f + Vec2F(m_behaviorShellRoom ? -25 : -35, 70)));
         m_guiContext->clearTextStyle();
       }
+      if (m_behaviorTextScanRoom)
+        renderBehaviorTextScanFrame();
       renderBehaviorScenario();
     }
     LogMap::set("client_render_interface", strf(u8"{:05d}\u00b5s", Time::monotonicMicroseconds() - start));
@@ -1486,7 +1492,7 @@ void ClientApplication::validateBehaviorStorage() {
   if (scenario != "lighting-room" && scenario != "raycast-room" && scenario != "encoding-room"
       && scenario != "sha256-room" && scenario != "vlq-room" && scenario != "bytes-room"
       && scenario != "unicode-room" && scenario != "shell-room" && scenario != "jsonpath-room" && scenario != "assetpath-room"
-      && scenario != "random-room" && scenario != "jsonpatch-room")
+      && scenario != "random-room" && scenario != "jsonpatch-room" && scenario != "text-room")
     throw StarException("BehaviorLab: unsupported scenario");
   m_behaviorRaycastRoom = scenario == "raycast-room";
   m_behaviorEncodingRoom = scenario == "encoding-room";
@@ -1497,6 +1503,7 @@ void ClientApplication::validateBehaviorStorage() {
   m_behaviorShellRoom = scenario == "shell-room";
   m_behaviorJsonPathRoom = scenario == "jsonpath-room";
   m_behaviorJsonPatchRoom = scenario == "jsonpatch-room";
+  m_behaviorTextScanRoom = scenario == "text-room";
   m_behaviorAssetPathRoom = scenario == "assetpath-room";
   m_behaviorRandomMwcRoom = scenario == "random-room";
   if (config.getUInt("maxFrames", 1800) == 0 || config.getUInt("maxFrames", 1800) > 18000)
@@ -1619,7 +1626,7 @@ void ClientApplication::updateBehaviorScenario() {
       return;
     if (m_behaviorStage == 2) {
       Logger::info("BehaviorLab: {} completed (three acknowledged world frames)",
-          m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
+          m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
       m_behaviorPhase = 5;
       appController()->quit();
       return;
@@ -2727,6 +2734,87 @@ void ClientApplication::prepareBehaviorShellFrame() {
   m_renderData.foregroundOverlays.append(std::move(drawable));
 }
 
+void ClientApplication::renderBehaviorTextScanFrame() {
+  m_behaviorTextScanProof = Json();
+  if (!m_behaviorReady || BehaviorLab::hasPendingFrame() || !m_behaviorLightingCompleted || m_renderData.isFullbright)
+    return;
+  auto world = m_universeClient->worldClient();
+  if (!world || !world->inWorld())
+    return;
+
+  // Only this normal GUI draw is observed. Measurement, wrapping, and other UI
+  // must not manufacture parser receipts or glyph/color evidence.
+  m_guiContext->setTextStyle(TextStyle(), 1.0f);
+  m_guiContext->setDefaultFont();
+  auto counts = []() {
+    std::array<uint64_t, 3> result{};
+#ifdef STAR_USE_RUST_TEXT_SCAN
+    for (uint32_t i = 0; i < result.size(); ++i)
+      result[i] = star_text_scan_call_count(i);
+#endif
+    return result;
+  };
+  String const input = "^red;TEXT^reset;";
+  TextProcessLab::Recorder recorder;
+  auto before = counts();
+  {
+    TextProcessLab::Scope scope(recorder);
+    m_guiContext->renderText(input,
+        TextPositioning(Vec2F(m_guiContext->windowSize()) * 0.5f + Vec2F(-35, 70),
+            HorizontalAnchor::LeftAnchor, VerticalAnchor::TopAnchor));
+    recorder.completed = true;
+  }
+  auto after = counts();
+  m_guiContext->clearTextStyle();
+
+  auto hex = [](unsigned char const* bytes, size_t size) {
+    std::string result;
+    static char const digits[] = "0123456789abcdef";
+    for (size_t i = 0; i < size; ++i) {
+      result += digits[bytes[i] >> 4];
+      result += digits[bytes[i] & 15];
+    }
+    return String(std::move(result));
+  };
+  JsonArray events;
+  for (size_t i = 0; i < recorder.eventCount; ++i) {
+    auto const& event = recorder.events[i];
+    events.append(JsonObject{{"kind", event.kind == 0 ? "text" : "command"},
+        {"hex", hex(event.bytes.data(), event.size)}});
+  }
+  JsonArray glyphs;
+  for (size_t i = 0; i < recorder.glyphCount; ++i) {
+    auto const& glyph = recorder.glyphs[i];
+    glyphs.append(JsonObject{{"codepoint", glyph.codepoint},
+        {"rgba", JsonArray{glyph.rgba[0], glyph.rgba[1], glyph.rgba[2], glyph.rgba[3]}}});
+  }
+  JsonArray calls;
+  for (size_t i = 0; i < before.size(); ++i)
+    calls.append(after[i] - before[i]);
+  String backend = "cpp";
+  JsonArray expectedCalls{0, 0, 0};
+#ifdef STAR_USE_RUST_TEXT_SCAN
+  backend = "rust";
+  expectedCalls = JsonArray{1, 1, 2};
+#endif
+  JsonArray const expectedEvents{
+      JsonObject{{"kind", "command"}, {"hex", "726564"}},
+      JsonObject{{"kind", "text"}, {"hex", "54455854"}},
+      JsonObject{{"kind", "command"}, {"hex", "7265736574"}}};
+  bool valid = recorder.valid && recorder.completed && events == expectedEvents && calls == expectedCalls
+      && recorder.glyphCount == 4;
+  std::array<uint32_t, 4> const expectedCodepoints{{84, 69, 88, 84}};
+  for (size_t i = 0; i < recorder.glyphCount; ++i)
+    valid = valid && i < expectedCodepoints.size() && recorder.glyphs[i].codepoint == expectedCodepoints[i]
+        && recorder.glyphs[i].rgba == Vec4B(255, 73, 66, 255);
+  if (!valid)
+    throw StarException("BehaviorLab: text native callback/glyph/color/receipt mismatch");
+  m_behaviorTextScanProof = JsonObject{{"version", 1}, {"backend", backend},
+      {"inputHex", hex(reinterpret_cast<unsigned char const*>(input.utf8Ptr()), input.utf8Size())},
+      {"calls", std::move(calls)},
+      {"events", std::move(events)}, {"glyphs", std::move(glyphs)}, {"completed", recorder.completed}};
+}
+
 void ClientApplication::renderBehaviorScenario() {
   if (!m_behaviorReady || BehaviorLab::hasPendingFrame())
     return;
@@ -2765,7 +2853,7 @@ void ClientApplication::renderBehaviorScenario() {
       {"layout", "row-major-rgb-f32-bits"}, {"bits", std::move(lightmapBits)}};
   Json metadata = JsonObject{
       {"lightingDiagnostics", std::move(lightmapDiagnostic)},
-      {"scenario", m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
+      {"scenario", m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
       {"worldState", JsonObject{
           {"worldId", printWorldId(m_universeClient->clientContext()->playerWorldId())},
           {"worldSize", jsonFromVec2U(world->geometry().size())},
@@ -2800,6 +2888,11 @@ void ClientApplication::renderBehaviorScenario() {
       {"replicatedSettledUpdates", m_behaviorSettledFrames}, {"updateIndex", m_behaviorFrames},
       {"seed", BehaviorLab::configuration().getUInt("seed", 42)}
   };
+  if (m_behaviorTextScanRoom) {
+    if (m_behaviorTextScanProof.isNull())
+      throw StarException("BehaviorLab: text frame has no completed native render proof");
+    metadata = metadata.set("textScanProof", m_behaviorTextScanProof);
+  }
   if (m_behaviorRaycastRoom)
     metadata = metadata.set("raycastState", m_behaviorRaycastState);
   if (m_behaviorEncodingRoom) {

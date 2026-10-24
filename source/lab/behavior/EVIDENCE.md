@@ -201,3 +201,10 @@ other platforms, moving-gameplay replay, save/network/audio parity and performan
 `jsonpatch-room` loads two literal operation files through normal `assets.patch` and the first uncached `assets.json`. all seven handlers, seven searches, inverse traversal, nested rollback and whole-patch rollback produce the full independently checked JSON. native attempt/success/exception vectors distinguish20dispatch attempts/18successes/two caught test failures; the public whole-PATCH entry is not called by Assets. observed RGB64/128/192, scale4 and labelPATCH drive a normal64×64image and Font label.
 
 parent isolated/combined fixtures and all eleven prior combined scenarios pass exact native frames/state/receipts; historical pixels remain unchanged. evidence, commands, source-bound oracle reports, invalid-metadata/known-failure controls and limitations: [JSON patch candidate](../json-patch/CANDIDATE_EVIDENCE.md). script modes `jsonpatch`/`jsonpatch-combined`; selector defaults OFF. no universal/performance/OOM/save/network/playback claim.
+
+
+## text command scanner
+
+`text-room` sends `^red;TEXT^reset;` through normal GUI Font rendering. native per-render receipts observe one Rust scan, one text callback, two command callbacks and actual foreground codepoints/colors; CPP counts are zero. the observed red quad color is `[255,73,66,255]`, not generic pure red; framebuffer antialiasing may blend it. fixed-storage observation never supplies proxy pixels or replaces the scanner.
+
+new isolated/combined and all twelve earlier scenarios pass exact frames/state/receipts; twelve historical pixel sequences remain unchanged. [text-scanner evidence](../text-scan/EVIDENCE.md) records independent original streams, invalid-metadata/overlap/mutation/reentry/exception tests, known-failure controls, native seals and limits. modes `textscan` / `textscan-combined`; default selector OFF. only `Text::processText` migrated, not Font, wrapping, stripping or the whole text module.

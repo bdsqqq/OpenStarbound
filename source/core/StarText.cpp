@@ -1,6 +1,11 @@
 #include "StarText.hpp"
 #include "StarJsonExtra.hpp"
 #include <re2/re2.h>
+#ifdef STAR_USE_RUST_TEXT_SCAN
+#include "StarRustTextScan.h"
+#include <exception>
+#include <stdexcept>
+#endif
 
 namespace Star {
 
@@ -43,6 +48,45 @@ namespace Text {
     return String(std::move(result));
   }
 
+#ifdef STAR_USE_RUST_TEXT_SCAN
+  namespace {
+    struct TextScanContext {
+      std::string_view bytes;
+      TextCallback& text;
+      CommandsCallback& commands;
+      std::exception_ptr pending;
+    };
+    uint32_t textScanHost(void* opaque, uint32_t kind, uint64_t offset, uint64_t length) noexcept {
+      if (!opaque)
+        return 3;
+      auto& context = *static_cast<TextScanContext*>(opaque);
+      if (context.pending || kind > 1 || offset > context.bytes.size() || length > context.bytes.size() - offset)
+        return 3;
+      try {
+        // Construct the same native StringView from the current span, without
+        // copying callbacks or bytes. Empty text callbacks throw only here.
+        auto span = context.bytes.substr(static_cast<size_t>(offset), static_cast<size_t>(length));
+        return (kind == 0 ? context.text(span) : context.commands(span)) ? 0 : 1;
+      } catch (...) {
+        context.pending = std::current_exception();
+        return 2;
+      }
+    }
+  }
+
+  bool processText(StringView text, TextCallback textFunc, CommandsCallback commandsFunc, bool includeCommandSides) {
+    TextScanContext context{text.utf8(), textFunc, commandsFunc, {}};
+    uint8_t result = 0;
+    auto status = star_text_scan_process(reinterpret_cast<uint8_t const*>(context.bytes.data()),
+        context.bytes.size(), commandsFunc ? 1 : 0, includeCommandSides ? 1 : 0,
+        textScanHost, &context, &result);
+    if (status == 1 && context.pending)
+      std::rethrow_exception(context.pending);
+    if (status != 0 || context.pending)
+      throw std::runtime_error("Rust text scanner protocol failure");
+    return result != 0;
+  }
+#else
   bool processText(StringView text, TextCallback textFunc, CommandsCallback commandsFunc, bool includeCommandSides) {
     std::string_view str = text.utf8();
     size_t start = 0;
@@ -77,6 +121,7 @@ namespace Text {
       return true;
     }
   }
+#endif
 }
 
 }

@@ -32,6 +32,7 @@ import jsonpath_proof
 import assetpath_proof
 import random_mwc_proof
 import json_patch_proof
+import text_scan_proof
 
 ROOT = Path(__file__).resolve().parents[3]
 BUILD = ROOT / "build"
@@ -41,7 +42,7 @@ ASSET_OVERLAYS = {
     "behavior-fixture": ROOT / "source/lab/behavior/assets",
 }
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,95}\Z")
-SCENARIOS = ("lighting-room", "raycast-room", "encoding-room", "sha256-room", "vlq-room", "bytes-room", "unicode-room", "shell-room", "jsonpath-room", "assetpath-room", "random-room", "jsonpatch-room")
+SCENARIOS = ("lighting-room", "raycast-room", "encoding-room", "sha256-room", "vlq-room", "bytes-room", "unicode-room", "shell-room", "jsonpath-room", "assetpath-room", "random-room", "jsonpatch-room", "text-room")
 MAX_PIXELS = 16_777_216
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
 
@@ -207,6 +208,11 @@ def semantic_world_state(receipt: dict) -> dict:
             native["jsonPatchProof"] = json_patch_proof.validate(receipt)
         except ValueError as error:
             raise LabError(str(error)) from error
+    if receipt.get("scenario") == "text-room":
+        try:
+            native["textScanProof"] = text_scan_proof.validate(receipt)
+        except ValueError as error:
+            raise LabError(str(error)) from error
     # A native declared object supplements, rather than weakens, the frozen
     # flat schema: retain both when the driver supplies both representations.
     return native if state is None else {"declared": state, "native": native}
@@ -302,10 +308,15 @@ def captures(directory: Path) -> dict:
                 json_patch_proof.visible(frame, receipt)
             except ValueError as error:
                 raise LabError(str(error)) from error
+        if receipt["scenario"] == "text-room":
+            try:
+                text_scan_proof.visible(frame, receipt)
+            except ValueError as error:
+                raise LabError(str(error)) from error
         result[name] = {"receipt": receipt, "png": pngs[name], "dimensions": list(frame.size),
                         "pngSha256": sha(pngs[name]), "receiptSha256": sha(receipts[name]),
                         "pixelsSha256": hashlib.sha256(frame.tobytes()).hexdigest()}
-    if scenarios in ({"lighting-room"}, {"encoding-room"}, {"sha256-room"}, {"vlq-room"}, {"bytes-room"}, {"unicode-room"}, {"shell-room"}, {"jsonpath-room"}, {"assetpath-room"}, {"random-room"}, {"jsonpatch-room"}):
+    if scenarios in ({"lighting-room"}, {"encoding-room"}, {"sha256-room"}, {"vlq-room"}, {"bytes-room"}, {"unicode-room"}, {"shell-room"}, {"jsonpath-room"}, {"assetpath-room"}, {"random-room"}, {"jsonpatch-room"}, {"text-room"}):
         validate_lighting_sequence(result)
         if scenarios == {"encoding-room"}:
             proofs = [encoding_proof.validate(frame["receipt"]) for frame in result.values()]
@@ -347,6 +358,10 @@ def captures(directory: Path) -> dict:
             proofs = [json_patch_proof.validate(frame["receipt"]) for frame in result.values()]
             if any(proof != proofs[0] for proof in proofs[1:]):
                 raise LabError("JSON patch actual handler/rollback observations changed across stages")
+        if scenarios == {"text-room"}:
+            proofs = [text_scan_proof.validate(frame["receipt"]) for frame in result.values()]
+            if any(proof != proofs[0] for proof in proofs[1:]):
+                raise LabError("actual text scanner events/glyphs changed across stages")
     else:
         validate_raycast_sequence(result)
     return result
@@ -590,7 +605,13 @@ def pair_compare(reference: Path, candidate: Path, output: Path, same_backend=Fa
                     row["errors"].append(f"{field} differs")
             if ref_meta["scenario"] != cand_meta["scenario"]:
                 row["errors"].append("scenario differs")
-            if ref_meta["scenario"] == "jsonpatch-room":
+            if ref_meta["scenario"] == "text-room":
+                wanted = "cpp" if same_backend else "rust"
+                if ref_meta["textScanProof"]["backend"] != "cpp" or cand_meta["textScanProof"]["backend"] != wanted:
+                    row["errors"].append("expected C++ reference and correct text scanner backend")
+                if ref_meta["lightingBackend"] != "cpp" or (same_backend and cand_meta["lightingBackend"] != "cpp"):
+                    row["errors"].append("expected C++ reference lighting")
+            elif ref_meta["scenario"] == "jsonpatch-room":
                 wanted = "cpp" if same_backend else "rust"
                 if ref_meta["jsonPatchProof"]["assets"]["backend"] != "cpp" or cand_meta["jsonPatchProof"]["assets"]["backend"] != wanted:
                     row["errors"].append("expected C++ reference and correct JSON patch backend")

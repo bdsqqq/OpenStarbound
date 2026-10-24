@@ -4,3 +4,5 @@ lib/** linguist-vendored=true
 source/lab/encode/StarEncode.original.cpp -whitespace
 source/lab/asset-path/StarAssetPath.original.hpp -whitespace
 source/lab/asset-path/StarAssetPath.reference.hpp -whitespace
+source/lab/text-scan/StarText.original.cpp -whitespace
+source/lab/text-scan/StarText.reference.cpp -whitespace

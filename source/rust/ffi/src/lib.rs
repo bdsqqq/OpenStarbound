@@ -1,5 +1,8 @@
 //! The engine's single Rust static archive owns the unmangled C ABI exports.
 //! Kernels remain rlibs so linking another kernel cannot add another Rust runtime.
+mod text_scan;
+pub use text_scan::{star_text_scan_call_count, star_text_scan_process, StarTextScanHost};
+
 mod random_mwc;
 pub use random_mwc::{
     star_random_mwc_add_entropy, star_random_mwc_call_count, star_random_mwc_init,

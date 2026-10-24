@@ -1,5 +1,6 @@
 #include "StarTextPainter.hpp"
 #include "StarJsonExtra.hpp"
+#include "StarTextProcessLab.hpp"
 
 namespace Star {
 
@@ -429,6 +430,8 @@ RectF TextPainter::doRenderLine(StringView text, TextPositioning const& position
   String escapeCode;
   RectF bounds = RectF::withSize(pos.pos, Vec2F());
   Text::TextCallback textCallback = [&](StringView text) {
+    if (reallyRender)
+      TextProcessLab::event(0, text);
     for (String::Char c : text) {
       if (charLimit) {
         if (*charLimit == 0)
@@ -444,6 +447,8 @@ RectF TextPainter::doRenderLine(StringView text, TextPositioning const& position
   };
 
   Text::CommandsCallback commandsCallback = [&](StringView commands) {
+    if (reallyRender)
+      TextProcessLab::event(1, commands);
     applyCommands(commands);
     return true;
   };
@@ -496,6 +501,7 @@ RectF TextPainter::doRenderGlyph(String::Char c, TextPositioning const& position
       renderGlyph(c, pos, m_backPrimitives, m_renderSettings.fontSize, 1, m_renderSettings.color, &m_renderSettings.backDirectives);
 
     auto& output = (hasShadow || hasBackDirectives) ? m_frontPrimitives : m_renderer->immediatePrimitives(); 
+    TextProcessLab::ForegroundScope foregroundScope;
     renderGlyph(c, pos, output, m_renderSettings.fontSize, 1, m_renderSettings.color, directives);
   }
 
@@ -522,6 +528,7 @@ void TextPainter::renderGlyph(String::Char c, Vec2F const& screenPos, List<Rende
     color[0] = color[1] = color[2] = 255;
   out.emplace_back(std::in_place_type_t<RenderQuad>(),
     glyphTexture.texture, Vec2F::round(screenPos + glyphTexture.offset * scale), scale, color, 0.0f);
+  TextProcessLab::glyph(c, color);
 }
 
 FontPtr TextPainter::loadFont(String const& fontPath, Maybe<String> fontName) {

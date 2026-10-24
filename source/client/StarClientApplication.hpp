@@ -96,6 +96,7 @@ private:
   // never mutate the scene while the SDL host still owns its pending frame.
   void updateBehaviorScenario();
   void renderBehaviorScenario();
+  void renderBehaviorTextScanFrame();
   void prepareBehaviorRaycastFrame();
   void prepareBehaviorEncodingFrame();
   void prepareBehaviorSha256Frame();
@@ -118,6 +119,8 @@ private:
   bool m_behaviorSha256Room = false;
   bool m_behaviorVlqRoom = false;
   bool m_behaviorBytesRoom = false;
+  bool m_behaviorTextScanRoom = false;
+  Json m_behaviorTextScanProof;
   bool m_behaviorJsonPatchRoom = false;
   Json m_behaviorJsonPatchProof;
   bool m_behaviorJsonPathRoom = false;
