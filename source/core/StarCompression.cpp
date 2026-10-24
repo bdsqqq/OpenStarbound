@@ -1,6 +1,9 @@
 #include "StarCompression.hpp"
 #include "StarFormat.hpp"
 #include "StarLexicalCast.hpp"
+#ifdef STAR_USE_RUST_COMPRESSION
+#include "StarCompressionHost.hpp"
+#endif
 
 #include <zlib-ng.h>
 #include <errno.h>
@@ -9,6 +12,10 @@
 namespace Star {
 
 void compressData(ByteArray const& in, ByteArray& out, CompressionLevel compression) {
+#ifdef STAR_USE_RUST_COMPRESSION
+  CompressionHost::NativeContext context(in, out, compression);
+  CompressionHost::run(context);
+#else
   out.clear();
 
   if (in.empty())
@@ -43,6 +50,7 @@ void compressData(ByteArray const& in, ByteArray& out, CompressionLevel compress
     throw IOException(strf("Internal error in uncompressData, deflate_res is {}", deflate_res));
 
   out.append((char const*)tempBuffer.get(), BUFSIZE - strm.avail_out);
+#endif
 }
 
 ByteArray compressData(ByteArray const& in, CompressionLevel compression) {
@@ -52,6 +60,10 @@ ByteArray compressData(ByteArray const& in, CompressionLevel compression) {
 }
 
 void uncompressData(const char* in, size_t inLen, ByteArray& out, size_t limit) {
+#ifdef STAR_USE_RUST_COMPRESSION
+  CompressionHost::NativeContext context(SC_INFLATE, in, inLen, out, limit);
+  CompressionHost::run(context);
+#else
   out.clear();
 
   if (!inLen)
@@ -94,6 +106,7 @@ void uncompressData(const char* in, size_t inLen, ByteArray& out, size_t limit) 
     throw IOException(strf("Internal error in uncompressData, inflate_res is {}", inflate_res));
 
   out.append((char const*)tempBuffer.get(), BUFSIZE - strm.avail_out);
+#endif
 }
 
 ByteArray uncompressData(const char* in, size_t inLen, size_t limit) {
@@ -111,6 +124,10 @@ ByteArray uncompressData(ByteArray const& in, size_t limit) {
 }
 
 void uncompressDataGzip(const char* in, size_t inLen, ByteArray& out, size_t limit) {
+#ifdef STAR_USE_RUST_COMPRESSION
+  CompressionHost::NativeContext context(SC_GZIP, in, inLen, out, limit);
+  CompressionHost::run(context);
+#else
   out.clear();
 
   if (!inLen)
@@ -153,6 +170,7 @@ void uncompressDataGzip(const char* in, size_t inLen, ByteArray& out, size_t lim
     throw IOException(strf("Internal error in uncompressDataGzip, inflate_res is {}", inflate_res));
 
   out.append((char const*)tempBuffer.get(), BUFSIZE - strm.avail_out);
+#endif
 }
 
 ByteArray uncompressDataGzip(const char* in, size_t inLen, size_t limit) {

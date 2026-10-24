@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Frozen native calibration. No Cargo, game, or production writes."""
-import argparse,hashlib,json,os,shlex,subprocess,zlib,gzip,sys
+import argparse,hashlib,json,os,re,shlex,subprocess,zlib,gzip,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[3];HERE=Path(__file__).resolve().parent;REV='038b6fd9'
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def main():
- p=argparse.ArgumentParser();p.add_argument('--output',required=True,type=Path);a=p.parse_args();out=a.output.absolute();base=ROOT/'build/compression-lab'
+ p=argparse.ArgumentParser();p.add_argument('--output',required=True,type=Path);p.add_argument('--backend',choices=['cpp','rust'],default='cpp');a=p.parse_args();out=a.output.absolute();base=ROOT/'build/compression-lab'
+ rust=a.backend=='rust';rust_archive=ROOT/'build/compression-rust/target/release/libstar_engine_ffi.a'
+ if rust and not rust_archive.is_file():p.error('canonical release Rust archive required')
  if not out.is_relative_to(base) or out==base or out.exists() or any(x.is_symlink() for x in [out,*out.parents]):p.error('fresh owned nonsymlink output required')
  out.mkdir(parents=True);commands=[];negative=[];runtime_receipts=[];generated_source_receipts={}
  def gate(ext,raw,adapt):
@@ -14,7 +16,15 @@ def main():
   if raw!=orig or adapt!=want:raise ValueError('freeze drift')
  for ext in ['cpp','hpp']:
   raw=(HERE/('StarCompression.original.'+ext)).read_bytes();ref=(HERE/('StarCompression.reference.'+ext)).read_bytes();gate(ext,raw,ref)
-  if (ROOT/('source/core/StarCompression.'+ext)).read_bytes()!=raw:raise ValueError('phase1 production drift')
+  current=(ROOT/('source/core/StarCompression.'+ext)).read_bytes()
+  if ext=='cpp' and current!=raw:
+   # Reconstruct the COMPLETE OFF translation unit, not selected facade snippets.
+   pattern=rb'#if(?:def STAR_USE_RUST_COMPRESSION| STAR_USE_RUST_COMPRESSION)\n(.*?)#else\n(.*?)#endif\n'
+   current,includes=re.subn(rb'#if(?:def STAR_USE_RUST_COMPRESSION| STAR_USE_RUST_COMPRESSION)\n(?:#include [^\n]+\n)+#endif\n',b'',current)
+   if includes!=1:raise ValueError('expected one guarded include block')
+   current,count=re.subn(pattern,lambda m:m[2],current,flags=re.S)
+   if count!=3:raise ValueError('expected exactly three guarded controllers')
+  if current!=raw:raise ValueError('complete OFF reconstruction/header drift')
   for label,r,d in [('raw',raw+b' ',ref),('adapt',raw,ref+b' ')]:
    try:gate(ext,r,d)
    except ValueError:negative.append(label+'-'+ext)
@@ -29,7 +39,12 @@ def main():
  objs=[cm/x for x in shlex.split(lines[i].split(': ',1)[1])[1:] if x.endswith('.o') and x.startswith(('core/','extern/')) and not x.endswith('/StarCompression.cpp.o')]
  libs=shlex.split(next(x.split(' = ',1)[1] for x in lines[i+1:i+15] if x.startswith('  LINK_LIBRARIES = ')));libs=[str(cm/x) if x.endswith('.a') and not Path(x).is_absolute() else x for x in libs]
  def run(cmd,name):
-  commands.append(shlex.join(map(str,cmd)));r=subprocess.run(list(map(str,cmd)),cwd=ROOT,capture_output=True,timeout=90);(out/(name+'.log')).write_bytes((commands[-1]+'\n').encode()+r.stdout+r.stderr);return r
+  executable=Path(cmd[0]);bound=sha(executable) if executable.parent==out and executable.is_file() else None
+  commands.append(shlex.join(map(str,cmd)));r=subprocess.run(list(map(str,cmd)),cwd=ROOT,capture_output=True,timeout=90);(out/(name+'.log')).write_bytes((commands[-1]+'\n').encode()+r.stdout+r.stderr)
+  if bound is not None:
+   if sha(executable)!=bound:raise RuntimeError('executed binary drift '+name)
+   runtime_receipts.append(dict(name=name,binary=str(executable),before=bound,after=sha(executable),returncode=r.returncode,stream_sha256=hashlib.sha256(r.stdout).hexdigest()))
+  return r
  # Independent producers, not a compressed-byte golden for installed zlib-ng.
  cases=[];anchors={};error_anchors={}
  def add(mode,facade,data,limit=0,level=5,alias=0,length=None,expect=None):
@@ -73,16 +88,17 @@ def main():
  for facade in range(4):add(1,facade,dictionary)
  fixture=out/'cases.tsv';fixture.write_text('\n'.join(' '.join(map(str,c)) for c in cases)+'\n');(out/'anchors.json').write_text(json.dumps(dict(success=anchors,error=error_anchors),sort_keys=True))
  sources=[HERE/'lab.cpp',HERE/'StarCompression.reference.cpp',ROOT/'source/core/StarCompression.cpp',HERE/'StarCompression.original.cpp']
- tracked=[Path(sys.executable).resolve(),Path(zlib.__file__),Path(gzip.__file__),HERE/'run.py',*sources,HERE/'StarCompression.original.hpp',HERE/'StarCompression.reference.hpp',db,cm/'build.ninja',Path(recipe[0]).resolve(),fixture,out/'anchors.json',*objs,*[Path(x) for x in libs if x.endswith('.a')]]
+ tracked=[*([rust_archive,*sorted((ROOT/'source/rust').rglob('*.rs'))] if rust else []),Path(sys.executable).resolve(),Path(zlib.__file__),Path(gzip.__file__),HERE/'run.py',*sources,HERE/'StarCompression.original.hpp',HERE/'StarCompression.reference.hpp',db,cm/'build.ninja',Path(recipe[0]).resolve(),fixture,out/'anchors.json',*objs,*[Path(x) for x in libs if x.endswith('.a')]]
  for n,src in enumerate(sources):
-  dep=out/(str(n)+'.d');r=run([recipe[0],*flags,'-I'+str(HERE),'-M','-MF',dep,src],'deps'+str(n))
+  dep=out/(str(n)+'.d');r=run([recipe[0],*flags,'-I'+str(HERE),*(['-DSTAR_USE_RUST_COMPRESSION=1','-DLAB_RUST=1'] if rust else []),'-M','-MF',dep,src],'deps'+str(n))
   if r.returncode:raise RuntimeError('dependency scan failure')
   tracked += [Path(x) if Path(x).is_absolute() else ROOT/x for x in shlex.split(dep.read_text().replace('\\\n',' ').split(':',1)[1])]
  tracked=list(dict.fromkeys(x.resolve() for x in tracked));before={str(x):sha(x) for x in tracked};(out/'before.json').write_text(json.dumps(before,indent=2))
  native=out/'native-core.a'
  if run(['/usr/bin/ar','rcs',native,*objs],'archive').returncode:raise RuntimeError('private archive failure')
- def compile(name,src,reference=False,lab=None):
-  binary=out/name;source_before=sha(src);r=run([recipe[0],*flags,'-I'+str(HERE),*(['-DLAB_REFERENCE=1'] if reference else []),lab or HERE/'lab.cpp',src,native,*libs,'-Wl,-dead_strip','-o',binary],name+'-compile')
+ def compile(name,src,reference=False,lab=None,selected=False):
+  extra=['-DSTAR_USE_RUST_COMPRESSION=1','-DLAB_RUST=1'] if selected and rust else []
+  binary=out/name;source_before=sha(src);r=run([recipe[0],*flags,'-I'+str(HERE),*extra,*(['-DLAB_REFERENCE=1'] if reference else []),lab or HERE/'lab.cpp',src,native,*([rust_archive] if selected and rust else []),*libs,'-Wl,-dead_strip','-o',binary],name+'-compile')
   if r.returncode:raise RuntimeError('compile failure '+name+' (not a credited negative)')
   if sha(src)!=source_before:raise RuntimeError('compile source drift')
   generated_source_receipts[str(src)]={'before':source_before,'after':sha(src)}
@@ -95,7 +111,7 @@ def main():
   runtime_receipts.append(dict(name=name,binary=str(binary),before=before_binary,after=sha(binary),stream_sha256=hashlib.sha256(r.stdout).hexdigest()))
   return r.stdout
  archive_before=sha(native)
- binary=compile('candidate',ROOT/'source/core/StarCompression.cpp');baseline=observe(binary,'baseline');reference=compile('reference',HERE/'StarCompression.reference.cpp',True);ref=observe(reference,'reference');independent=compile('original',HERE/'StarCompression.original.cpp');ind=observe(independent,'original')
+ binary=compile('candidate',ROOT/'source/core/StarCompression.cpp',selected=True);baseline=observe(binary,'baseline');reference=compile('reference',HERE/'StarCompression.reference.cpp',True);ref=observe(reference,'reference');independent=compile('original',HERE/'StarCompression.original.cpp');ind=observe(independent,'original')
  def check(stream):
   if stream!=ref:raise ValueError('COMPARISON ordered native stream')
   rows={x.split(b'\t')[0].decode():x.split(b'\t') for x in stream.splitlines()}
@@ -109,6 +125,35 @@ def main():
    if mode==0 and not alias and length and not rows[id][1]:
     if zlib.decompress(bytes.fromhex(rows[id][2].decode()))!=bytes.fromhex(encoded):raise ValueError('COMPARISON independent compressed payload '+id)
  check(baseline);check(ind);check(observe(binary,'repeat'))
+ if hashlib.sha256(ind).hexdigest()!='bcf3f6fe8dd2f31fb896743ca555a37bc56222d18c801713b57d5296216d5582':raise RuntimeError('frozen original ordered stream drift')
+ if rust:
+  # A zeroed receipt must fail at runtime even if byte behavior is unchanged.
+  receipt_lab=out/'suppressed-receipt.cpp';receipt_lab.write_bytes((HERE/'lab.cpp').read_bytes().replace(b'star_compression_call_count(k,e)-counters[k][e]',b'uint64_t(0)'))
+  bad=compile('suppressed-receipt',ROOT/'source/core/StarCompression.cpp',lab=receipt_lab,selected=True)
+  result=run([bad,fixture],'suppressed-receipt-run')
+  if result.returncode==0 or b'COMPARISON selected controller TLS receipt' not in result.stderr:raise RuntimeError('receipt suppression not detected at runtime')
+  negative.append('selected-receipt-suppression')
+  production=(ROOT/'source/core/StarCompression.cpp').read_bytes();host=(ROOT/'source/core/StarCompressionHost.hpp').read_bytes()
+  mutations=[('clear',b'x.output.clear();',b'(void)0;'),('errorclass',b'throw IOException(',b'throw StarException('),('hoststatus',b'return SC_OK;',b'return SC_HOST_INVALID;')]
+  for name,old,new in mutations:
+   if old not in host:raise RuntimeError('selected host mutant anchor missing '+name)
+   header=out/(name+'-host.hpp');header.write_bytes(host.replace(old,new));header_before=sha(header)
+   source=out/(name+'-selected.cpp');source.write_bytes(production.replace(b'"StarCompressionHost.hpp"',('"'+str(header)+'"').encode()))
+   bad=compile(name+'-selected',source,selected=True);result=run([bad,fixture],name+'-selected-run')
+   if sha(header)!=header_before:raise RuntimeError('generated host header drift')
+   generated_source_receipts[str(header)]={'before':header_before,'after':sha(header)}
+   if result.returncode:
+    if result.returncode!=1 or b'COMPARISON selected controller TLS receipt' not in result.stderr:raise RuntimeError('selected mutant non-comparison failure '+name)
+   else:
+    try:check(result.stdout)
+    except ValueError:pass
+    else:raise RuntimeError('selected host mutant escaped '+name)
+   negative.append('selected-host-'+name)
+  source=out/'dispatch-selected.cpp';source.write_bytes(production.replace(b'CompressionHost::run(context);',b'context.kind = SC_INFLATE; CompressionHost::run(context);',1))
+  # Use an empty first case: wrong dispatch is observed before native input access.
+  bad=compile('dispatch-selected',source,selected=True);result=run([bad,fixture],'dispatch-selected-run')
+  if result.returncode!=1 or b'COMPARISON selected controller TLS receipt' not in result.stderr:raise RuntimeError('selected dispatch mutant not cleanly detected')
+  negative.append('selected-dispatch')
  raw=(HERE/'StarCompression.original.cpp').read_bytes()
  mutants=[('clear-order',b'  out.clear();\n\n  if (in.empty())\n    return;',b'  if (in.empty())\n    return;\n  out.clear();'),('full-limit',b'out.size() >= limit',b'out.size() > limit'),('discard-partial',b'  if (inflate_res != Z_STREAM_END)\n    throw',b'  if (inflate_res != Z_STREAM_END) out.clear();\n  if (inflate_res != Z_STREAM_END)\n    throw'),('final-limit',b'  out.append((char const*)tempBuffer.get(), BUFSIZE - strm.avail_out);',b'  if (limit && out.size() + BUFSIZE - strm.avail_out >= limit) throw IOException("wrong final limit");\n  out.append((char const*)tempBuffer.get(), BUFSIZE - strm.avail_out);')]
  for name,old,new in mutants:
@@ -146,6 +191,6 @@ def main():
   try:identity(binding,stream_hash)
   except ValueError:negative.append(label)
   else:raise RuntimeError('provenance control escaped')
- report=dict(status='PASS',revision=REV,cases=len(cases),independent_anchors=len(anchors)+len(error_anchors),negative_controls=negative,ordered_observations_sha256=hashlib.sha256(baseline).hexdigest(),bindings=before,executables=executables,runtime_receipts=runtime_receipts,generated_source_receipts=generated_source_receipts,native_archive_sha256=sha(native),commands=commands,python_zlib=zlib.ZLIB_RUNTIME_VERSION,native_zlib_ng=codec_version,python_version=sys.version,limits=['phase1 native CPP only; no Rust or game claim','finite corpus, no actual OOM injection or C API call traces','wrong deflate error text is source-only, not forced here','virtual size narrowing probes only raw zlib/gzip void controllers; no 4GiB allocation or returning facades','alias probes only reserved stable allocations, compressed input <= one slab','no CompressedFile methods invoked'])
+ report=dict(status='PASS',backend=a.backend,revision=REV,cases=len(cases),independent_anchors=len(anchors)+len(error_anchors),negative_controls=negative,ordered_observations_sha256=hashlib.sha256(baseline).hexdigest(),bindings=before,executables=executables,runtime_receipts=runtime_receipts,generated_source_receipts=generated_source_receipts,native_archive_sha256=sha(native),commands=commands,python_zlib=zlib.ZLIB_RUNTIME_VERSION,native_zlib_ng=codec_version,python_version=sys.version,limits=['selected production controller backend; no game claim','finite corpus, no actual OOM injection or C API call traces','wrong deflate error text is source-only, not forced here','virtual size narrowing probes only raw zlib/gzip void controllers; no 4GiB allocation or returning facades','alias probes only reserved stable allocations, compressed input <= one slab','no CompressedFile methods invoked'])
  (out/'observations.tsv').write_bytes(baseline);(out/'report.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps({k:v for k,v in report.items() if k not in ['bindings','commands','executables','runtime_receipts','generated_source_receipts']}))
 if __name__=='__main__':main()

@@ -25,6 +25,10 @@
 #include "StarJsonPatchLab.hpp"
 #include "StarAssetPathLab.hpp"
 #include "StarRandomMwcLab.hpp"
+#include "StarCompressionLab.hpp"
+#ifdef STAR_USE_RUST_COMPRESSION
+#include "StarRustCompression.h"
+#endif
 #ifdef STAR_USE_RUST_BYTES
 #include "StarRustBytes.h"
 #endif
@@ -71,6 +75,98 @@ Json JsonPathAssetProof;
 std::mutex AssetPathAssetProofMutex;
 Json AssetPathAssetRows = JsonObject{};
 Json AssetPathAssetProof;
+}
+
+namespace {
+std::mutex CompressionProofMutex;
+Json CompressionRows = JsonObject{};
+Json CompressionProof;
+bool CompressionZlibImage = false, CompressionGzipImage = false;
+Json CompressionGzipColor;
+thread_local String CompressionPath;
+String const CompressionGzipPath = "/opensb_data;bin;gzip;H4sIAAAAAAAC_-sM8HPn5ZLiYmBg4PX0cAkC0gIgzMEGJOU__08EUlKeLo4hFbeSPSw-PLBXnZF4pSGQ2Y1XQg-oJOL0f_m8kF5HoCoGT1c_l3VOCU0A1S_qHVMAAAA=";
+struct CompressionCounts {
+  uint64_t values[3][3]{};
+  CompressionCounts(bool enabled = true) {
+    if (!enabled) return;
+#ifdef STAR_USE_RUST_COMPRESSION
+    for (unsigned k = 0; k != 3; ++k)
+      for (unsigned e = 0; e != 3; ++e)
+        values[k][e] = star_compression_call_count(k, e);
+#endif
+  }
+  Json delta(CompressionCounts const& before) const {
+    JsonObject result;
+    char const* names[] = {"attempt", "success", "exception"};
+    for (unsigned e = 0; e != 3; ++e) {
+      JsonArray a;
+      for (unsigned k = 0; k != 3; ++k)
+        a.append(values[k][e] - before.values[k][e]);
+      result[names[e]] = std::move(a);
+    }
+    return result;
+  }
+};
+Json compressionRow(String const& path, ByteArray const& wire, ByteArray const& png, Json calls) {
+  String backend = "cpp";
+#ifdef STAR_USE_RUST_COMPRESSION
+  backend = "rust";
+#endif
+  return JsonObject{{"backend", backend}, {"path", path}, {"compressedHex", hexEncode(wire)},
+      {"pngHex", hexEncode(png)}, {"calls", std::move(calls)}};
+}
+bool compressionDecodeSelected() {
+  if (!std::getenv("STAR_BEHAVIOR_LAB"))
+    return false;
+  std::lock_guard<std::mutex> lock(CompressionProofMutex);
+  return CompressionPath == CompressionGzipPath
+      || (CompressionRows.contains("embed") && CompressionPath == CompressionRows.get("embed").getString("path"));
+}
+void compressionDecodedImage(String const& path, Image const& image) {
+  if (!std::getenv("STAR_BEHAVIOR_LAB"))
+    return;
+  std::lock_guard<std::mutex> lock(CompressionProofMutex);
+  bool gzip = path == CompressionGzipPath;
+  bool zlib = CompressionRows.contains("embed") && path == CompressionRows.get("embed").getString("path");
+  if (!gzip && !zlib)
+    return;
+  if (!compressionLabSource(image))
+    throw AssetException("BehaviorLab: compression decoded image mismatch");
+  if (gzip) {
+    CompressionGzipImage = true;
+    auto c = image.get(0, 0);
+    CompressionGzipColor = JsonArray{c[0], c[1], c[2], c[3]};
+  }
+  if (zlib) CompressionZlibImage = true;
+}
+}
+bool compressionLabSource(Image const& image) {
+  if (!std::getenv("STAR_BEHAVIOR_LAB") || image.size() != Vec2U(16, 16))
+    return false;
+  for (unsigned y = 0; y != 16; ++y)
+    for (unsigned x = 0; x != 16; ++x)
+      if (image.get(x, y) != Vec4B(96, 192, 224, 255))
+        return false;
+  return true;
+}
+String compressionLabEmbed(ByteArray const& png, EmbeddedCompressionMethod method) {
+  CompressionCounts before;
+  auto encoded = embedAndCompressData(png, method);
+  CompressionCounts after;
+  auto wire = base64Decode(encoded.split(";").last());
+  std::lock_guard<std::mutex> lock(CompressionProofMutex);
+  if (CompressionRows.contains("embed"))
+    throw AssetException("BehaviorLab: repeated compression producer");
+  CompressionRows = CompressionRows.set("embed", compressionRow("", wire, png, after.delta(before)));
+  return encoded;
+}
+void compressionLabEmbedPath(String const& path) {
+  std::lock_guard<std::mutex> lock(CompressionProofMutex);
+  CompressionRows = CompressionRows.set("embed", CompressionRows.get("embed").set("path", path));
+}
+Json compressionBehaviorAssetProof() {
+  std::lock_guard<std::mutex> lock(CompressionProofMutex);
+  return CompressionProof;
 }
 
 Json randomMwcBehaviorAssetProof() {
@@ -236,6 +332,12 @@ Assets::Assets(Settings settings, StringList assetSources) {
   if (captureSha256) {
     std::lock_guard<std::mutex> randomLock(RandomMwcAssetProofMutex);
     RandomMwcAssetProof = Json();
+    { std::lock_guard<std::mutex> compressionLock(CompressionProofMutex);
+      CompressionRows = JsonObject{};
+      CompressionProof = Json();
+      CompressionZlibImage = CompressionGzipImage = false;
+      CompressionGzipColor = Json();
+    }
     std::lock_guard<std::mutex> lock(Sha256AssetProofMutex);
     Sha256AssetProof = Json();
     std::lock_guard<std::mutex> vlqLock(VlqAssetProofMutex);
@@ -275,6 +377,19 @@ Assets::Assets(Settings settings, StringList assetSources) {
     // Lab-only, executing-thread receipts: no application dependency or config
     // access here, since these callbacks also run during Root construction.
     if (std::getenv("STAR_BEHAVIOR_LAB")) {
+      callbacks.registerCallback("recordCompressionLabProof", [](Json visual) {
+        std::lock_guard<std::mutex> lock(CompressionProofMutex);
+        if (!CompressionProof.isNull() || !CompressionRows.contains("embed")
+            || !CompressionRows.contains("zlib") || !CompressionRows.contains("gzip")
+            || !CompressionZlibImage || !CompressionGzipImage
+            || visual.size() != 3 || visual.getString("imagePath") != "/behaviorlab/compression-result.png"
+            || visual.getInt("scale") != 4 || visual.getString("label") != "COMPRESS")
+          throw AssetException("BehaviorLab: incomplete or invalid compression proof");
+        // Color is observed from the real returned gzip image, not Lua metadata.
+        CompressionProof = JsonObject{{"version", 1}, {"operations", CompressionRows},
+            {"visual", JsonObject{{"imagePath", visual.get("imagePath")}, {"scale", visual.get("scale")},
+                {"label", visual.get("label")}, {"color", CompressionGzipColor}}}};
+      });
       callbacks.registerCallback("recordRandomMwcLabProof", [](Json supplied) {
         std::lock_guard<std::mutex> lock(RandomMwcAssetProofMutex);
         if (!RandomMwcAssetProof.isNull())
@@ -1622,6 +1737,11 @@ EmbeddedAsset Assets::loadEmbeddedData(String const& basePath, bool const& asByt
     throw AssetException("Embedded data is disallowed by config.");
   // assumes asset in question has already been checked for '/opensb_data;' embedded header. excludes that.
 
+  struct PathScope {
+    String previous;
+    PathScope(String const& path) : previous(CompressionPath) { CompressionPath = path; }
+    ~PathScope() { CompressionPath = std::move(previous); }
+  } scope(basePath);
   auto split = basePath.split(";");
   return loadEmbeddedData(split,1,asBytes);
 }
@@ -1649,6 +1769,8 @@ EmbeddedAsset Assets::loadEmbeddedData(StringList const& split, int const& start
     }
     auto base64Data = base64Decode(split[startOffset+1+indexOff]);
     ByteArray bytes;
+    bool captureCompression = compressionDecodeSelected();
+    CompressionCounts compressionBefore(captureCompression);
     switch (method) {
       case EmbeddedCompressionMethod::None:
         bytes = base64Data;
@@ -1662,6 +1784,15 @@ EmbeddedAsset Assets::loadEmbeddedData(StringList const& split, int const& start
       case EmbeddedCompressionMethod::Zstd:
         bytes = ZstdCompression::decompress(base64Data);
         break;
+    }
+    CompressionCounts compressionAfter(captureCompression);
+    if (captureCompression && (method == EmbeddedCompressionMethod::Zlib || method == EmbeddedCompressionMethod::Gzip)) {
+      std::lock_guard<std::mutex> lock(CompressionProofMutex);
+      String key = method == EmbeddedCompressionMethod::Gzip ? "gzip" : "zlib";
+      if (CompressionRows.contains(key))
+        throw AssetException("BehaviorLab: repeated compression decoder");
+      CompressionRows = CompressionRows.set(key,
+          compressionRow(CompressionPath, base64Data, bytes, compressionAfter.delta(compressionBefore)));
     }
     if (asBytes) {
       // output should be bytes, so just return them directly
@@ -1977,6 +2108,7 @@ shared_ptr<Assets::AssetData> Assets::loadImage(AssetPath const& path) const {
         } else {
           throw AssetException("Embedded image is of wrong type");
         }
+        compressionDecodedImage(path.basePath, *imageData->image);
         return imageData;
       });
     } else {

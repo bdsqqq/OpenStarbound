@@ -108,6 +108,7 @@ private:
   void prepareBehaviorJsonPatchFrame();
   void prepareBehaviorAssetPathFrame();
   void prepareBehaviorRandomMwcFrame();
+  void prepareBehaviorCompressionFrame();
   void validateBehaviorStorage();
   unsigned m_behaviorFrames = 0;
   unsigned m_behaviorSettledFrames = 0;
@@ -125,6 +126,8 @@ private:
   Json m_behaviorJsonPatchProof;
   bool m_behaviorJsonPathRoom = false;
   Json m_behaviorJsonPathProof;
+  bool m_behaviorCompressionRoom = false;
+  Json m_behaviorCompressionProof;
   bool m_behaviorRandomMwcRoom = false;
   Json m_behaviorRandomMwcProof;
   bool m_behaviorAssetPathRoom = false;

@@ -135,3 +135,10 @@ parent isolated/combined fixtures and all eleven prior combined scenarios pass e
 `text-room` sends `^red;TEXT^reset;` through normal GUI Font rendering. native per-render receipts observe one Rust scan, one text callback, two command callbacks and actual foreground codepoints/colors; CPP counts are zero. the observed red quad color is `[255,73,66,255]`, not generic pure red; framebuffer antialiasing may blend it. fixed-storage observation never supplies proxy pixels or replaces the scanner.
 
 new isolated/combined and all twelve earlier scenarios pass exact frames/state/receipts; twelve historical pixel sequences remain unchanged. [text-scanner evidence](../text-scan/EVIDENCE.md) records independent original streams, invalid-metadata/overlap/mutation/reentry/exception tests, known-failure controls, native seals and limits. modes `textscan` / `textscan-combined`; default selector OFF. only `Text::processText` migrated, not Font, wrapping, stripping or the whole text module.
+
+
+## compression controllers
+
+`compression-room` exercises normal Zlib image embed, its uncached Zlib image load and a separate fixed Gzip-PNG image load. native producer/decoder bytes and per-controller attempts/success/exception deltas cannot be supplied by Lua. independently decoded literal pixels and fixed Gzip bytes prevent accepting a matched wrong roundtrip. the actual returned Gzip image is rendered through normal Assets/Font.
+
+exact centered64×64cyan bounds are required, not minimum ink alone: the check rejects the first128×128fixture capture before the projection-only repair. [compression evidence](../compression/EVIDENCE.md) records frozen whole-source reconstruction, opaque/raw ABI, real codec-call traces, counterfactual exception controls, corrected captures and explicit limits. modes `compression` / `compression-combined`, selector default OFF; only three controllers migrate, not `CompressedFile` or vendor codecs. isolated embedded-data permission does not authorize external HTTP.

@@ -1,5 +1,8 @@
 //! The engine's single Rust static archive owns the unmangled C ABI exports.
 //! Kernels remain rlibs so linking another kernel cannot add another Rust runtime.
+mod compression;
+pub use compression::{star_compression_call_count, star_compression_run, StarCompressionHost};
+
 mod text_scan;
 pub use text_scan::{star_text_scan_call_count, star_text_scan_process, StarTextScanHost};
 

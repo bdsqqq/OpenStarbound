@@ -17,6 +17,7 @@
 #include "StarJsonPatchLab.hpp"
 #include "StarAssetPathLab.hpp"
 #include "StarRandomMwcLab.hpp"
+#include "StarCompressionLab.hpp"
 #ifdef STAR_USE_RUST_BYTES
 #include "StarRustBytes.h"
 #endif
@@ -560,6 +561,8 @@ void ClientApplication::render() {
         prepareBehaviorAssetPathFrame();
       if (BehaviorLab::enabled() && m_behaviorRandomMwcRoom)
         prepareBehaviorRandomMwcFrame();
+      if (BehaviorLab::enabled() && m_behaviorCompressionRoom)
+        prepareBehaviorCompressionFrame();
 
       auto paintStart = Time::monotonicMicroseconds();
       m_worldPainter->render(m_renderData, [&]() -> bool {
@@ -594,7 +597,8 @@ void ClientApplication::render() {
           || (m_behaviorJsonPatchRoom && !m_behaviorJsonPatchProof.isNull())
           || (m_behaviorJsonPathRoom && !m_behaviorJsonPathProof.isNull())
           || (m_behaviorAssetPathRoom && !m_behaviorAssetPathProof.isNull())
-          || (m_behaviorRandomMwcRoom && !m_behaviorRandomMwcProof.isNull())) {
+          || (m_behaviorRandomMwcRoom && !m_behaviorRandomMwcProof.isNull())
+          || (m_behaviorCompressionRoom && !m_behaviorCompressionProof.isNull())) {
         // Normal Font -> TextPainter -> GPU glyph path; only ASCII coverage is
         // claimed. Screen-space coordinates avoid the 64px world-image area.
         m_guiContext->clearTextStyle();
@@ -604,6 +608,7 @@ void ClientApplication::render() {
         m_guiContext->setFontMode(FontMode::Normal);
         m_guiContext->setFontProcessingDirectives("");
         m_guiContext->renderText(m_behaviorJsonPatchRoom ? m_behaviorJsonPatchProof.get("visual").getString("label")
+            : m_behaviorCompressionRoom ? m_behaviorCompressionProof.get("visual").getString("label")
             : m_behaviorRandomMwcRoom ? m_behaviorRandomMwcProof.get("visual").getString("label")
             : m_behaviorAssetPathRoom ? m_behaviorAssetPathProof.get("visual").getString("label")
             : m_behaviorJsonPathRoom ? m_behaviorJsonPathProof.get("visual").getString("label")
@@ -1492,7 +1497,8 @@ void ClientApplication::validateBehaviorStorage() {
   if (scenario != "lighting-room" && scenario != "raycast-room" && scenario != "encoding-room"
       && scenario != "sha256-room" && scenario != "vlq-room" && scenario != "bytes-room"
       && scenario != "unicode-room" && scenario != "shell-room" && scenario != "jsonpath-room" && scenario != "assetpath-room"
-      && scenario != "random-room" && scenario != "jsonpatch-room" && scenario != "text-room")
+      && scenario != "random-room" && scenario != "jsonpatch-room" && scenario != "text-room"
+      && scenario != "compression-room")
     throw StarException("BehaviorLab: unsupported scenario");
   m_behaviorRaycastRoom = scenario == "raycast-room";
   m_behaviorEncodingRoom = scenario == "encoding-room";
@@ -1506,6 +1512,7 @@ void ClientApplication::validateBehaviorStorage() {
   m_behaviorTextScanRoom = scenario == "text-room";
   m_behaviorAssetPathRoom = scenario == "assetpath-room";
   m_behaviorRandomMwcRoom = scenario == "random-room";
+  m_behaviorCompressionRoom = scenario == "compression-room";
   if (config.getUInt("maxFrames", 1800) == 0 || config.getUInt("maxFrames", 1800) > 18000)
     throw StarException("BehaviorLab: maxFrames must be in [1, 18000]");
 
@@ -1626,7 +1633,7 @@ void ClientApplication::updateBehaviorScenario() {
       return;
     if (m_behaviorStage == 2) {
       Logger::info("BehaviorLab: {} completed (three acknowledged world frames)",
-          m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
+          m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
       m_behaviorPhase = 5;
       appController()->quit();
       return;
@@ -2380,6 +2387,56 @@ void ClientApplication::prepareBehaviorUnicodeFrame() {
   m_renderData.foregroundOverlays.append(std::move(drawable));
 }
 
+void ClientApplication::prepareBehaviorCompressionFrame() {
+  if (!m_behaviorReady || BehaviorLab::hasPendingFrame() || m_renderData.isFullbright)
+    return;
+  auto world = m_universeClient->worldClient();
+  if (!world || !world->inWorld())
+    return;
+  if (m_behaviorCompressionProof.isNull()) {
+    auto proof = compressionBehaviorAssetProof();
+    String backend = "cpp";
+    bool rust = false;
+#ifdef STAR_USE_RUST_COMPRESSION
+    backend = "rust";
+    rust = true;
+#endif
+    if (proof.isNull() || proof.getUInt("version") != 1)
+      throw StarException("BehaviorLab: compression native proof missing");
+    auto operations = proof.get("operations");
+    char const* names[] = {"embed", "zlib", "gzip"};
+    for (unsigned k = 0; k != 3; ++k) {
+      auto row = operations.get(names[k]);
+      if (row.getString("backend") != backend || row.getString("path").empty()
+          || row.getString("pngHex").empty() || row.getString("compressedHex").empty())
+        throw StarException("BehaviorLab: compression native row missing");
+      JsonArray expected;
+      for (unsigned j = 0; j != 3; ++j) expected.append(rust && j == k ? 1 : 0);
+      auto calls = row.get("calls");
+      if (calls.getArray("attempt") != expected || calls.getArray("success") != expected
+          || calls.getArray("exception") != JsonArray{0, 0, 0})
+        throw StarException("BehaviorLab: compression controller receipts mismatch");
+    }
+    if (operations.get("embed").getString("path") != operations.get("zlib").getString("path")
+        || operations.get("embed").getString("pngHex") != operations.get("zlib").getString("pngHex")
+        || operations.get("embed").getString("compressedHex") != operations.get("zlib").getString("compressedHex"))
+      throw StarException("BehaviorLab: compression producer/consumer mismatch");
+    Json visual = JsonObject{{"imagePath", "/behaviorlab/compression-result.png"},
+        {"color", JsonArray{96, 192, 224, 255}}, {"scale", 4}, {"label", "COMPRESS"}};
+    if (proof.get("visual") != visual)
+      throw StarException("BehaviorLab: compression visual mismatch");
+    auto image = m_root->assets()->image(visual.getString("imagePath"));
+    if (!compressionLabSource(*image))
+      throw StarException("BehaviorLab: compression displayed result mismatch");
+    m_behaviorCompressionProof = std::move(proof);
+  }
+  auto observedScale = m_behaviorCompressionProof.get("visual").getFloat("scale");
+  auto drawable = Drawable::makeImage("/behaviorlab/compression-result.png",
+      observedScale * 0.5f / TilePixels, true, Vec2F(64, 48));
+  drawable.fullbright = true;
+  m_renderData.foregroundOverlays.append(std::move(drawable));
+}
+
 void ClientApplication::prepareBehaviorRandomMwcFrame() {
   if (!m_behaviorReady || BehaviorLab::hasPendingFrame() || m_renderData.isFullbright)
     return;
@@ -2853,7 +2910,7 @@ void ClientApplication::renderBehaviorScenario() {
       {"layout", "row-major-rgb-f32-bits"}, {"bits", std::move(lightmapBits)}};
   Json metadata = JsonObject{
       {"lightingDiagnostics", std::move(lightmapDiagnostic)},
-      {"scenario", m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
+      {"scenario", m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
       {"worldState", JsonObject{
           {"worldId", printWorldId(m_universeClient->clientContext()->playerWorldId())},
           {"worldSize", jsonFromVec2U(world->geometry().size())},
@@ -2939,6 +2996,11 @@ void ClientApplication::renderBehaviorScenario() {
     if (m_behaviorAssetPathProof.isNull())
       throw StarException("BehaviorLab: assetpath frame has no completed proof");
     metadata = metadata.set("assetPathProof", m_behaviorAssetPathProof);
+  }
+  if (m_behaviorCompressionRoom) {
+    if (m_behaviorCompressionProof.isNull())
+      throw StarException("BehaviorLab: compression frame has no completed proof");
+    metadata = metadata.set("compressionProof", m_behaviorCompressionProof);
   }
   if (m_behaviorRandomMwcRoom) {
     if (m_behaviorRandomMwcProof.isNull())

@@ -5,6 +5,7 @@
 #include "StarDataStreamDevices.hpp"
 #include "StarBuffer.hpp"
 #include "StarPathEmbed.hpp"
+#include "StarCompressionLab.hpp"
 
 namespace Star {
 
@@ -40,7 +41,14 @@ LuaMethods<Image> LuaUserDataMethods<Image>::make() {
     BufferPtr buf = make_shared<Buffer>();
     image.writePng(buf);
     String const outType = frames ? "image" : "bin";
-    String outStr = strf("/opensb_data;{};{}",outType,embedAndCompressData(buf->takeData(),compressionMethod));
+    bool captureCompression = !frames && compressionMethod == EmbeddedCompressionMethod::Zlib
+        && compressionLabSource(image);
+    // Keep the original full-expression temporary lifetime on the ordinary path.
+    String outStr = captureCompression
+        ? strf("/opensb_data;{};{}", outType, compressionLabEmbed(buf->takeData(), compressionMethod))
+        : strf("/opensb_data;{};{}",outType,embedAndCompressData(buf->takeData(),compressionMethod));
+    if (captureCompression)
+      compressionLabEmbedPath(outStr);
     if (frames.is<String>()) {
       outStr += strf(";framespath;{}",frames.get<String>());
     } else if (frames.is<Json>()) {

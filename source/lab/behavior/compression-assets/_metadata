@@ -1,0 +1,10 @@
+{
+  "name": "behavior-compression-fixtures",
+  "friendlyName": "Isolated compression consumer fixtures",
+  "priority": 1100,
+  "scripts": {
+    "postLoad": [
+      "/behaviorlab/compression.lua"
+    ]
+  }
+}
