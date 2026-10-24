@@ -18,6 +18,8 @@
 #include "StarAssetPathLab.hpp"
 #include "StarRandomMwcLab.hpp"
 #include "StarCompressionLab.hpp"
+#include "StarZstdLab.hpp"
+#include "StarNetPacketSocket.hpp"
 #ifdef STAR_USE_RUST_BYTES
 #include "StarRustBytes.h"
 #endif
@@ -563,6 +565,8 @@ void ClientApplication::render() {
         prepareBehaviorRandomMwcFrame();
       if (BehaviorLab::enabled() && m_behaviorCompressionRoom)
         prepareBehaviorCompressionFrame();
+      if (BehaviorLab::enabled() && m_behaviorZstdRoom)
+        prepareBehaviorZstdFrame();
 
       auto paintStart = Time::monotonicMicroseconds();
       m_worldPainter->render(m_renderData, [&]() -> bool {
@@ -598,16 +602,18 @@ void ClientApplication::render() {
           || (m_behaviorJsonPathRoom && !m_behaviorJsonPathProof.isNull())
           || (m_behaviorAssetPathRoom && !m_behaviorAssetPathProof.isNull())
           || (m_behaviorRandomMwcRoom && !m_behaviorRandomMwcProof.isNull())
-          || (m_behaviorCompressionRoom && !m_behaviorCompressionProof.isNull())) {
+          || (m_behaviorCompressionRoom && !m_behaviorCompressionProof.isNull())
+          || (m_behaviorZstdRoom && !m_behaviorZstdProof.isNull())) {
         // Normal Font -> TextPainter -> GPU glyph path; only ASCII coverage is
         // claimed. Screen-space coordinates avoid the 64px world-image area.
         m_guiContext->clearTextStyle();
         m_guiContext->setDefaultFont();
-        m_guiContext->setFontSize(16, 1.0f);
+        m_guiContext->setFontSize(m_behaviorZstdRoom ? 8 : 16, 1.0f);
         m_guiContext->setFontColor(Vec4B(255, 255, 255, 255));
         m_guiContext->setFontMode(FontMode::Normal);
         m_guiContext->setFontProcessingDirectives("");
         m_guiContext->renderText(m_behaviorJsonPatchRoom ? m_behaviorJsonPatchProof.get("visual").getString("label")
+            : m_behaviorZstdRoom ? m_behaviorZstdProof.get("visual").getString("label")
             : m_behaviorCompressionRoom ? m_behaviorCompressionProof.get("visual").getString("label")
             : m_behaviorRandomMwcRoom ? m_behaviorRandomMwcProof.get("visual").getString("label")
             : m_behaviorAssetPathRoom ? m_behaviorAssetPathProof.get("visual").getString("label")
@@ -1498,7 +1504,7 @@ void ClientApplication::validateBehaviorStorage() {
       && scenario != "sha256-room" && scenario != "vlq-room" && scenario != "bytes-room"
       && scenario != "unicode-room" && scenario != "shell-room" && scenario != "jsonpath-room" && scenario != "assetpath-room"
       && scenario != "random-room" && scenario != "jsonpatch-room" && scenario != "text-room"
-      && scenario != "compression-room")
+      && scenario != "compression-room" && scenario != "zstd-room")
     throw StarException("BehaviorLab: unsupported scenario");
   m_behaviorRaycastRoom = scenario == "raycast-room";
   m_behaviorEncodingRoom = scenario == "encoding-room";
@@ -1513,6 +1519,7 @@ void ClientApplication::validateBehaviorStorage() {
   m_behaviorAssetPathRoom = scenario == "assetpath-room";
   m_behaviorRandomMwcRoom = scenario == "random-room";
   m_behaviorCompressionRoom = scenario == "compression-room";
+  m_behaviorZstdRoom = scenario == "zstd-room";
   if (config.getUInt("maxFrames", 1800) == 0 || config.getUInt("maxFrames", 1800) > 18000)
     throw StarException("BehaviorLab: maxFrames must be in [1, 18000]");
 
@@ -1633,7 +1640,7 @@ void ClientApplication::updateBehaviorScenario() {
       return;
     if (m_behaviorStage == 2) {
       Logger::info("BehaviorLab: {} completed (three acknowledged world frames)",
-          m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
+          m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
       m_behaviorPhase = 5;
       appController()->quit();
       return;
@@ -2387,6 +2394,177 @@ void ClientApplication::prepareBehaviorUnicodeFrame() {
   m_renderData.foregroundOverlays.append(std::move(drawable));
 }
 
+void ClientApplication::prepareBehaviorZstdFrame() {
+  // Run before the frame-ready guard: the first normal Assets image lookup must
+  // be driven by the actual TCP-received path, not a Lua preload or proxy.
+  if (m_behaviorZstdProof.isNull()) {
+    auto source = zstdLabImageProof();
+    if (!source.contains("embed") || source.contains("decode"))
+      throw StarException("BehaviorLab: Zstd producer missing or image was preloaded");
+    auto path = source.get("embed").getString("path");
+    if (!path.beginsWith("/opensb_data;bin;zstd;"))
+      throw StarException("BehaviorLab: Zstd producer path mismatch");
+    uint8_t loopbackBytes[4] = {127, 0, 0, 1};
+    HostAddress const loopback(NetworkMode::IPv4, loopbackBytes);
+    TcpSocketPtr listener;
+    uint16_t port = 0;
+    for (uint16_t candidate = 40137; candidate <= 40168; ++candidate) {
+      try {
+        listener = TcpSocket::listen(HostAddressWithPort(loopback, candidate));
+        port = candidate;
+        break;
+      } catch (NetworkException const&) {}
+    }
+    if (!listener) throw StarException("BehaviorLab: no owned Zstd loopback port");
+    listener->setNonBlocking(true);
+    // Connect ONLY after our own listener has bound this numeric loopback port.
+    auto rawA = TcpSocket::connectTo(HostAddressWithPort(loopback, port));
+    TcpSocketPtr rawB;
+    auto deadline = Time::monotonicMilliseconds() + 2000;
+    while (!rawB && Time::monotonicMilliseconds() < deadline) rawB = listener->accept();
+    if (!rawB) throw StarException("BehaviorLab: Zstd accept deadline");
+    listener->close();
+    auto a = TcpPacketSocket::open(rawA);
+    auto b = TcpPacketSocket::open(rawB);
+    a->setNetRules(NetCompatibilityRules(VersionNumber(5)));
+    b->setNetRules(NetCompatibilityRules(VersionNumber(5)));
+    a->setCompressionStreamEnabled(true);
+    b->setCompressionStreamEnabled(true);
+    // Manual native PacketSocket configuration, NOT Universe negotiation.
+    auto arena = std::make_unique<ZstdLabArena>();
+    arena->a = a.get(); arena->b = b.get();
+    struct Armed {
+      Armed(ZstdLabArena* p) { if (ZstdLabActive) throw StarException("BehaviorLab: nested Zstd observer"); ZstdLabActive = p; }
+      ~Armed() { ZstdLabActive = nullptr; }
+    } armed(arena.get());
+    bool rust = false;
+    String backend = "cpp";
+#ifdef STAR_USE_RUST_ZSTD
+    rust = true; backend = "rust";
+#endif
+    auto requireCalls = [&](ZstdLabCounts const& calls, unsigned kind) {
+      for (unsigned k = 0; k != 4; ++k)
+        for (unsigned e = 0; e != 3; ++e)
+          if (calls.values[k][e] != uint64_t(rust && k == kind && e < 2))
+            throw StarException("BehaviorLab: Zstd native receipt mismatch");
+    };
+    // Independent literal framing, not DataStream or a replacement Packet codec.
+    auto uv = [](ByteArray& out, uint64_t n) {
+      unsigned shift = 0;
+      while ((n >> shift) > 127) shift += 7;
+      for (; shift; shift -= 7) out.appendByte(char(((n >> shift) & 127) | 128));
+      out.appendByte(char(n & 127));
+    };
+    auto expectedPacket = [&](String const& text) {
+      ByteArray payload;
+      uv(payload, text.utf8Size()); payload.append(text.utf8Ptr(), text.utf8Size());
+      payload.appendByte(0); payload.appendByte(0);
+      ByteArray out; out.appendByte(0x12); uv(out, 2 * payload.size()); out.append(payload);
+      return out;
+    };
+    if (hexEncode(expectedPacket("ZSTD")) != "120e045a5354440000")
+      throw StarException("BehaviorLab: Zstd independent label literal mismatch");
+    auto requirePeers = [&]() {
+      // poll reports EOF/hangup and shuts down the raw peer; receive() alone
+      // returns zero for both EAGAIN and EOF on this native socket API.
+      if (auto ready = Socket::poll({{rawA, {true, false}}, {rawB, {true, false}}}, 0))
+        for (auto const& peer : *ready)
+          if (peer.second.exception) throw StarException("BehaviorLab: Zstd TCP EOF/error");
+      if (!a->isOpen() || !b->isOpen()) throw StarException("BehaviorLab: closed Zstd TCP peer");
+    };
+    JsonArray rounds;
+    auto round = [&](TcpPacketSocket* sender, TcpPacketSocket* receiver, String const& text, String const& direction) {
+      size_t first = arena->count;
+      auto packet = make_shared<ChatSendPacket>(text, ChatSendMode::Broadcast, JsonObject{});
+      sender->sendPackets({packet});
+      List<PacketPtr> received;
+      auto until = Time::monotonicMilliseconds() + 2000;
+      while (Time::monotonicMilliseconds() < until) {
+        requirePeers();
+        sender->writeData(); receiver->readData();
+        received.appendAll(receiver->receivePackets());
+        if (!sender->sentPacketsPending() && !received.empty()) break;
+      }
+      requirePeers();
+      receiver->readData(); received.appendAll(receiver->receivePackets());
+      sender->readData();
+      if (!sender->receivePackets().empty()) throw StarException("BehaviorLab: unexpected Zstd reverse traffic");
+      if (sender->sentPacketsPending() || received.size() != 1 || !arena->valid)
+        throw StarException("BehaviorLab: Zstd TCP deadline/count/observer failure");
+      auto chat = std::dynamic_pointer_cast<ChatSendPacket>(received.first());
+      if (!chat || chat->text != text || chat->sendMode != ChatSendMode::Broadcast || !chat->data.empty())
+        throw StarException("BehaviorLab: Zstd typed TCP packet mismatch");
+      ByteArray ci, co, di, dout;
+      JsonArray events;
+      unsigned compressions = 0, decompressions = 0;
+      for (size_t i = first; i != arena->count; ++i) {
+        auto const& record = arena->records[i];
+        requireCalls(record.calls, record.kind);
+        ByteArray input(record.input, record.inputSize), output(record.output, record.outputSize);
+        if (record.kind == 0) { ++compressions; ci.append(input); co.append(output); }
+        else {
+          if (record.kind != 1 || record.inputSize == 0 || record.inputSize > 1024)
+            throw StarException("BehaviorLab: Zstd invalid TCP receive chunk");
+          ++decompressions; di.append(input); dout.append(output);
+        }
+        events.append(JsonObject{{"kind", record.kind}, {"inputHex", hexEncode(input)},
+            {"outputHex", hexEncode(output)}, {"calls", record.calls.json()}});
+      }
+      auto literal = expectedPacket(text);
+      if (compressions != 1 || decompressions == 0 || ci != literal || co != di || dout != literal
+          || (text.utf8Size() == 16384 && (co.size() <= 1024 || decompressions < 2)))
+        throw StarException("BehaviorLab: Zstd actual native TCP wire mismatch");
+      rounds.append(JsonObject{{"direction", direction}, {"textHex", hexEncode(text.utf8Bytes())},
+          {"receivedHex", hexEncode(chat->text.utf8Bytes())}, {"sendMode", unsigned(packet->sendMode)},
+          {"receivedMode", unsigned(chat->sendMode)}, {"receivedData", chat->data}, {"events", std::move(events)}});
+      return chat->text;
+    };
+    auto receivedPath = round(a.get(), b.get(), path, "a-to-b");
+    auto receivedLabel = round(b.get(), a.get(), "ZSTD", "b-to-a");
+    std::string bulk; bulk.reserve(16384);
+    uint32_t x = 0x12345678;
+    for (unsigned i = 0; i != 16384; ++i) {
+      x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+      bulk.push_back("0123456789abcdef"[(x >> 28) & 15]);
+    }
+    round(a.get(), b.get(), String(bulk), "a-to-b");
+    ZstdLabActive = nullptr;
+    auto image = m_root->assets()->image(receivedPath);
+    auto imageProof = zstdLabImageProof();
+    if (!imageProof.contains("decode") || !imageProof.contains("rgbaHex") || image->size() != Vec2U(16, 16))
+      throw StarException("BehaviorLab: Zstd normal Assets decode missing");
+    for (auto key : {"embed", "decode"}) {
+      auto row = imageProof.get(key);
+      auto calls = row.get("calls");
+      unsigned kind = String(key) == "embed" ? 2 : 3;
+      for (auto event : {"attempt", "success", "exception"}) {
+        auto counts = calls.getArray(event);
+        if (counts.size() != 4) throw StarException("BehaviorLab: Zstd image receipt shape");
+        for (unsigned k = 0; k != 4; ++k)
+          if (counts[k].toUInt() != uint64_t(rust && k == kind && String(event) != "exception"))
+            throw StarException("BehaviorLab: Zstd image receipt mismatch");
+      }
+    }
+    if (imageProof.get("embed").getString("path") != receivedPath
+        || imageProof.get("decode").getString("path") != receivedPath
+        || imageProof.get("embed").getString("compressedHex") != imageProof.get("decode").getString("compressedHex")
+        || imageProof.get("embed").getString("pngHex") != imageProof.get("decode").getString("pngHex"))
+      throw StarException("BehaviorLab: Zstd image producer/decoder mismatch");
+    auto color = image->get(0, 0);
+    m_behaviorZstdProof = JsonObject{{"version", 1}, {"backend", backend}, {"image", imageProof},
+        {"network", JsonObject{{"transport", "tcp"}, {"address", "127.0.0.1"}, {"streamEnabled", true},
+            {"rulesVersion", 5}, {"rounds", std::move(rounds)}}},
+        {"visual", JsonObject{{"imagePath", receivedPath}, {"color", JsonArray{color[0], color[1], color[2], color[3]}},
+            {"scale", 4}, {"label", receivedLabel}}}};
+  }
+  if (!m_behaviorReady || BehaviorLab::hasPendingFrame() || m_renderData.isFullbright) return;
+  auto visual = m_behaviorZstdProof.get("visual");
+  auto drawable = Drawable::makeImage(visual.getString("imagePath"),
+      visual.getFloat("scale") * 0.5f / TilePixels, true, Vec2F(64, 48));
+  drawable.fullbright = true;
+  m_renderData.foregroundOverlays.append(std::move(drawable));
+}
+
 void ClientApplication::prepareBehaviorCompressionFrame() {
   if (!m_behaviorReady || BehaviorLab::hasPendingFrame() || m_renderData.isFullbright)
     return;
@@ -2910,7 +3088,7 @@ void ClientApplication::renderBehaviorScenario() {
       {"layout", "row-major-rgb-f32-bits"}, {"bits", std::move(lightmapBits)}};
   Json metadata = JsonObject{
       {"lightingDiagnostics", std::move(lightmapDiagnostic)},
-      {"scenario", m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
+      {"scenario", m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
       {"worldState", JsonObject{
           {"worldId", printWorldId(m_universeClient->clientContext()->playerWorldId())},
           {"worldSize", jsonFromVec2U(world->geometry().size())},
@@ -2996,6 +3174,11 @@ void ClientApplication::renderBehaviorScenario() {
     if (m_behaviorAssetPathProof.isNull())
       throw StarException("BehaviorLab: assetpath frame has no completed proof");
     metadata = metadata.set("assetPathProof", m_behaviorAssetPathProof);
+  }
+  if (m_behaviorZstdRoom) {
+    if (m_behaviorZstdProof.isNull())
+      throw StarException("BehaviorLab: Zstd frame has no completed proof");
+    metadata = metadata.set("zstdProof", m_behaviorZstdProof);
   }
   if (m_behaviorCompressionRoom) {
     if (m_behaviorCompressionProof.isNull())

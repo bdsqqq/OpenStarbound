@@ -1,5 +1,8 @@
 #include "StarZSTDCompression.hpp"
 #include <zstd.h>
+#ifdef STAR_USE_RUST_ZSTD
+#include "StarZstdHost.hpp"
+#endif
 
 namespace Star {
 
@@ -12,6 +15,11 @@ CompressionStream::CompressionStream() : m_cStream(ZSTD_createCStream()) {
 CompressionStream::~CompressionStream() { ZSTD_freeCStream(m_cStream); }
 
 void CompressionStream::compress(const char* in, size_t inLen, ByteArray& out) {
+#ifdef STAR_USE_RUST_ZSTD
+  ZstdHost::NativeContext context(ZC_STREAM_COMPRESS,in,inLen,&out);
+  context.compression=m_cStream;
+  ZstdHost::run(context);
+#else
   size_t const cOutSize = ZSTD_CStreamOutSize();
   ZSTD_inBuffer inBuffer = {in, inLen, 0};
   size_t written = out.size();
@@ -35,6 +43,7 @@ void CompressionStream::compress(const char* in, size_t inLen, ByteArray& out) {
     finished = ret == 0 && inBuffer.pos == inBuffer.size;
   } while (!finished);
   out.resize(written);
+#endif
 }
 
 void CompressionStream::compress(ByteArray const& in, ByteArray& out) {
@@ -62,6 +71,11 @@ DecompressionStream::DecompressionStream() : m_dStream(ZSTD_createDStream()) {
 DecompressionStream::~DecompressionStream() { ZSTD_freeDStream(m_dStream); }
 
 void DecompressionStream::decompress(const char* in, size_t inLen, ByteArray& out) {
+#ifdef STAR_USE_RUST_ZSTD
+  ZstdHost::NativeContext context(ZC_STREAM_DECOMPRESS,in,inLen,&out);
+  context.decompression=m_dStream;
+  ZstdHost::run(context);
+#else
   size_t const dOutSize = ZSTD_DStreamOutSize();
   ZSTD_inBuffer inBuffer = {in, inLen, 0};
   size_t written = out.size();
@@ -84,6 +98,7 @@ void DecompressionStream::decompress(const char* in, size_t inLen, ByteArray& ou
     finished = inBuffer.pos == inBuffer.size;
   } while (!finished);
   out.resize(written);
+#endif
 }
 
 void DecompressionStream::decompress(ByteArray const& in, ByteArray& out) {
@@ -103,6 +118,12 @@ ByteArray DecompressionStream::decompress(ByteArray const& in) {
 }
 
 ByteArray ZstdCompression::compress(const char* in, size_t inLen, int compressionLevel) {
+#ifdef STAR_USE_RUST_ZSTD
+  ZstdHost::NativeContext context(ZC_ONESHOT_COMPRESS,in,inLen);
+  context.level=compressionLevel;
+  ZstdHost::run(context);
+  return std::move(context.result);
+#else
   if (inLen == 0)
     return ByteArray();
     
@@ -120,6 +141,7 @@ ByteArray ZstdCompression::compress(const char* in, size_t inLen, int compressio
   
   out.resize(compressedSize);
   return out;
+#endif
 }
 
 void ZstdCompression::compress(const char* in, size_t inLen, ByteArray& out, int compressionLevel) {
@@ -135,6 +157,11 @@ void ZstdCompression::compress(ByteArray const& in, ByteArray& out, int compress
 }
 
 ByteArray ZstdCompression::decompress(const char* in, size_t inLen) {
+#ifdef STAR_USE_RUST_ZSTD
+  ZstdHost::NativeContext context(ZC_ONESHOT_DECOMPRESS,in,inLen);
+  ZstdHost::run(context);
+  return std::move(context.result);
+#else
   unsigned long long const frameContentSize = ZSTD_getFrameContentSize(in, inLen);
   if (frameContentSize == ZSTD_CONTENTSIZE_ERROR || frameContentSize == ZSTD_CONTENTSIZE_UNKNOWN)
     throw IOException("Cannot determine ZSTD decompressed size");
@@ -147,6 +174,7 @@ ByteArray ZstdCompression::decompress(const char* in, size_t inLen) {
   
   out.resize(result);
   return out;
+#endif
 }
 
 void ZstdCompression::decompress(const char* in, size_t inLen, ByteArray& out) {

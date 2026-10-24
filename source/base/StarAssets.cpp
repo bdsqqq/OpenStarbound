@@ -26,6 +26,7 @@
 #include "StarAssetPathLab.hpp"
 #include "StarRandomMwcLab.hpp"
 #include "StarCompressionLab.hpp"
+#include "StarZstdLab.hpp"
 #ifdef STAR_USE_RUST_COMPRESSION
 #include "StarRustCompression.h"
 #endif
@@ -167,6 +168,67 @@ void compressionLabEmbedPath(String const& path) {
 Json compressionBehaviorAssetProof() {
   std::lock_guard<std::mutex> lock(CompressionProofMutex);
   return CompressionProof;
+}
+
+namespace {
+std::mutex ZstdProofMutex;
+Json ZstdImageRows = JsonObject{};
+bool ZstdArmed = false;
+thread_local bool ZstdProducer = false;
+Json zstdRow(String const& path, ByteArray const& wire, ByteArray const& png, ZstdLabCounts const& calls) {
+  return JsonObject{{"path", path}, {"compressedHex", hexEncode(wire)},
+      {"pngHex", hexEncode(png)}, {"calls", calls.json()}};
+}
+bool zstdDecodeSelected() {
+  if (!std::getenv("STAR_BEHAVIOR_LAB")) return false;
+  std::lock_guard<std::mutex> lock(ZstdProofMutex);
+  return ZstdArmed && ZstdImageRows.contains("embed")
+      && CompressionPath == ZstdImageRows.get("embed").getString("path");
+}
+void zstdDecodedImage(String const& path, Image const& image) {
+  if (!std::getenv("STAR_BEHAVIOR_LAB")) return;
+  std::lock_guard<std::mutex> lock(ZstdProofMutex);
+  if (!ZstdArmed || !ZstdImageRows.contains("decode")
+      || path != ZstdImageRows.get("decode").getString("path")) return;
+  if (ZstdImageRows.contains("rgbaHex") || image.size() != Vec2U(16, 16))
+    throw AssetException("BehaviorLab: repeated or invalid Zstd image");
+  ByteArray pixels;
+  for (unsigned y = 0; y != 16; ++y)
+    for (unsigned x = 0; x != 16; ++x) {
+      auto c = image.get(x, y);
+      if (c != Vec4B(224, 160, 64, 255))
+        throw AssetException("BehaviorLab: decoded Zstd pixels mismatch");
+      for (unsigned channel = 0; channel != 4; ++channel) pixels.appendByte(char(c[channel]));
+    }
+  ZstdImageRows = ZstdImageRows.set("size", JsonArray{image.width(), image.height()})
+      .set("rgbaHex", hexEncode(pixels));
+}
+}
+bool zstdLabSource(Image const& image) {
+  if (!ZstdProducer || image.size() != Vec2U(16, 16)) return false;
+  for (unsigned y = 0; y != 16; ++y)
+    for (unsigned x = 0; x != 16; ++x)
+      if (image.get(x, y) != Vec4B(224, 160, 64, 255)) return false;
+  return true;
+}
+String zstdLabEmbed(ByteArray const& png, EmbeddedCompressionMethod method) {
+  ZstdProducer = false;
+  auto before = ZstdLabCounts::snapshot();
+  auto encoded = embedAndCompressData(png, method);
+  auto after = ZstdLabCounts::snapshot();
+  auto wire = base64Decode(encoded.split(";").last());
+  std::lock_guard<std::mutex> lock(ZstdProofMutex);
+  if (ZstdImageRows.contains("embed")) throw AssetException("BehaviorLab: repeated Zstd embed");
+  ZstdImageRows = ZstdImageRows.set("embed", zstdRow("", wire, png, after.delta(before)));
+  return encoded;
+}
+void zstdLabEmbedPath(String const& path) {
+  std::lock_guard<std::mutex> lock(ZstdProofMutex);
+  ZstdImageRows = ZstdImageRows.set("embed", ZstdImageRows.get("embed").set("path", path));
+}
+Json zstdLabImageProof() {
+  std::lock_guard<std::mutex> lock(ZstdProofMutex);
+  return ZstdImageRows;
 }
 
 Json randomMwcBehaviorAssetProof() {
@@ -377,6 +439,12 @@ Assets::Assets(Settings settings, StringList assetSources) {
     // Lab-only, executing-thread receipts: no application dependency or config
     // access here, since these callbacks also run during Root construction.
     if (std::getenv("STAR_BEHAVIOR_LAB")) {
+      callbacks.registerCallback("beginZstdLabProof", []() {
+        std::lock_guard<std::mutex> lock(ZstdProofMutex);
+        if (ZstdArmed) throw AssetException("BehaviorLab: repeated Zstd arm");
+        ZstdArmed = true;
+        ZstdProducer = true;
+      });
       callbacks.registerCallback("recordCompressionLabProof", [](Json visual) {
         std::lock_guard<std::mutex> lock(CompressionProofMutex);
         if (!CompressionProof.isNull() || !CompressionRows.contains("embed")
@@ -1781,9 +1849,18 @@ EmbeddedAsset Assets::loadEmbeddedData(StringList const& split, int const& start
       case EmbeddedCompressionMethod::Zlib:
         bytes = uncompressData(base64Data);
         break;
-      case EmbeddedCompressionMethod::Zstd:
+      case EmbeddedCompressionMethod::Zstd: {
+        bool captureZstd = zstdDecodeSelected();
+        auto before = captureZstd ? ZstdLabCounts::snapshot() : ZstdLabCounts{};
         bytes = ZstdCompression::decompress(base64Data);
+        auto after = captureZstd ? ZstdLabCounts::snapshot() : ZstdLabCounts{};
+        if (captureZstd) {
+          std::lock_guard<std::mutex> lock(ZstdProofMutex);
+          if (ZstdImageRows.contains("decode")) throw AssetException("BehaviorLab: repeated Zstd decode");
+          ZstdImageRows = ZstdImageRows.set("decode", zstdRow(CompressionPath, base64Data, bytes, after.delta(before)));
+        }
         break;
+      }
     }
     CompressionCounts compressionAfter(captureCompression);
     if (captureCompression && (method == EmbeddedCompressionMethod::Zlib || method == EmbeddedCompressionMethod::Gzip)) {
@@ -2109,6 +2186,7 @@ shared_ptr<Assets::AssetData> Assets::loadImage(AssetPath const& path) const {
           throw AssetException("Embedded image is of wrong type");
         }
         compressionDecodedImage(path.basePath, *imageData->image);
+        zstdDecodedImage(path.basePath, *imageData->image);
         return imageData;
       });
     } else {

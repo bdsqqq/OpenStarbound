@@ -1,24 +1,37 @@
 #!/usr/bin/env python3
 """Native-only finite Zstd calibration; no project builds or Rust selectors."""
-import argparse,hashlib,json,os,shlex,subprocess,sys
+import argparse,gzip,hashlib,json,os,re,shlex,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[3]; HERE=Path(__file__).resolve().parent; REV='d62f1662'
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def main():
- p=argparse.ArgumentParser();p.add_argument('--output',required=True,type=Path);p.add_argument('--values-only',action='store_true',help='unqualified value acquisition for the separate trace verifier');a=p.parse_args();out=a.output.absolute();base=ROOT/'build/zstd-lab'
+ p=argparse.ArgumentParser();p.add_argument('--backend',choices=['cpp','rust'],default='cpp');p.add_argument('--output',required=True,type=Path);p.add_argument('--values-only',action='store_true',help='unqualified value acquisition for the separate trace verifier');p.add_argument('--fixture-template',type=Path,help='hardlink an existing byte-identical regenerated corpus to avoid repeated disk copies');a=p.parse_args();out=a.output.absolute();base=ROOT/'build/zstd-lab'
  if not out.is_relative_to(base) or out==base or out.exists() or any(x.is_symlink() for x in [out,*out.parents]):p.error('fresh owned nonsymlink output required')
- out.mkdir(parents=True);commands=[];receipts=[];negative=[];generated={}
+ out.mkdir(parents=True);commands=[];receipts=[];negative=[];generated={};stdout_cache={}
+ if not a.values_only:p.error('closed output-only mutants must not run; use --values-only then candidate_trace_run.py')
+ rust=ROOT/'build/zstd-rust/target/release/libstar_engine_ffi.a'
+ def reconstruct(data):
+  data=data.replace(b'#ifdef STAR_USE_RUST_ZSTD\n#include "StarZstdHost.hpp"\n#endif\n',b'')
+  return re.sub(rb'#ifdef STAR_USE_RUST_ZSTD\n.*?#else\n(.*?)#endif\n',lambda m:m[1],data,flags=re.S)
  def run(cmd,name,data=None):
   cmd=list(map(str,cmd));commands.append(shlex.join(cmd));exe=Path(cmd[0]);before=sha(exe) if exe.is_file() else None
-  r=subprocess.run(cmd,cwd=ROOT,input=data,capture_output=True,timeout=90);(out/(name+'.log')).write_bytes((commands[-1]+'\n').encode()+r.stderr)
+  env=os.environ.copy();env['ZSTD_RECEIPTS']=str(out/(name+'.tls.tsv'))
+  r=subprocess.run(cmd,cwd=ROOT,input=data,capture_output=True,timeout=90,env=env)
+  artifact=out/(name+'.stdout.gz');stdout_digest=hashlib.sha256(r.stdout).hexdigest()
+  # Preserve every named receipt, sharing storage only for exact byte matches.
+  if stdout_digest in stdout_cache:os.link(stdout_cache[stdout_digest],artifact)
+  else:
+   with gzip.open(artifact,'wb',compresslevel=1) as f:f.write(r.stdout)
+   stdout_cache[stdout_digest]=artifact
+  (out/(name+'.log')).write_bytes((commands[-1]+'\n').encode()+r.stderr)
   if before and sha(exe)!=before:raise RuntimeError('executable drift')
-  receipts.append(dict(name=name,command=cmd,returncode=r.returncode,executable_sha256=before,stdout_sha256=hashlib.sha256(r.stdout).hexdigest()))
+  receipts.append(dict(name=name,command=cmd,returncode=r.returncode,executable_sha256=before,stdout_sha256=hashlib.sha256(r.stdout).hexdigest(),stdout_artifact=str(artifact),stdout_artifact_sha256=sha(artifact),tls_receipt_sha256=sha(out/(name+'.tls.tsv')) if (out/(name+'.tls.tsv')).exists() else None))
   return r
  def gate(ext,raw,ref):
   original=subprocess.check_output(['git','show',REV+':source/core/StarZSTDCompression.'+ext],cwd=ROOT)
   want=original.replace(b'namespace Star {',b'namespace ZstdReference {\nusing namespace Star;')
   if ext=='cpp':want=want.replace(b'"StarZSTDCompression.hpp"',b'"StarZSTDCompression.reference.hpp"')
-  if original!=raw or want!=ref or (ROOT/('source/core/StarZSTDCompression.'+ext)).read_bytes()!=raw:raise ValueError('freeze drift')
+  if original!=raw or want!=ref or (reconstruct((ROOT/('source/core/StarZSTDCompression.'+ext)).read_bytes()) if ext=='cpp' else (ROOT/('source/core/StarZSTDCompression.'+ext)).read_bytes())!=raw:raise ValueError('freeze drift')
  for ext in ['cpp','hpp']:
   raw=(HERE/('StarZSTDCompression.original.'+ext)).read_bytes();ref=(HERE/('StarZSTDCompression.reference.'+ext)).read_bytes();gate(ext,raw,ref)
   for label,r,d in [('raw',raw+b' ',ref),('reference',raw,ref+b' ')]:
@@ -70,11 +83,23 @@ def main():
  for facade in range(4):
   for data in [b'garbage',literal,b'',literal]:add(3,data,facade,group='error-reuse'+str(facade))
   add(1,b'',facade,expect=b'\xaa\x55',error='(IOException) Cannot determine ZSTD decompressed size')
- fixture=out/'cases.tsv';fixture.write_text('\n'.join(' '.join(map(str,x)) for x in cases)+'\n');(out/'anchors.json').write_text(json.dumps(anchors,sort_keys=True))
+ fixture=out/'cases.tsv'
+ if a.fixture_template:
+  template=a.fixture_template.absolute()
+  if template.is_symlink() or not template.is_file() or not template.resolve().is_relative_to(base):raise ValueError('owned regular fixture template required')
+  expected=hashlib.sha256()
+  for row in cases:expected.update((' '.join(map(str,row))+'\n').encode())
+  # Regenerate and compare EVERY byte before sharing immutable fixture storage;
+  # a cached corpus must never become an unchecked replacement for anchors.
+  if sha(template)!=expected.hexdigest():raise ValueError('fixture template differs from regenerated corpus')
+  os.link(template,fixture)
+ else:fixture.write_text('\n'.join(' '.join(map(str,x)) for x in cases)+'\n')
+ (out/'anchors.json').write_text(json.dumps(anchors,sort_keys=True))
  sources=[HERE/'lab.cpp',HERE/'StarZSTDCompression.reference.cpp',ROOT/'source/core/StarZSTDCompression.cpp',HERE/'StarZSTDCompression.original.cpp']
+ if a.backend=='rust':sources += [ROOT/'source/core/StarZstdHost.hpp',ROOT/'source/core/StarRustZstd.h',ROOT/'source/rust/ffi/src/zstd.rs',ROOT/'source/rust/ffi/src/lib.rs',rust]
  tracked=[Path(sys.executable).resolve(),Path(__file__),cli,db,cm/'build.ninja',Path(recipe[0]).resolve(),fixture,out/'anchors.json',*sources,*[HERE/('StarZSTDCompression.'+k+'.hpp') for k in ['reference','original']],*objs,*[Path(x) for x in libs if x.endswith('.a')],*out.glob('input-*')]
- for n,src in enumerate(sources):
-  dep=out/(str(n)+'.d');r=run([recipe[0],*flags,'-I'+str(HERE),'-M','-MF',dep,src],'deps'+str(n))
+ for n,src in enumerate(sources[:4]):
+  dep=out/(str(n)+'.d');r=run([recipe[0],*flags,'-I'+str(HERE),*(['-DSTAR_USE_RUST_ZSTD=1','-DLAB_RUST=1'] if a.backend=='rust' and n in (0,2) else []),'-M','-MF',dep,src],'deps'+str(n))
   if r.returncode:raise RuntimeError('dependency scan failure')
   tracked += [Path(x) if Path(x).is_absolute() else ROOT/x for x in shlex.split(dep.read_text().replace('\\\n',' ').split(':',1)[1])]
  tracked=list(dict.fromkeys(x.resolve() for x in tracked));before={str(x):sha(x) for x in tracked};(out/'before.json').write_text(json.dumps(before,indent=2))
@@ -82,7 +107,7 @@ def main():
  if run(['/usr/bin/ar','rcs',native,*objs],'archive').returncode:raise RuntimeError('archive failure')
  archive_sha=sha(native)
  def compile(name,src,ref=False):
-  binary=out/name;start=sha(src);r=run([recipe[0],*flags,'-I'+str(HERE),*(['-DLAB_REFERENCE=1'] if ref else []),HERE/'lab.cpp',src,native,*libs,'-Wl,-dead_strip','-o',binary],name+'-compile')
+  binary=out/name;start=sha(src);r=run([recipe[0],*flags,'-I'+str(HERE),*(['-DLAB_REFERENCE=1'] if ref else []),*(['-DSTAR_USE_RUST_ZSTD=1','-DLAB_RUST=1'] if a.backend=='rust' and name=='candidate' else []),HERE/'lab.cpp',src,native,*([rust] if a.backend=='rust' and name=='candidate' else []),*libs,'-Wl,-dead_strip','-o',binary],name+'-compile')
   if r.returncode:raise RuntimeError('compile failure NOT credited negative '+name)
   if sha(src)!=start:raise RuntimeError('generated source drift')
   generated[str(src)]=start;return binary
@@ -102,8 +127,8 @@ def main():
   after={str(x):sha(x) for x in tracked};(out/'after.json').write_text(json.dumps(after,indent=2))
   if before!=after or sha(native)!=archive_sha:raise RuntimeError('value-acquisition binding drift')
   version=run([binary,'--version'],'native-version').stdout.decode().strip()
-  (out/'observations.tsv').write_bytes(baseline)
-  report=dict(status='VALUES_ONLY_NOT_QUALIFIED',revision=REV,cases=len(cases),anchors=len(anchors),negative_controls=negative,ordered_sha256=hashlib.sha256(baseline).hexdigest(),native_zstd=version,external_cli=cli_version,bindings=before,commands=commands,runtime_receipts=receipts,link=dict(compiler=recipe[0],flags=flags,libraries=libs,archive=str(native)))
+  os.link(stdout_cache[hashlib.sha256(baseline).hexdigest()],out/'observations.tsv.gz')
+  report=dict(status='VALUES_ONLY_NOT_QUALIFIED',backend=a.backend,revision=REV,cases=len(cases),anchors=len(anchors),negative_controls=negative,ordered_sha256=hashlib.sha256(baseline).hexdigest(),native_zstd=version,external_cli=cli_version,bindings=before,commands=commands,runtime_receipts=receipts,link=dict(compiler=recipe[0],flags=flags,libraries=libs,archive=str(native)))
   (out/'report.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps({k:v for k,v in report.items() if k not in ['bindings','commands','runtime_receipts','link']}));return
  raw=(HERE/'StarZSTDCompression.original.cpp').read_bytes()
  mutants=[('prefix-clear',b'  size_t written = out.size();',b'  out.clear(); size_t written = out.size();'),('compress-input-only',b'finished = ret == 0 && inBuffer.pos == inBuffer.size;',b'finished = inBuffer.pos == inBuffer.size;'),('drop-full-continue',b'      continue;',b'      /* dropped continue */'),('premature-shrink',b'    written += outBuffer.pos;',b'    out.resize(written); written += outBuffer.pos;')]
@@ -132,7 +157,7 @@ def main():
  except ValueError:negative.append('provenance')
  else:raise RuntimeError('provenance escaped')
  version=run([binary,'--version'],'native-version').stdout.decode().strip()
- (out/'observations.tsv').write_bytes(baseline)
+ with gzip.open(out/'observations.tsv.gz','wb',compresslevel=1) as f:f.write(baseline)
  report=dict(status='PASS',revision=REV,cases=len(cases),anchors=len(anchors),negative_controls=negative,ordered_sha256=hashlib.sha256(baseline).hexdigest(),native_zstd=version,external_cli=cli_version,bindings=before,generated_source_bindings=generated,native_archive_sha256=archive_sha,commands=commands,runtime_receipts=receipts,limits=['C++ calibration only; no Rust/game/port completion claim','finite capacity-stable aliases only; no reallocating aliases','no actual OOM, fault injection, or codec call trace','require-ret0/full-output controls not yet demonstrated'])
  (out/'report.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps({k:v for k,v in report.items() if k not in ['bindings','generated_source_bindings','commands','runtime_receipts']}))
 if __name__=='__main__':main()

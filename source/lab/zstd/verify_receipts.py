@@ -45,7 +45,7 @@ def main():
  if args.self_test:print(json.dumps({'self_test':'PASS','controls':self_test()}))
  if args.report:
   path=args.report.resolve();report=json.loads(path.read_text())
-  if report['status']!='PASS_NATIVE_VALUES_AND_TRACE':raise ValueError('not a complete native trace report')
+  if report['status'] not in ('PASS_NATIVE_VALUES_AND_TRACE','PASS_ACTUAL_RUST_VALUES_AND_NATIVE_TRACE'):raise ValueError('not a complete native trace report')
   for field in ['bindings','generated_sources']:
    for filename,expected in report[field].items():
     if file_hash(Path(filename))!=expected:raise ValueError('BINDING '+filename)

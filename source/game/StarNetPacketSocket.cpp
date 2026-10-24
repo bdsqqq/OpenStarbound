@@ -2,6 +2,7 @@
 #include "StarIterator.hpp"
 #include "StarCompression.hpp"
 #include "StarLogging.hpp"
+#include "StarZstdLab.hpp"
 
 namespace Star {
 
@@ -281,7 +282,9 @@ bool TcpPacketSocket::writeData() {
     if (!m_outputBuffer.empty() || !m_compressedOutputBuffer.empty()) {
       if (compressionStreamEnabled()) {
         if (!m_outputBuffer.empty()) {
+          ZstdLabCall receipt(this, 0, m_outputBuffer.ptr(), m_outputBuffer.size(), m_compressedOutputBuffer.size());
           m_compressionStream.compress(m_outputBuffer, m_compressedOutputBuffer);
+          receipt.success(m_compressedOutputBuffer);
           m_outputBuffer.clear();
         }
         do {
@@ -322,7 +325,9 @@ bool TcpPacketSocket::readData() {
       dataReceived = true;
       if (compressionStreamEnabled()) {
         m_incomingStats.mix(readAmount);
+        ZstdLabCall receipt(this, 1, readBuffer, readAmount, m_inputBuffer.size());
         m_decompressionStream.decompress(readBuffer, readAmount, m_inputBuffer);
+        receipt.success(m_inputBuffer);
       } else {
         m_inputBuffer.append(readBuffer, readAmount);
       }

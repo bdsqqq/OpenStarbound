@@ -1,0 +1,6 @@
+{
+  "name": "behavior-zstd-fixtures",
+  "friendlyName": "Isolated native Zstd TCP and embedded image consumers",
+  "priority": 1100,
+  "scripts": {"postLoad": ["/behaviorlab/zstd.lua"]}
+}
