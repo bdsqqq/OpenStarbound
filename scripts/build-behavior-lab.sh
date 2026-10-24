@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Both executables use the same application and capture instrumentation. Only
-# the lighting implementation changes; SDKs are disabled for offline fixtures.
+# Reference and candidates share application/capture instrumentation. Only the
+# selected Rust backends change; SDKs are disabled for offline fixtures.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mode="${1:-lighting}"
@@ -50,6 +50,7 @@ for backend in reference candidate; do
     -DSTAR_ENABLE_STEAM_INTEGRATION=OFF -DSTAR_ENABLE_DISCORD_INTEGRATION=OFF \
     -DSTAR_BUILD_LIGHTING_LAB=OFF "-DSTAR_USE_RUST_LIGHTING=$rust" \
     "-DSTAR_USE_RUST_BLOCKS_ALONG_LINE=$blocks" \
+    "-DSTAR_USE_RUST_LINE_QUERY=OFF" \
     "-DSTAR_RUNTIME_OUTPUT_DIRECTORY=$base/$backend/bin" "${extra[@]}"
   cmake --build "$build" --target starbound --parallel "${CMAKE_BUILD_PARALLEL_LEVEL:-8}"
   python3 "$provenance" seal --source-root "$root" --snapshot "$snapshot" \

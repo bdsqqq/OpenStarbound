@@ -1,6 +1,16 @@
 #pragma once
 
 #include "StarMatrix3.hpp"
+#ifdef STAR_USE_RUST_LINE_QUERY
+// Fast C++ reassociation depends on inlining context; the sampled Rust policy
+// fails the frozen full-field oracle. Do not silently select that candidate.
+#ifdef __FAST_MATH__
+#error Rust line queries are experimental and do not support fast-math
+#endif
+#include "StarRustLine.h"
+#include <stdexcept>
+#include <type_traits>
+#endif
 
 namespace Star {
 
@@ -136,6 +146,13 @@ public:
   template <size_t P = N>
   typename std::enable_if<P == 2 && N == P, IntersectResult>::type intersection(
       Line const& line2, bool infinite = false) const {
+#ifdef STAR_USE_RUST_LINE_QUERY
+    if constexpr (std::is_same_v<T, float> || std::is_same_v<T, double>) {
+      auto r = rustQuery(line2.min(), line2.max(), 0, infinite);
+      return {r.intersects != 0, VectorType(r.point[0], r.point[1]), r.t,
+          r.coincides != 0, r.glances != 0};
+    }
+#endif
     Line l1 = *this;
     Line l2 = line2;
     // Warning to others, do not make the lines positive, because points of
@@ -214,12 +231,20 @@ public:
   // from 0.0 to 1.0
   template <size_t P = N>
   typename std::enable_if<P == 2 && N == P, T>::type lineProjection(VectorType const& l2) const {
+#ifdef STAR_USE_RUST_LINE_QUERY
+    if constexpr (std::is_same_v<T, float> || std::is_same_v<T, double>)
+      return rustQuery(l2, VectorType(), 1, false).t;
+#endif
     VectorType d = diff();
     return ((l2[0] - min()[0]) * d[0] + (l2[1] - min()[1]) * d[1]) / d.magnitudeSquared();
   }
 
   template <size_t P = N>
   typename std::enable_if<P == 2 && N == P, T>::type distanceTo(VectorType const& l, bool infinite = false) const {
+#ifdef STAR_USE_RUST_LINE_QUERY
+    if constexpr (std::is_same_v<T, float> || std::is_same_v<T, double>)
+      return rustQuery(l, VectorType(), 2, infinite).t;
+#endif
     auto t = lineProjection(l);
     if (!infinite)
       t = clamp<T>(t, 0, 1);
@@ -258,6 +283,34 @@ public:
   }
 
 private:
+#ifdef STAR_USE_RUST_LINE_QUERY
+  // Kept behind a function template so integer and non-2D Lines never instantiate
+  // the foreign calculation types. Public query SFINAE remains unchanged.
+  template <typename Scalar = T>
+  auto rustQuery(VectorType const& c, VectorType const& d, uint32_t mode, bool infinite) const {
+    using Input = std::conditional_t<std::is_same_v<Scalar, float>, StarLineInputF32, StarLineInputF64>;
+    using Result = std::conditional_t<std::is_same_v<Scalar, float>, StarLineResultF32, StarLineResultF64>;
+    Input input{{m_min[0], m_min[1]}, {m_max[0], m_max[1]}, {c[0], c[1]}, {d[0], d[1]}};
+    Result result{};
+    uint32_t policy = 0;
+#if defined(STAR_RUST_LINE_FP_PRECISE)
+    // Must accompany -ffp-contract=off.
+    policy = 0;
+#elif defined(__APPLE__) && defined(__aarch64__) && defined(__clang__) && __clang_major__ == 21
+    policy = 2;
+#endif
+    int32_t status;
+    if constexpr (std::is_same_v<Scalar, float>)
+      status = star_line_query_f32(&input, mode, infinite ? 1u : 0u, policy, &result);
+    else
+      status = star_line_query_f64(&input, mode, infinite ? 1u : 0u, policy, &result);
+    if (status == 2)
+      throw std::invalid_argument("invalid Rust line-query argument");
+    if (status != 0)
+      throw std::runtime_error("Rust line-query panic");
+    return result;
+  }
+#endif
   VectorType m_min;
   VectorType m_max;
 };

@@ -46,6 +46,8 @@
     {"id":"windows-compat","module":"presentation.app-platform","disposition":"migrate-adapter","pattern":"lib/windows/include/(?:strings|windows_extra)\\.h"},
     {"id":"core-collections","module":"foundation.collections","disposition":"migrate","pattern":"source/core/Star(?:Algorithm|Array|AtomicSharedPtr|BiMap|BlockAllocator|Casting|Either|FlatHashMap|FlatHashSet|FlatHashTable|IdMap|Iterator|List|Map|Maybe|Memory|MultiArray|MultiTable|OrderedMap|OrderedSet|Pythonic|RefPtr|Set|SmallVector|StaticVector|StrongTypedef|Variant)\\.(?:hpp|cpp)"},
     {"id":"core-text","module":"foundation.text","disposition":"migrate","pattern":"source/core/Star(?:Format|LexicalCast|String|StringView|Text|Unicode)(?:_windows)?\\.(?:hpp|cpp)"},
+    {"id":"rust-line-query-abi","module":"foundation.math-geometry","disposition":"ffi-adapter","pattern":"source/core/StarRustLine\\.h"},
+    {"id":"rust-line-query","module":"foundation.math-geometry","disposition":"rust-candidate","pattern":"source/rust/ffi/src/line_query\\.rs"},
     {"id":"core-math","module":"foundation.math-geometry","disposition":"migrate","pattern":"source/core/Star(?:AStar|Interpolation|Line|MathCommon|Matrix3|MultiArrayInterpolator|ParametricFunction|PeriodicFunction|Poly|Rect|SectorArray2D|SpatialHash2D|Spline|Vector)\\.(?:hpp|cpp)"},
     {"id":"core-random","module":"foundation.random","disposition":"migrate","pattern":"source/core/Star(?:Perlin|Random|RandomPoint|SecureRandom|StaticRandom|WeightedPool)(?:_(?:unix|windows))?\\.(?:hpp|cpp)"},
     {"id":"core-serialization","module":"foundation.serialization","disposition":"migrate","pattern":"source/core/Star(?:Buffer|ByteArray|Bytes|DataStream|DataStreamDevices|DataStreamExtra|Encode|FormattedJson|IODevice|IODeviceCallbacks|Json|JsonBuilder|JsonExtra|JsonParser|JsonPath|JsonPatch|JsonRpc|ObserverStream|VlqEncoding)\\.(?:hpp|cpp)"},
@@ -109,7 +111,7 @@
     {"id":"archived-scripts","module":"tools.inactive","disposition":"inactive-review","pattern":"attic/.+\\.(?:py|sh)"},
     {"id":"vendor","module":"retained.third-party","disposition":"retained-third-party","pattern":"source/(?:extern/(?!imgui_(?:iterator|lua_bindings))|application/discord/|test/gtest/).+\\.(?:c|cc|cpp|h|hpp|inl)"},
     {"id":"tests","module":"validation.tests","disposition":"test","pattern":"source/test/(?:[a-z][a-z0-9_]*|StarTestUniverse)\\.(?:cpp|hpp)"},
-    {"id":"laboratories","module":"validation.oracles-harness","disposition":"oracle/harness","pattern":"source/lab/(?!migration/).+\\.(?:cpp|hpp|h|py|sh|rs)"},
+    {"id":"laboratories","module":"validation.oracles-harness","disposition":"oracle/harness","pattern":"source/lab/(?!migration/).+\\.(?:c|cpp|hpp|h|py|sh|rs)"},
     {"id":"behavior-lab-contract","module":"validation.oracles-harness","disposition":"harness","pattern":"source/application/StarBehaviorLab\\.(?:hpp|cpp)"}
   ]
 }
