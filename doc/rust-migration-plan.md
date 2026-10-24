@@ -59,7 +59,7 @@ per slice: inventory -> contract -> reference/negative tests -> Rust -> integrat
 ## current handoff
 
 host/worktree: apple silicon macOS, `/Users/bdsqqq/www/OpenStarbound`, main.
-last committed checkpoint: `a0296af5` (Rust float/double grid traversal plus actual raycast/combined regression evidence). archive/oracle checkpoint7f6700c2 precedes it. the guarded experimental line-query checkpoint below is ready; all delegated tasks are terminal; the next byte-slice proposal is recorded below. no native build/game is running. preserve pre-existing untracked `storage/` and the Steam install. no pushes or external service actions.
+latest code checkpoint: `49586f4e` (guarded experimental line queries; fast-math BLOCKED, not game-qualified). last actual-game checkpoint: `a0296af5` (Rust float/double grid traversal plus actual raycast/combined regression evidence); archive/oracle checkpoint7f6700c2 precedes it. the experimental checkpoint is committed locally, no push; all delegated tasks are terminal; the next byte-slice proposal is recorded below. no native build/game is running. preserve pre-existing untracked `storage/` and the Steam install. no pushes or external service actions.
 
 ### completed checkpoints and evidence
 
