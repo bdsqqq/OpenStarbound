@@ -20172,6 +20172,106 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/json-patch/StarJsonPatch.original.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/json-patch/StarJsonPatch.original.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/json-patch/StarJsonPatch.reference.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/json-patch/StarJsonPatch.reference.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/json-patch/host_contract.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/json-patch/host_contract.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/json-patch/host_contract_test.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/json-patch/host_run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/json-patch/lab.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/json-patch/run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/json-path/StarJsonPath.original.cpp",
       "rule": "laboratories"
     },
@@ -29171,6 +29271,46 @@
       "sha256": "681cafaf4d87b9e1797d3434b6f60db75baf8731a8f3c617d865efd05da9091e"
     },
     {
+      "path": "source/lab/json-patch/StarJsonPatch.original.cpp",
+      "sha256": "fa72040071c0771ff40cf13accb8f141c28137ce54b512b6036a52bd7cd55678"
+    },
+    {
+      "path": "source/lab/json-patch/StarJsonPatch.original.hpp",
+      "sha256": "6d58887c0b7864166fd38c168a1882dc2804d20bcedb2edd0569156aeefa3557"
+    },
+    {
+      "path": "source/lab/json-patch/StarJsonPatch.reference.cpp",
+      "sha256": "37d5160e57f615ea6dfbf06d8b24deb7fdbe103c3a3ee2094922206e371f2db0"
+    },
+    {
+      "path": "source/lab/json-patch/StarJsonPatch.reference.hpp",
+      "sha256": "f90d3202548d3c9c5752592294dd955ba7bcfbf229babc9a72c6b14f307d149d"
+    },
+    {
+      "path": "source/lab/json-patch/host_contract.cpp",
+      "sha256": "9a48a4782183900d7fac48d92640ef213f54eae5112d7e442188473953eb4230"
+    },
+    {
+      "path": "source/lab/json-patch/host_contract.hpp",
+      "sha256": "1c3d52a27b5f85243fa2962af01fd06b1f73a31956b40188a8dd8a98f14e1fe2"
+    },
+    {
+      "path": "source/lab/json-patch/host_contract_test.cpp",
+      "sha256": "ccb9e74e01e083f6247263d87b61a1cffd5d44f78a9a5d8c95078a0b7f15dbb2"
+    },
+    {
+      "path": "source/lab/json-patch/host_run.py",
+      "sha256": "8a67cb55e3a0866e8bf66f4e222281ef764364520e82a5d11ec858682da073fd"
+    },
+    {
+      "path": "source/lab/json-patch/lab.cpp",
+      "sha256": "894ec43e0c7ae4fea7e2cd2cd6424262df9e12818c368b045d3b6d65020fe11f"
+    },
+    {
+      "path": "source/lab/json-patch/run.py",
+      "sha256": "862ab9a3d12586fb38446623f1a9a3f60625cf548ed07e700b3db09f442eed33"
+    },
+    {
       "path": "source/lab/json-path/StarJsonPath.original.cpp",
       "sha256": "5683e878d887dbf3bc68dc7b8b944b109a02ef58aa7f95f67a9331e3028fba7a"
     },
@@ -30381,7 +30521,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 90,
+      "oracle/harness": 100,
       "retain-tooling": 20,
       "retained-third-party": 296,
       "rust-candidate": 12,
@@ -30422,14 +30562,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 35,
-      "validation.oracles-harness": 103,
+      "validation.oracles-harness": 113,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1505,
+    "files": 1515,
     "modules": 39,
-    "no_direct_target": 399
+    "no_direct_target": 409
   }
 }
