@@ -1,6 +1,20 @@
 #include "StarOptionParser.hpp"
 #include "StarIterator.hpp"
 
+#ifdef STAR_USE_RUST_OPTION_PARSER
+#include "StarOptionParserHost.hpp"
+namespace Star {
+void OptionParser::setCommandName(String x){auto c=makeContext<Switch,Parameter,Argument>(this,0,m_commandName,m_summary,m_additionalHelp,m_options,m_arguments);c.moved=&x;c.run();}
+void OptionParser::setSummary(String x){auto c=makeContext<Switch,Parameter,Argument>(this,1,m_commandName,m_summary,m_additionalHelp,m_options,m_arguments);c.moved=&x;c.run();}
+void OptionParser::setAdditionalHelp(String x){auto c=makeContext<Switch,Parameter,Argument>(this,2,m_commandName,m_summary,m_additionalHelp,m_options,m_arguments);c.moved=&x;c.run();}
+void OptionParser::addSwitch(String const& f,String d){auto c=makeContext<Switch,Parameter,Argument>(this,3,m_commandName,m_summary,m_additionalHelp,m_options,m_arguments);c.payloadFlag=&f;c.description=&d;c.run();}
+void OptionParser::addParameter(String const& f,String a,RequirementMode r,String d){auto c=makeContext<Switch,Parameter,Argument>(this,4,m_commandName,m_summary,m_additionalHelp,m_options,m_arguments);c.payloadFlag=&f;c.payloadArgument=&a;c.description=&d;c.requirement=r;c.run();}
+void OptionParser::addArgument(String a,RequirementMode r,String d){auto c=makeContext<Switch,Parameter,Argument>(this,5,m_commandName,m_summary,m_additionalHelp,m_options,m_arguments);c.payloadArgument=&a;c.description=&d;c.requirement=r;c.run();}
+pair<OptionParser::Options,StringList> OptionParser::parseOptions(StringList const& a)const{Options result;StringList errors;auto c=makeContext<Switch,Parameter,Argument>(this,6,m_commandName,m_summary,m_additionalHelp,m_options,m_arguments);c.input=&a;c.result=&result;c.errors=&errors;c.run();return {std::move(result),std::move(errors)};}
+void OptionParser::printHelp(std::ostream& out)const{auto c=makeContext<Switch,Parameter,Argument>(this,7,m_commandName,m_summary,m_additionalHelp,m_options,m_arguments);c.stream=&out;c.run();}
+}
+
+#else
 namespace Star {
 
 void OptionParser::setCommandName(String commandName) {
@@ -160,3 +174,4 @@ void OptionParser::printHelp(std::ostream& os) const {
 }
 
 }
+#endif

@@ -49,6 +49,28 @@ def anchors(data):
  if d['bytes']!=want:raise ValueError('usage callback late definitions anchor')
  if dict(rows['stream8'])['nested']!=base:raise ValueError('nested help')
  return len(rows)
+def current_source_matches(ext, src, current):
+ if ext=='hpp':return current==src
+ if current==src:return True
+ # Only the unique top-level selector's fallback may carry the original body.
+ depth=0;starts=[];ends=[];offset=0
+ for line in current.splitlines(keepends=True):
+  directive=line.strip().split(maxsplit=1)[0] if line.strip() else b''
+  if directive in (b'#if',b'#ifdef',b'#ifndef'):depth+=1
+  elif directive==b'#else':
+   if depth<=0:return False
+   if depth==1:starts.append(offset+len(line))
+  elif directive==b'#endif':
+   if depth<=0:return False
+   if depth==1:ends.append(offset)
+   depth-=1
+  offset+=len(line)
+ if depth or len(starts)!=1 or len(ends)!=1:return False
+ prefix,body=src.split(b'namespace Star {',1)
+ fallback=current[starts[0]:ends[0]]
+ return (b'STAR_USE_RUST_OPTION_PARSER' in current[:starts[0]] and
+         current.startswith(prefix) and current[ends[0]:]==b'#endif\n' and
+         fallback==b'namespace Star {'+body)
 def main():
  ap=argparse.ArgumentParser();ap.add_argument('--output',required=True,type=Path);ap.add_argument('--identity-manifest',type=Path,default=ROOT/'build/zstd-lab/cpp-postbuild-r1/before.json');a=ap.parse_args();out=a.output.absolute();base=ROOT/'build/option-parser-lab'
  if out==base or not out.is_relative_to(base) or out.exists() or any(p.is_symlink() for p in [out,*out.parents]):ap.error('fresh owned nonsymlink output required')
@@ -63,7 +85,7 @@ def main():
  def gate(ext,raw,ref):
   src=subprocess.check_output(['git','show',REV+':source/core/StarOptionParser.'+ext],cwd=ROOT);want=src.replace(b'namespace Star {',b'namespace OptionReference {\nusing namespace Star;')
   if ext=='cpp':want=want.replace(b'"StarOptionParser.hpp"',b'"StarOptionParser.reference.hpp"')
-  if raw!=src or ref!=want or (ROOT/('source/core/StarOptionParser.'+ext)).read_bytes()!=src:raise ValueError('source provenance mismatch')
+  if raw!=src or ref!=want or not current_source_matches(ext,src,(ROOT/('source/core/StarOptionParser.'+ext)).read_bytes()):raise ValueError('source provenance mismatch')
  for ext in ['cpp','hpp']:
   raw=(HERE/('StarOptionParser.original.'+ext)).read_bytes();ref=(HERE/('StarOptionParser.reference.'+ext)).read_bytes();gate(ext,raw,ref)
   try:gate(ext,raw+b' ',ref)
@@ -85,7 +107,7 @@ def main():
  supplementary=ROOT/'build/shell-lab/cpp-final-r2/before.json';old=json.loads(supplementary.read_text());zp=(cm/'core/CMakeFiles/star_core.dir/StarZSTDCompression.cpp.o').resolve();sealed[str(zp)]=old[str(zp)]
  for p in identity:
   if sealed.get(str(p.resolve()))!=sha(p):raise RuntimeError('native sealed identity drift '+str(p))
- tracked=[Path(__file__),HERE/'lab.cpp',a.identity_manifest,supplementary,Path(sys.executable).resolve(),Path('/usr/bin/ar').resolve(),*identity,*[HERE/('StarOptionParser.'+k+'.'+e) for k in ['original','reference'] for e in ['cpp','hpp']]]
+ tracked=[ROOT/'source/core/StarOptionParser.cpp',ROOT/'source/core/StarOptionParser.hpp',Path(__file__),HERE/'lab.cpp',a.identity_manifest,supplementary,Path(sys.executable).resolve(),Path('/usr/bin/ar').resolve(),*identity,*[HERE/('StarOptionParser.'+k+'.'+e) for k in ['original','reference'] for e in ['cpp','hpp']]]
  for n,s in enumerate([HERE/'lab.cpp',HERE/'StarOptionParser.original.cpp',HERE/'StarOptionParser.reference.cpp']):
   dep=out/(str(n)+'.d');run([recipe[0],*flags,'-I'+str(HERE),'-M','-MF',dep,s],'deps'+str(n));tracked += [Path(x) if Path(x).is_absolute() else ROOT/x for x in shlex.split(dep.read_text().replace('\\\n',' ').split(':',1)[1])]
  tracked=list(dict.fromkeys(p.resolve() for p in tracked));before={str(p):sha(p) for p in tracked};(out/'before.json').write_text(json.dumps(before,indent=2));archive=out/'native-core.a';run(['/usr/bin/ar','rcs',archive,*objs],'archive');archive_sha=sha(archive);binaries={};generated={}

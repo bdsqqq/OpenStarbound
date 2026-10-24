@@ -1,6 +1,6 @@
 # option parser native calibration
 
-this lab isolates the eight compiled `OptionParser` definitions before introducing a rust boundary. it does NOT qualify a production port.
+this lab calibrates the eight compiled `OptionParser` definitions and separately exercises the opt-in Rust/native boundary. native-only calibration is not production qualification; the accepted finite scope and actual client evidence are in [candidate evidence](CANDIDATE_EVIDENCE.md).
 
 ```sh
 python3 source/lab/option-parser/run.py --output build/option-parser-lab/your-fresh-run
@@ -29,6 +29,16 @@ the complete originals are frozen at `0a428508`; the reference changes namespace
 - nul/unicode strings and a native invalid-utf8 case pass through `StarString`; no unchecked rust string domain is substituted.
 
 `report.json` binds native inputs, transitive headers, sources, generated mutants, executables, compiler flags, and observations. `receipts.json` is updated after each command so later compile/runtime failure cannot erase previous observations. stderr/stdout and generated sources remain beside each executable. markdown is intentionally outside the runtime binding set.
+
+## actual selected rust replay
+
+```sh
+python3 -B source/lab/option-parser/run.py --identity-manifest build/option-parser-lab/postbuild-identity/manifest.json --output build/option-parser-lab/fresh-current-cpp
+python3 -B source/lab/option-parser/candidate_run.py --values build/option-parser-lab/fresh-current-cpp --output build/option-parser-lab/fresh-current-rust
+python3 -B source/lab/option-parser/verify_candidate.py --report build/option-parser-lab/fresh-current-rust/report.json
+```
+
+native objects, selected production sources and `build/option-parser-rust/target/release/libstar_engine_ffi.a` must be frozen while running. a subsequent native rebuild requires a new verified object identity, not blessing drift in an old report. `candidate_run.py` compiles the actual selected public bridge, not the C++ blueprint, and checks real Rust counters, raw-host tests and compiled wiring negatives. it never runs Cargo or rebuilds the project.
 
 ## limits
 

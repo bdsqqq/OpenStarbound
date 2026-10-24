@@ -1,0 +1,5 @@
+{
+  "name": "behavior-option-parser-fixtures",
+  "priority": 1100,
+  "scripts": {"postLoad": ["/behaviorlab/option-parser-image.lua"]}
+}

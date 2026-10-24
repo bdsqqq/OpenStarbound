@@ -1,5 +1,6 @@
 #include "StarVersionOptionParser.hpp"
 #include "StarFile.hpp"
+#include "StarOptionParserLab.hpp"
 
 namespace Star {
 
@@ -21,6 +22,7 @@ VersionOptionParser::Options VersionOptionParser::parseOrDie(StringList const& c
   Options options;
   StringList errors;
   tie(options, errors) = OptionParser::parseOptions(cmdLineArguments);
+  optionParserLabObserveParse(cmdLineArguments, options, errors);
 
   if (options.switches.contains("version"))
     coutf("{}\n", getVersionString());

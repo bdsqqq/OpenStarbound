@@ -1,6 +1,7 @@
 #include "StarRootLoader.hpp"
 #include "StarLexicalCast.hpp"
 #include "StarJsonExtra.hpp"
+#include "StarOptionParserLab.hpp"
 
 namespace Star {
 
@@ -220,6 +221,17 @@ Root::Settings RootLoader::rootSettingsForOptions(Options const& options) const 
     else
       rootSettings.runtimeConfigFile = m_defaults.runtimeConfigFile;
 
+    if (optionParserLabEnabled() && !optionParserLabStartup().isNull()) {
+      auto receipt = optionParserLabStartup();
+      optionParserLabStartup() = receipt.set("root", JsonObject{
+          {"nativeRootSettingsObservations", 1}, {"bootConfigPath", bootConfigFile},
+          {"sourceJson", bootConfig}, {"assetDirectories", bootConfig.get("assetDirectories", JsonArray())},
+          {"assetSources", bootConfig.get("assetSources", JsonArray())},
+          {"storageDirectory", rootSettings.storageDirectory},
+          {"defaultConfiguration", rootSettings.defaultConfiguration},
+          {"logLevel", LogLevelNames.getRight(rootSettings.logLevel)}, {"quiet", rootSettings.quiet},
+          {"afterRootSettingsCounters", optionParserLabCounters()}});
+    }
     return rootSettings;
 
   } catch (std::exception const& e) {

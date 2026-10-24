@@ -19,6 +19,8 @@
 #include "StarRandomMwcLab.hpp"
 #include "StarCompressionLab.hpp"
 #include "StarZstdLab.hpp"
+#include "StarOptionParserLab.hpp"
+#include "StarRootLuaBindings.hpp"
 #include "StarNetPacketSocket.hpp"
 #ifdef STAR_USE_RUST_BYTES
 #include "StarRustBytes.h"
@@ -565,6 +567,8 @@ void ClientApplication::render() {
         prepareBehaviorRandomMwcFrame();
       if (BehaviorLab::enabled() && m_behaviorCompressionRoom)
         prepareBehaviorCompressionFrame();
+      if (BehaviorLab::enabled() && m_behaviorOptionParserRoom)
+        prepareBehaviorOptionParserFrame();
       if (BehaviorLab::enabled() && m_behaviorZstdRoom)
         prepareBehaviorZstdFrame();
 
@@ -603,7 +607,8 @@ void ClientApplication::render() {
           || (m_behaviorAssetPathRoom && !m_behaviorAssetPathProof.isNull())
           || (m_behaviorRandomMwcRoom && !m_behaviorRandomMwcProof.isNull())
           || (m_behaviorCompressionRoom && !m_behaviorCompressionProof.isNull())
-          || (m_behaviorZstdRoom && !m_behaviorZstdProof.isNull())) {
+          || (m_behaviorZstdRoom && !m_behaviorZstdProof.isNull())
+          || (m_behaviorOptionParserRoom && !m_behaviorOptionParserProof.isNull())) {
         // Normal Font -> TextPainter -> GPU glyph path; only ASCII coverage is
         // claimed. Screen-space coordinates avoid the 64px world-image area.
         m_guiContext->clearTextStyle();
@@ -612,7 +617,8 @@ void ClientApplication::render() {
         m_guiContext->setFontColor(Vec4B(255, 255, 255, 255));
         m_guiContext->setFontMode(FontMode::Normal);
         m_guiContext->setFontProcessingDirectives("");
-        m_guiContext->renderText(m_behaviorJsonPatchRoom ? m_behaviorJsonPatchProof.get("visual").getString("label")
+        m_guiContext->renderText(m_behaviorOptionParserRoom ? m_behaviorOptionParserProof.get("visual").getString("label")
+            : m_behaviorJsonPatchRoom ? m_behaviorJsonPatchProof.get("visual").getString("label")
             : m_behaviorZstdRoom ? m_behaviorZstdProof.get("visual").getString("label")
             : m_behaviorCompressionRoom ? m_behaviorCompressionProof.get("visual").getString("label")
             : m_behaviorRandomMwcRoom ? m_behaviorRandomMwcProof.get("visual").getString("label")
@@ -1504,7 +1510,7 @@ void ClientApplication::validateBehaviorStorage() {
       && scenario != "sha256-room" && scenario != "vlq-room" && scenario != "bytes-room"
       && scenario != "unicode-room" && scenario != "shell-room" && scenario != "jsonpath-room" && scenario != "assetpath-room"
       && scenario != "random-room" && scenario != "jsonpatch-room" && scenario != "text-room"
-      && scenario != "compression-room" && scenario != "zstd-room")
+      && scenario != "compression-room" && scenario != "zstd-room" && scenario != "option-parser-room")
     throw StarException("BehaviorLab: unsupported scenario");
   m_behaviorRaycastRoom = scenario == "raycast-room";
   m_behaviorEncodingRoom = scenario == "encoding-room";
@@ -1519,6 +1525,7 @@ void ClientApplication::validateBehaviorStorage() {
   m_behaviorAssetPathRoom = scenario == "assetpath-room";
   m_behaviorRandomMwcRoom = scenario == "random-room";
   m_behaviorCompressionRoom = scenario == "compression-room";
+  m_behaviorOptionParserRoom = scenario == "option-parser-room";
   m_behaviorZstdRoom = scenario == "zstd-room";
   if (config.getUInt("maxFrames", 1800) == 0 || config.getUInt("maxFrames", 1800) > 18000)
     throw StarException("BehaviorLab: maxFrames must be in [1, 18000]");
@@ -1640,7 +1647,7 @@ void ClientApplication::updateBehaviorScenario() {
       return;
     if (m_behaviorStage == 2) {
       Logger::info("BehaviorLab: {} completed (three acknowledged world frames)",
-          m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
+          m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
       m_behaviorPhase = 5;
       appController()->quit();
       return;
@@ -2394,6 +2401,52 @@ void ClientApplication::prepareBehaviorUnicodeFrame() {
   m_renderData.foregroundOverlays.append(std::move(drawable));
 }
 
+void ClientApplication::prepareBehaviorOptionParserFrame() {
+  if (!m_behaviorReady || BehaviorLab::hasPendingFrame() || m_renderData.isFullbright)
+    return;
+  if (m_behaviorOptionParserProof.isNull()) {
+    auto startup = optionParserLabStartup();
+    if (startup.isNull() || !startup.contains("root"))
+      throw StarException("BehaviorLab: actual option parser startup receipt missing");
+    auto config = m_root->configuration()->get("optionParserProof");
+    if (config != m_root->settings().defaultConfiguration.get("optionParserProof"))
+      throw StarException("BehaviorLab: option parser Root configuration differs from boot defaults");
+    auto assets = m_root->assets();
+    auto engine = LuaEngine::create();
+    auto context = engine->createContext();
+    context.setCallbacks("root", LuaBindings::makeRootCallbacks());
+    context.load(*assets->bytes("/behaviorlab/option-parser-consumer.lua"),
+        "/behaviorlab/option-parser-consumer.lua");
+    auto visual = context.invokePath<Json>("proof");
+    if (visual.get("configuration") != config)
+      throw StarException("BehaviorLab: normal Lua Root binding lost option parser configuration");
+    auto image = assets->image(visual.getString("imagePath"));
+    auto color = visual.getArray("color");
+    if (image->size() != Vec2U(16, 16) || color.size() != 4)
+      throw StarException("BehaviorLab: option parser image dimensions/color invalid");
+    Vec4B expected(color[0].toUInt(), color[1].toUInt(), color[2].toUInt(), color[3].toUInt());
+    for (unsigned y = 0; y != 16; ++y)
+      for (unsigned x = 0; x != 16; ++x)
+        if (image->get(x, y) != expected)
+          throw StarException("BehaviorLab: normal Assets image differs from Root configuration");
+    String backend = "cpp";
+#ifdef STAR_USE_RUST_OPTION_PARSER
+    backend = "rust";
+#endif
+    m_behaviorOptionParserProof = JsonObject{{"version", 1}, {"backend", backend},
+        {"startup", startup}, {"rootConfiguration", config}, {"visual", visual},
+        {"sourceSize", JsonArray{16, 16}}, {"displaySize", JsonArray{64, 64}},
+        {"configurationConsumer", "normal-root-lua-getConfiguration"},
+        {"imageConsumer", "normal-Assets-image"}, {"labelConsumer", "normal-Font-TextPainter"},
+        {"mainThreadCounters", optionParserLabCounters()}};
+  }
+  auto visual = m_behaviorOptionParserProof.get("visual");
+  auto drawable = Drawable::makeImage(visual.getString("imagePath"),
+      visual.getFloat("scale") * 0.5f / TilePixels, true, Vec2F(64, 48));
+  drawable.fullbright = true;
+  m_renderData.foregroundOverlays.append(std::move(drawable));
+}
+
 void ClientApplication::prepareBehaviorZstdFrame() {
   // Run before the frame-ready guard: the first normal Assets image lookup must
   // be driven by the actual TCP-received path, not a Lua preload or proxy.
@@ -3088,7 +3141,7 @@ void ClientApplication::renderBehaviorScenario() {
       {"layout", "row-major-rgb-f32-bits"}, {"bits", std::move(lightmapBits)}};
   Json metadata = JsonObject{
       {"lightingDiagnostics", std::move(lightmapDiagnostic)},
-      {"scenario", m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
+      {"scenario", m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
       {"worldState", JsonObject{
           {"worldId", printWorldId(m_universeClient->clientContext()->playerWorldId())},
           {"worldSize", jsonFromVec2U(world->geometry().size())},
@@ -3174,6 +3227,11 @@ void ClientApplication::renderBehaviorScenario() {
     if (m_behaviorAssetPathProof.isNull())
       throw StarException("BehaviorLab: assetpath frame has no completed proof");
     metadata = metadata.set("assetPathProof", m_behaviorAssetPathProof);
+  }
+  if (m_behaviorOptionParserRoom) {
+    if (m_behaviorOptionParserProof.isNull())
+      throw StarException("BehaviorLab: option parser frame has no completed proof");
+    metadata = metadata.set("optionParserProof", m_behaviorOptionParserProof);
   }
   if (m_behaviorZstdRoom) {
     if (m_behaviorZstdProof.isNull())

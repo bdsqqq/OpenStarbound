@@ -1,5 +1,10 @@
 //! The engine's single Rust static archive owns the unmangled C ABI exports.
 //! Kernels remain rlibs so linking another kernel cannot add another Rust runtime.
+mod option_parser;
+pub use option_parser::{
+    star_option_parser_call_count, star_option_parser_run, StarOptionParserHost,
+};
+
 mod zstd;
 pub use zstd::{star_zstd_call_count, star_zstd_run, StarZstdHost};
 
