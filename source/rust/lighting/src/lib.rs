@@ -2,6 +2,16 @@
 use std::mem::{align_of, size_of};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::slice;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+// A receipt for integration tests: a linked symbol alone cannot prove the
+// running WorldClient actually selected and executed this implementation.
+static SUCCESSFUL_CALCULATIONS: AtomicU64 = AtomicU64::new(0);
+
+#[no_mangle]
+pub extern "C" fn star_lighting_call_count() -> u64 {
+    SUCCESSFUL_CALCULATIONS.load(Ordering::Relaxed)
+}
 
 #[cfg(test)]
 mod tests;
@@ -491,6 +501,7 @@ pub unsafe extern "C" fn star_lighting_calculate(
         array.sources(spread);
         array.sweeps(bounds);
         array.points(points, bounds);
+        SUCCESSFUL_CALCULATIONS.fetch_add(1, Ordering::Relaxed);
         0
     }))
     .unwrap_or(2)

@@ -172,10 +172,14 @@ unsafe fn call(
 }
 #[test]
 fn ffi_validates_before_mutation_and_allows_null_empty_sources() {
+    let calls_before = star_lighting_call_count();
     let mut cells = [StarLightingCell::default(); 25];
     let mut p = params();
     unsafe {
         assert_eq!(call(5, 5, &p, cells.as_mut_ptr(), 25), 0);
+        // Other Rust tests may call the ABI concurrently; only monotonicity is
+        // contractual, not an exact process-global count at this instant.
+        assert!(star_lighting_call_count() > calls_before);
         assert_eq!(call(5, 5, std::ptr::null(), cells.as_mut_ptr(), 25), 1);
         assert_eq!(call(5, 5, &p, std::ptr::null_mut(), 25), 1);
         assert_eq!(call(5, 5, &p, cells.as_mut_ptr(), 24), 1);

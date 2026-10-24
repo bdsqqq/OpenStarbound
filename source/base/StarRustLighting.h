@@ -52,6 +52,10 @@ int32_t star_lighting_calculate(
     StarLightingPointLight const* point_lights, size_t point_len,
     size_t x_min, size_t y_min, size_t x_max, size_t y_max);
 
+/* Successful calculations in this process; no reset/global configuration.
+ * Integration evidence only, never used to decide simulation behavior. */
+uint64_t star_lighting_call_count(void);
+
 #ifdef __cplusplus
 }
 #endif
