@@ -1,5 +1,11 @@
 //! The engine's single Rust static archive owns the unmangled C ABI exports.
 //! Kernels remain rlibs so linking another kernel cannot add another Rust runtime.
+mod vlq;
+pub use vlq::{
+    star_vlq_call_count, star_vlq_read_i, star_vlq_read_u, star_vlq_size_i, star_vlq_size_u,
+    star_vlq_write_i, star_vlq_write_u, StarVlqRead, StarVlqWrite,
+};
+
 mod sha256;
 pub use sha256::{
     star_sha256_call_count, star_sha256_finalize, star_sha256_init, star_sha256_oneshot,

@@ -18,6 +18,10 @@
 #include "StarLexicalCast.hpp"
 #include "StarSha256.hpp"
 #include "StarSha256Lab.hpp"
+#include "StarVlqLab.hpp"
+#ifdef STAR_USE_RUST_VLQ
+#include "StarRustVlq.h"
+#endif
 #include "StarEncode.hpp"
 #include "StarDataStreamDevices.hpp"
 #include "StarLua.hpp"
@@ -40,6 +44,13 @@ namespace Star {
 namespace {
 std::mutex Sha256AssetProofMutex;
 Json Sha256AssetProof;
+std::mutex VlqAssetProofMutex;
+Json VlqAssetProof;
+}
+
+Json vlqBehaviorAssetProof() {
+  std::lock_guard<std::mutex> lock(VlqAssetProofMutex);
+  return VlqAssetProof;
 }
 
 Json sha256BehaviorAssetProof() {
@@ -170,6 +181,8 @@ Assets::Assets(Settings settings, StringList assetSources) {
   if (captureSha256) {
     std::lock_guard<std::mutex> lock(Sha256AssetProofMutex);
     Sha256AssetProof = Json();
+    std::lock_guard<std::mutex> vlqLock(VlqAssetProofMutex);
+    VlqAssetProof = Json();
   }
   const char* AssetsPatchSuffix = ".patch";
   const char* AssetsPatchListSuffix = ".patchlist";
@@ -194,6 +207,27 @@ Assets::Assets(Settings settings, StringList assetSources) {
     // Lab-only, executing-thread receipts: no application dependency or config
     // access here, since these callbacks also run during Root construction.
     if (std::getenv("STAR_BEHAVIOR_LAB")) {
+      callbacks.registerCallback("vlqLabCounts", []() -> Json {
+        JsonArray counts;
+        for (uint32_t op = 0; op != 6; ++op) {
+#ifdef STAR_USE_RUST_VLQ
+          counts.append(star_vlq_call_count(op));
+#else
+          counts.append(0);
+#endif
+        }
+        return counts;
+      });
+      callbacks.registerCallback("recordVlqLabProof", [](Json proof) {
+        // The backend is a native build fact, not an assertion supplied by Lua.
+#ifdef STAR_USE_RUST_VLQ
+        proof = proof.set("backend", "rust");
+#else
+        proof = proof.set("backend", "cpp");
+#endif
+        std::lock_guard<std::mutex> lock(VlqAssetProofMutex);
+        VlqAssetProof = std::move(proof);
+      });
       callbacks.registerCallback("encodingLabCounts", []() -> Json {
         JsonArray counts;
         for (uint32_t op = 0; op != 5; ++op) {

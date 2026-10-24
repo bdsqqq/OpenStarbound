@@ -4,8 +4,8 @@
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mode="${1:-lighting}"
-if [[ $# -gt 1 || ! "$mode" =~ ^(lighting|traversal|combined|encode|encode-combined|sha256|sha256-combined)$ ]]; then
-  printf '%s\n' 'usage: build-behavior-lab.sh [lighting|traversal|combined|encode|encode-combined|sha256|sha256-combined]' >&2
+if [[ $# -gt 1 || ! "$mode" =~ ^(lighting|traversal|combined|encode|encode-combined|sha256|sha256-combined|vlq|vlq-combined)$ ]]; then
+  printf '%s\n' 'usage: build-behavior-lab.sh [lighting|traversal|combined|encode|encode-combined|sha256|sha256-combined|vlq|vlq-combined]' >&2
   exit 2
 fi
 if [[ "$(uname -s)" != Darwin || "$(uname -m)" != arm64 ]]; then
@@ -30,6 +30,7 @@ for backend in reference candidate; do
   blocks=OFF
   encode=OFF
   sha256=OFF
+  vlq=OFF
   # All modes share the identical all-C++ reference; candidates stay isolated.
   base="$root/build/behavior"
   if [[ "$backend" == candidate ]]; then
@@ -41,6 +42,8 @@ for backend in reference candidate; do
       encode-combined) rust=ON; blocks=ON; encode=ON ;;
       sha256) sha256=ON ;;
       sha256-combined) rust=ON; blocks=ON; encode=ON; sha256=ON ;;
+      vlq) vlq=ON ;;
+      vlq-combined) rust=ON; blocks=ON; encode=ON; sha256=ON; vlq=ON ;;
     esac
     if [[ "$mode" != lighting ]]; then base="$base/$mode"; fi
   fi
@@ -62,7 +65,7 @@ for backend in reference candidate; do
     -DSTAR_BUILD_LIGHTING_LAB=OFF "-DSTAR_USE_RUST_LIGHTING=$rust" \
     "-DSTAR_USE_RUST_BLOCKS_ALONG_LINE=$blocks" \
     "-DSTAR_USE_RUST_LINE_QUERY=OFF" "-DSTAR_USE_RUST_ENCODE=$encode" \
-    "-DSTAR_USE_RUST_SHA256=$sha256" \
+    "-DSTAR_USE_RUST_SHA256=$sha256" "-DSTAR_USE_RUST_VLQ=$vlq" \
     "-DSTAR_RUNTIME_OUTPUT_DIRECTORY=$base/$backend/bin" "${extra[@]}"
   cmake --build "$build" --target starbound --parallel "${CMAKE_BUILD_PARALLEL_LEVEL:-8}"
   python3 "$provenance" seal --source-root "$root" --snapshot "$snapshot" \

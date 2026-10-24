@@ -1,0 +1,7 @@
+{
+  "name": "behavior-vlq-fixtures",
+  "friendlyName": "Isolated VLQ behavior fixtures",
+  "description": "Frozen binary JSON inputs through normal Assets; requires behavior-lab-fixtures.",
+  "priority": 1100,
+  "scripts": {"postLoad": ["/behaviorlab/vlq.lua"]}
+}

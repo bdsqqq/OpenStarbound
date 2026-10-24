@@ -1,5 +1,11 @@
 # framebuffer behavior lab
 
+## vlq-room
+
+Build `scripts/build-behavior-lab.sh vlq` (or `vlq-combined`), then run the usual `run` command with `--scenario vlq-room`. The candidate is `build/behavior/<mode>/candidate/bin/starbound`. Earlier build modes explicitly keep VLQ OFF; line queries remain OFF in every native mode.
+
+This scenario preserves the three-stage lighting room and draws a red result from normal Assets binary-JSON decoding. Strict `vlqProof` validation also checks independently specified save/packet bytes, real RAM BTree raw pages/reopen and EOF-prefix behavior, with scoped six-operation receipts. Paired round-trips alone do not pass. See `EVIDENCE.md` and `../vlq/EVIDENCE.md` for exact tested artifacts and boundaries; this does not establish existing-save or network-transport compatibility.
+
 this is the first screenshot/state gate for the rust lighting migration, not a claim of game parity. captures use the real native client; unit fixtures only prove verifier sensitivity. inspect the expected/candidate/diff artifacts after an automated pass. the machine report deliberately leaves `parityCertified: false` pending that inspection.
 
 ```sh

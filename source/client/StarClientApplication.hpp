@@ -99,6 +99,7 @@ private:
   void prepareBehaviorRaycastFrame();
   void prepareBehaviorEncodingFrame();
   void prepareBehaviorSha256Frame();
+  void prepareBehaviorVlqFrame();
   void validateBehaviorStorage();
   unsigned m_behaviorFrames = 0;
   unsigned m_behaviorSettledFrames = 0;
@@ -108,6 +109,8 @@ private:
   bool m_behaviorRaycastRoom = false;
   bool m_behaviorEncodingRoom = false;
   bool m_behaviorSha256Room = false;
+  bool m_behaviorVlqRoom = false;
+  Json m_behaviorVlqProof;
   Json m_behaviorSha256Proof;
   Json m_behaviorEncodingProof;
   String m_behaviorEncodingImage;

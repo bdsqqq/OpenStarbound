@@ -1,6 +1,12 @@
 #include "StarClientApplication.hpp"
 #include "StarBehaviorLab.hpp"
 #include "StarSha256Lab.hpp"
+#include "StarVlqLab.hpp"
+#include "StarVlqEncoding.hpp"
+#include "StarVersioningDatabase.hpp"
+#include "StarNetPackets.hpp"
+#include "StarDataStreamDevices.hpp"
+#include <array>
 #include "StarBTreeDatabase.hpp"
 #include "StarBuffer.hpp"
 #ifdef STAR_USE_RUST_SHA256
@@ -520,6 +526,8 @@ void ClientApplication::render() {
         prepareBehaviorEncodingFrame();
       if (BehaviorLab::enabled() && m_behaviorSha256Room)
         prepareBehaviorSha256Frame();
+      if (BehaviorLab::enabled() && m_behaviorVlqRoom)
+        prepareBehaviorVlqFrame();
 
       auto paintStart = Time::monotonicMicroseconds();
       m_worldPainter->render(m_renderData, [&]() -> bool {
@@ -1425,11 +1433,12 @@ void ClientApplication::validateBehaviorStorage() {
   auto const& config = BehaviorLab::configuration();
   auto scenario = config.getString("scenario", "lighting-room");
   if (scenario != "lighting-room" && scenario != "raycast-room" && scenario != "encoding-room"
-      && scenario != "sha256-room")
+      && scenario != "sha256-room" && scenario != "vlq-room")
     throw StarException("BehaviorLab: unsupported scenario");
   m_behaviorRaycastRoom = scenario == "raycast-room";
   m_behaviorEncodingRoom = scenario == "encoding-room";
   m_behaviorSha256Room = scenario == "sha256-room";
+  m_behaviorVlqRoom = scenario == "vlq-room";
   if (config.getUInt("maxFrames", 1800) == 0 || config.getUInt("maxFrames", 1800) > 18000)
     throw StarException("BehaviorLab: maxFrames must be in [1, 18000]");
 
@@ -1550,7 +1559,7 @@ void ClientApplication::updateBehaviorScenario() {
       return;
     if (m_behaviorStage == 2) {
       Logger::info("BehaviorLab: {} completed (three acknowledged world frames)",
-          m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
+          m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
       m_behaviorPhase = 5;
       appController()->quit();
       return;
@@ -1818,6 +1827,209 @@ void ClientApplication::prepareBehaviorSha256Frame() {
       {"database", std::move(databaseProof)}};
 }
 
+void ClientApplication::prepareBehaviorVlqFrame() {
+  if (!m_behaviorReady || BehaviorLab::hasPendingFrame() || m_renderData.isFullbright)
+    return;
+
+  if (m_behaviorVlqProof.isNull()) {
+    auto count = [](uint32_t op) -> uint64_t {
+#ifdef STAR_USE_RUST_VLQ
+      return star_vlq_call_count(op);
+#else
+      (void)op;
+      return 0;
+#endif
+    };
+    auto snapshot = [&]() {
+      std::array<uint64_t, 6> result;
+      for (uint32_t op = 0; op != 6; ++op)
+        result[op] = count(op);
+      return result;
+    };
+    auto delta = [&](std::array<uint64_t, 6> const& before) {
+      JsonArray result;
+      for (uint32_t op = 0; op != 6; ++op)
+        result.append(count(op) - before[op]);
+      return result;
+    };
+    auto requireCalls = [](JsonArray const& calls, std::array<bool, 6> active) {
+      for (size_t op = 0; op != 6; ++op) {
+#ifdef STAR_USE_RUST_VLQ
+        bool expectedPositive = active[op];
+#else
+        (void)active;
+        bool expectedPositive = false;
+#endif
+        if (expectedPositive ? calls[op].toUInt() == 0 : calls[op].toUInt() != 0)
+          throw StarException::format("BehaviorLab: unexpected VLQ operation receipts: {}", Json(calls));
+      }
+    };
+    String backend = "cpp";
+    JsonArray pairCalls{0, 0, 0, 0, 0, 0}, stringCalls = pairCalls;
+    JsonArray sizeCallsExpected = pairCalls, packetWriteExpected = pairCalls, packetReadExpected = pairCalls;
+    JsonArray eofCallsExpected = pairCalls;
+#ifdef STAR_USE_RUST_VLQ
+    backend = "rust";
+    pairCalls = JsonArray{0, 0, 1, 0, 0, 2};
+    stringCalls = JsonArray{0, 0, 1, 0, 0, 0};
+    sizeCallsExpected = JsonArray{0, 0, 0, 0, 1, 0};
+    packetWriteExpected = JsonArray{0, 0, 0, 2, 0, 0};
+    packetReadExpected = JsonArray{0, 0, 0, 0, 0, 2};
+    eofCallsExpected = JsonArray{0, 0, 1, 0, 0, 0};
+#endif
+    String const text(std::string(128, 'x'));
+    String stringInputHex = "058100";
+    for (unsigned i = 0; i != 128; ++i)
+      stringInputHex += "78";
+    auto assetProof = vlqBehaviorAssetProof();
+    Json expectedAssets = JsonObject{{"backend", backend}, {"pairInputHex", "0602048101048200"},
+        {"pairValue", JsonArray{-65, 128}}, {"stringInputHex", stringInputHex}, {"stringValue", text},
+        {"readCalls", JsonObject{{"pair", pairCalls}, {"string", stringCalls}}},
+        {"visualColor", JsonArray{255, 0, 0, 255}}};
+    auto assets = m_root->assets();
+    String const imagePath = "/behaviorlab/vlq-result.png";
+    // Assets swallows postLoad Lua exceptions. Require both independent proof
+    // and actual normal image pixels; a lamp seed fallback is not acceptance.
+    if (assetProof != expectedAssets || !assets->assetExists(imagePath))
+      throw StarException("BehaviorLab: missing or invalid VLQ asset proof/image");
+    auto image = assets->image(imagePath);
+    if (image->size() != Vec2U(16, 16))
+      throw StarException("BehaviorLab: VLQ result image must be 16x16");
+    for (unsigned y = 0; y != 16; ++y)
+      for (unsigned x = 0; x != 16; ++x)
+        if (image->get(x, y) != Vec4B(255, 0, 0, 255))
+          throw StarException("BehaviorLab: VLQ result pixels differ from decoded values");
+
+    // Production save codec, including magic and subversion trailer, in RAM
+    // only. The parent independently compares the entire CPP/Rust wire bytes.
+    auto value = VersionedJson::fromJson(JsonObject{{"id", "vlqlab"}, {"version", 1},
+        {"content", JsonArray{-65, 128, text}}, {"subVersions", JsonObject{{"vlq", 128}}}});
+    DataStreamBuffer saveStream;
+    auto before = snapshot();
+    saveStream.writeData(VersionedJson::Magic, VersionedJson::MagicStringSize);
+    saveStream.write(value);
+    VersionedJson::writeSubVersioning(saveStream, value);
+    auto saveWriteCalls = delta(before);
+    requireCalls(saveWriteCalls, {true, false, false, true, false, false});
+    auto saveBytes = saveStream.data();
+    DataStreamBuffer saveReader(saveBytes);
+    before = snapshot();
+    if (saveReader.readBytes(VersionedJson::MagicStringSize)
+        != ByteArray(VersionedJson::Magic, VersionedJson::MagicStringSize))
+      throw StarException("BehaviorLab: VLQ save magic mismatch");
+    VersionedJson decoded;
+    saveReader.read(decoded);
+    VersionedJson::readSubVersioning(saveReader, decoded);
+    auto saveReadCalls = delta(before);
+    requireCalls(saveReadCalls, {false, false, true, false, false, true});
+    if (decoded.toJson() != value.toJson() || saveReader.pos() != saveBytes.size())
+      throw StarException("BehaviorLab: VLQ save decode/trailer mismatch");
+    Json save = JsonObject{{"wireHex", hexEncode(saveBytes)}, {"value", decoded.toJson()},
+        {"consumed", saveReader.pos()}, {"writeCalls", saveWriteCalls}, {"readCalls", saveReadCalls}};
+
+    // LocalSockets bypass serialization in release. Explicitly exercise real
+    // production packets, with both compatibility rules, without any sockets.
+    DataStreamBuffer currentPing, currentPong, legacyPing, legacyPong;
+    before = snapshot();
+    auto signedSize = vlqISize(-65);
+    auto sizeCalls = delta(before);
+    currentPing.reserve(signedSize);
+    before = snapshot();
+    PingPacket(-65).write(currentPing, NetCompatibilityRules());
+    PongPacket(128).write(currentPong, NetCompatibilityRules());
+    PingPacket(-65).write(legacyPing, NetCompatibilityRules(LegacyVersion));
+    PongPacket(128).write(legacyPong, NetCompatibilityRules(LegacyVersion));
+    auto packetWriteCalls = delta(before);
+    currentPing.seek(0);
+    currentPong.seek(0);
+    legacyPing.seek(0);
+    legacyPong.seek(0);
+    PingPacket pingDecoded, legacyPingDecoded;
+    PongPacket pongDecoded, legacyPongDecoded;
+    before = snapshot();
+    pingDecoded.read(currentPing, NetCompatibilityRules());
+    pongDecoded.read(currentPong, NetCompatibilityRules());
+    legacyPingDecoded.read(legacyPing, NetCompatibilityRules(LegacyVersion));
+    legacyPongDecoded.read(legacyPong, NetCompatibilityRules(LegacyVersion));
+    auto packetReadCalls = delta(before);
+    JsonArray times{pingDecoded.time, pongDecoded.time, legacyPingDecoded.time, legacyPongDecoded.time};
+    if (signedSize != 2 || signedSize != currentPing.size() || sizeCalls != sizeCallsExpected
+        || packetWriteCalls != packetWriteExpected || packetReadCalls != packetReadExpected
+        || times != JsonArray{-65, 128, 0, 0}
+        || hexEncode(currentPing.data()) != "8101" || hexEncode(currentPong.data()) != "8200"
+        || hexEncode(legacyPing.data()) != "00" || hexEncode(legacyPong.data()) != "00"
+        || !currentPing.atEnd() || !currentPong.atEnd() || !legacyPing.atEnd() || !legacyPong.atEnd())
+      throw StarException("BehaviorLab: VLQ production packet bytes/receipts mismatch");
+    Json packets = JsonObject{{"currentPingHex", hexEncode(currentPing.data())},
+        {"currentPongHex", hexEncode(currentPong.data())}, {"legacyPingHex", hexEncode(legacyPing.data())},
+        {"legacyPongHex", hexEncode(legacyPong.data())}, {"decodedTimes", times},
+        {"signedSize", signedSize}, {"sizeCalls", sizeCalls}, {"writeCalls", packetWriteCalls},
+        {"readCalls", packetReadCalls}};
+
+    before = snapshot();
+    auto rawBuffer = make_shared<Buffer>();
+    std::array<String, 3> const keys{"vlq-a", "vlq-b", "vlq-c"};
+    std::array<size_t, 3> const lengths{127, 128, 700};
+    std::array<ByteArray, 3> values;
+    for (size_t seed = 0; seed != values.size(); ++seed) {
+      values[seed].resize(lengths[seed]);
+      for (size_t i = 0; i != lengths[seed]; ++i)
+        values[seed][i] = static_cast<char>((i + seed) & 255);
+    }
+    BTreeSha256Database database("behavior_vlq");
+    database.setIODevice(rawBuffer);
+    database.setBlockSize(512);
+    database.setAutoCommit(false);
+    if (!database.open())
+      throw StarException("BehaviorLab: VLQ database unexpectedly existed");
+    for (size_t i = 0; i != keys.size(); ++i)
+      if (database.insert(keys[i], values[i]))
+        throw StarException("BehaviorLab: VLQ database duplicate initial key");
+    database.commit();
+    // Observe the actual committed device, not a re-encoded reconstruction.
+    auto pages = rawBuffer->data();
+    database.close(false);
+    BTreeSha256Database reopened("behavior_vlq");
+    reopened.setIODevice(rawBuffer);
+    reopened.setBlockSize(512);
+    if (reopened.open())
+      throw StarException("BehaviorLab: VLQ database lost committed pages");
+    JsonArray foundHex, valueLengths;
+    for (size_t i = 0; i != keys.size(); ++i) {
+      auto found = reopened.find(keys[i]);
+      if (!found || *found != values[i])
+        throw StarException("BehaviorLab: VLQ database reopened value mismatch");
+      valueLengths.append(found->size());
+      foundHex.append(hexEncode(*found));
+    }
+    reopened.close(false);
+    auto databaseCalls = delta(before);
+    requireCalls(databaseCalls, {true, true, true, false, false, false});
+    Json databaseProof = JsonObject{{"valueLengths", valueLengths}, {"foundHex", foundHex},
+        {"pagesBase64", base64Encode(pages)}, {"rustCalls", databaseCalls}};
+
+    DataStreamBuffer eofStream(ByteArray("\x81", 1));
+    uint64_t unsignedValue = 0x12345678;
+    bool caughtEof = false;
+    before = snapshot();
+    try {
+      eofStream.readVlqU(unsignedValue);
+    } catch (EofException const&) {
+      caughtEof = true;
+    }
+    auto eofCalls = delta(before);
+    if (!caughtEof || unsignedValue != 1 || eofStream.pos() != 1 || eofCalls != eofCallsExpected)
+      throw StarException("BehaviorLab: VLQ EOF exception/partial output mismatch");
+    Json eof = JsonObject{{"kind", "EofException"}, {"unsignedValue", unsignedValue},
+        {"consumed", eofStream.pos()}, {"readCalls", eofCalls}};
+    m_behaviorVlqProof = JsonObject{{"version", 1}, {"assets", assetProof}, {"save", save},
+        {"packets", packets}, {"database", databaseProof}, {"eof", eof}};
+  }
+  auto drawable = Drawable::makeImage("/behaviorlab/vlq-result.png", 2.0f / TilePixels, true, Vec2F(64, 48));
+  drawable.fullbright = true;
+  m_renderData.foregroundOverlays.append(std::move(drawable));
+}
+
 void ClientApplication::renderBehaviorScenario() {
   if (!m_behaviorReady || BehaviorLab::hasPendingFrame())
     return;
@@ -1856,7 +2068,7 @@ void ClientApplication::renderBehaviorScenario() {
       {"layout", "row-major-rgb-f32-bits"}, {"bits", std::move(lightmapBits)}};
   Json metadata = JsonObject{
       {"lightingDiagnostics", std::move(lightmapDiagnostic)},
-      {"scenario", m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
+      {"scenario", m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
       {"worldState", JsonObject{
           {"worldId", printWorldId(m_universeClient->clientContext()->playerWorldId())},
           {"worldSize", jsonFromVec2U(world->geometry().size())},
@@ -1902,6 +2114,11 @@ void ClientApplication::renderBehaviorScenario() {
     if (m_behaviorSha256Proof.isNull())
       throw StarException("BehaviorLab: SHA256 frame has no completed asset/database proof");
     metadata = metadata.set("sha256Proof", m_behaviorSha256Proof);
+  }
+  if (m_behaviorVlqRoom) {
+    if (m_behaviorVlqProof.isNull())
+      throw StarException("BehaviorLab: VLQ frame has no completed proof");
+    metadata = metadata.set("vlqProof", m_behaviorVlqProof);
   }
   BehaviorLab::queueFrame(m_behaviorCapture, std::move(metadata));
   m_behaviorReady = false;
