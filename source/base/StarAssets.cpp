@@ -19,6 +19,10 @@
 #include "StarSha256.hpp"
 #include "StarSha256Lab.hpp"
 #include "StarVlqLab.hpp"
+#include "StarBytesLab.hpp"
+#ifdef STAR_USE_RUST_BYTES
+#include "StarRustBytes.h"
+#endif
 #ifdef STAR_USE_RUST_VLQ
 #include "StarRustVlq.h"
 #endif
@@ -46,6 +50,13 @@ std::mutex Sha256AssetProofMutex;
 Json Sha256AssetProof;
 std::mutex VlqAssetProofMutex;
 Json VlqAssetProof;
+std::mutex BytesAssetProofMutex;
+Json BytesAssetProof;
+}
+
+Json bytesBehaviorAssetProof() {
+  std::lock_guard<std::mutex> lock(BytesAssetProofMutex);
+  return BytesAssetProof;
 }
 
 Json vlqBehaviorAssetProof() {
@@ -183,6 +194,8 @@ Assets::Assets(Settings settings, StringList assetSources) {
     Sha256AssetProof = Json();
     std::lock_guard<std::mutex> vlqLock(VlqAssetProofMutex);
     VlqAssetProof = Json();
+    std::lock_guard<std::mutex> bytesLock(BytesAssetProofMutex);
+    BytesAssetProof = Json();
   }
   const char* AssetsPatchSuffix = ".patch";
   const char* AssetsPatchListSuffix = ".patchlist";
@@ -207,6 +220,26 @@ Assets::Assets(Settings settings, StringList assetSources) {
     // Lab-only, executing-thread receipts: no application dependency or config
     // access here, since these callbacks also run during Root construction.
     if (std::getenv("STAR_BEHAVIOR_LAB")) {
+      callbacks.registerCallback("bytesLabCounts", []() -> Json {
+        JsonArray counts;
+        for (uint32_t op = 0; op != 6; ++op) {
+#ifdef STAR_USE_RUST_BYTES
+          counts.append(star_bytes_call_count(op));
+#else
+          counts.append(0);
+#endif
+        }
+        return counts;
+      });
+      callbacks.registerCallback("recordBytesLabProof", [](Json proof) {
+#ifdef STAR_USE_RUST_BYTES
+        proof = proof.set("backend", "rust");
+#else
+        proof = proof.set("backend", "cpp");
+#endif
+        std::lock_guard<std::mutex> lock(BytesAssetProofMutex);
+        BytesAssetProof = std::move(proof);
+      });
       callbacks.registerCallback("vlqLabCounts", []() -> Json {
         JsonArray counts;
         for (uint32_t op = 0; op != 6; ++op) {

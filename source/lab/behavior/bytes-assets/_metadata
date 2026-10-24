@@ -1,0 +1,7 @@
+{
+  "name": "behavior-bytes-fixtures",
+  "friendlyName": "Isolated byte-order behavior fixtures",
+  "description": "Frozen floating binary JSON through normal Assets; requires behavior-lab-fixtures.",
+  "priority": 1100,
+  "scripts": {"postLoad": ["/behaviorlab/bytes.lua"]}
+}

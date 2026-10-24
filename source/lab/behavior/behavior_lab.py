@@ -25,6 +25,7 @@ import build_provenance
 import encoding_proof
 import sha256_proof
 import vlq_proof
+import bytes_proof
 
 ROOT = Path(__file__).resolve().parents[3]
 BUILD = ROOT / "build"
@@ -34,7 +35,7 @@ ASSET_OVERLAYS = {
     "behavior-fixture": ROOT / "source/lab/behavior/assets",
 }
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,95}\Z")
-SCENARIOS = ("lighting-room", "raycast-room", "encoding-room", "sha256-room", "vlq-room")
+SCENARIOS = ("lighting-room", "raycast-room", "encoding-room", "sha256-room", "vlq-room", "bytes-room")
 MAX_PIXELS = 16_777_216
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
 
@@ -165,6 +166,11 @@ def semantic_world_state(receipt: dict) -> dict:
             native["vlqProof"] = vlq_proof.validate(receipt)
         except ValueError as error:
             raise LabError(str(error)) from error
+    if receipt.get("scenario") == "bytes-room":
+        try:
+            native["bytesProof"] = bytes_proof.validate(receipt)
+        except ValueError as error:
+            raise LabError(str(error)) from error
     # A native declared object supplements, rather than weakens, the frozen
     # flat schema: retain both when the driver supplies both representations.
     return native if state is None else {"declared": state, "native": native}
@@ -225,10 +231,15 @@ def captures(directory: Path) -> dict:
                 vlq_proof.visible(frame, receipt)
             except ValueError as error:
                 raise LabError(str(error)) from error
+        if receipt["scenario"] == "bytes-room":
+            try:
+                bytes_proof.visible(frame, receipt)
+            except ValueError as error:
+                raise LabError(str(error)) from error
         result[name] = {"receipt": receipt, "png": pngs[name], "dimensions": list(frame.size),
                         "pngSha256": sha(pngs[name]), "receiptSha256": sha(receipts[name]),
                         "pixelsSha256": hashlib.sha256(frame.tobytes()).hexdigest()}
-    if scenarios in ({"lighting-room"}, {"encoding-room"}, {"sha256-room"}, {"vlq-room"}):
+    if scenarios in ({"lighting-room"}, {"encoding-room"}, {"sha256-room"}, {"vlq-room"}, {"bytes-room"}):
         validate_lighting_sequence(result)
         if scenarios == {"encoding-room"}:
             proofs = [encoding_proof.validate(frame["receipt"]) for frame in result.values()]
@@ -242,6 +253,10 @@ def captures(directory: Path) -> dict:
             proofs = [vlq_proof.validate(frame["receipt"]) for frame in result.values()]
             if any(proof != proofs[0] for proof in proofs[1:]):
                 raise LabError("VLQ wire/database evidence changed across scene stages")
+        if scenarios == {"bytes-room"}:
+            proofs = [bytes_proof.validate(frame["receipt"]) for frame in result.values()]
+            if any(proof != proofs[0] for proof in proofs[1:]):
+                raise LabError("byte-order wire/database evidence changed across scene stages")
     else:
         validate_raycast_sequence(result)
     return result
@@ -485,7 +500,14 @@ def pair_compare(reference: Path, candidate: Path, output: Path, same_backend=Fa
                     row["errors"].append(f"{field} differs")
             if ref_meta["scenario"] != cand_meta["scenario"]:
                 row["errors"].append("scenario differs")
-            if ref_meta["scenario"] == "vlq-room":
+            if ref_meta["scenario"] == "bytes-room":
+                wanted = "cpp" if same_backend else "rust"
+                if (ref_meta["bytesProof"]["assets"]["backend"] != "cpp"
+                        or cand_meta["bytesProof"]["assets"]["backend"] != wanted):
+                    row["errors"].append("expected C++ reference and correct byte-order backend")
+                if ref_meta["lightingBackend"] != "cpp" or (same_backend and cand_meta["lightingBackend"] != "cpp"):
+                    row["errors"].append("expected C++ reference lighting")
+            elif ref_meta["scenario"] == "vlq-room":
                 wanted = "cpp" if same_backend else "rust"
                 if (ref_meta["vlqProof"]["assets"]["backend"] != "cpp"
                         or cand_meta["vlqProof"]["assets"]["backend"] != wanted):
@@ -569,6 +591,8 @@ def asset_overlays(scenario="lighting-room") -> dict:
         overlays["encoding-fixture"] = ROOT / "source/lab/behavior/encoding-assets"
     if scenario == "vlq-room":
         overlays["vlq-fixture"] = ROOT / "source/lab/behavior/vlq-assets"
+    if scenario == "bytes-room":
+        overlays["bytes-fixture"] = ROOT / "source/lab/behavior/bytes-assets"
     return overlays
 
 
@@ -619,7 +643,7 @@ def capture(executable: Path, assets: Path, directory: Path, timeout: float, sce
                         "instrumentVol": 0, "clearUniverseFiles": False,
                         "clientIPJoinable": False, "clientP2PJoinable": False,
                         "serverAdvertise": False, "serverIP": "127.0.0.1",
-                        **({"safe": {"allowRemoteAssets": True}} if scenario in ("encoding-room", "vlq-room") else {})}})
+                        **({"safe": {"allowRemoteAssets": True}} if scenario in ("encoding-room", "vlq-room", "bytes-room") else {})}})
     # Both overlays are required inputs; namespace their hashes to avoid collisions.
     overlay = overlay_identity(scenario)
     environment = dict(os.environ)

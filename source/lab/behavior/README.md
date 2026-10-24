@@ -1,5 +1,11 @@
 # framebuffer behavior lab
 
+## bytes-room
+
+Build `scripts/build-behavior-lab.sh bytes` (or `bytes-combined`), then `run --scenario bytes-room` against its candidate under `build/behavior/<mode>/candidate/bin/starbound`. All earlier build modes explicitly keep bytes OFF; line queries stay OFF.
+
+Independent binary64 JSON determines the visible image color; a literal binary32 PausePacket determines its normal drawable scale. Exact VersionedJson bytes and RAM BTree headers/pages are checked separately from pixels. This avoids mistaking JSON integers (VLQ), textual JSON, or local socket traffic for fixed-width byte-order execution. `bytes_proof.py` requires scoped six-operation receipts. See `EVIDENCE.md`, `../bytes/EVIDENCE.md` and the separate production PCM decoder oracle `../bytes/AUDIO.md` for tested artifacts and omissions.
+
 ## vlq-room
 
 Build `scripts/build-behavior-lab.sh vlq` (or `vlq-combined`), then run the usual `run` command with `--scenario vlq-room`. The candidate is `build/behavior/<mode>/candidate/bin/starbound`. Earlier build modes explicitly keep VLQ OFF; line queries remain OFF in every native mode.

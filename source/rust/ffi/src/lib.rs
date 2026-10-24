@@ -1,5 +1,8 @@
 //! The engine's single Rust static archive owns the unmangled C ABI exports.
 //! Kernels remain rlibs so linking another kernel cannot add another Rust runtime.
+mod bytes;
+pub use bytes::{star_bytes_call_count, star_bytes_transform};
+
 mod vlq;
 pub use vlq::{
     star_vlq_call_count, star_vlq_read_i, star_vlq_read_u, star_vlq_size_i, star_vlq_size_u,

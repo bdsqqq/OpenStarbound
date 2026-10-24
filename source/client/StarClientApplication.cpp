@@ -2,6 +2,10 @@
 #include "StarBehaviorLab.hpp"
 #include "StarSha256Lab.hpp"
 #include "StarVlqLab.hpp"
+#include "StarBytesLab.hpp"
+#ifdef STAR_USE_RUST_BYTES
+#include "StarRustBytes.h"
+#endif
 #include "StarVlqEncoding.hpp"
 #include "StarVersioningDatabase.hpp"
 #include "StarNetPackets.hpp"
@@ -528,6 +532,8 @@ void ClientApplication::render() {
         prepareBehaviorSha256Frame();
       if (BehaviorLab::enabled() && m_behaviorVlqRoom)
         prepareBehaviorVlqFrame();
+      if (BehaviorLab::enabled() && m_behaviorBytesRoom)
+        prepareBehaviorBytesFrame();
 
       auto paintStart = Time::monotonicMicroseconds();
       m_worldPainter->render(m_renderData, [&]() -> bool {
@@ -1433,12 +1439,13 @@ void ClientApplication::validateBehaviorStorage() {
   auto const& config = BehaviorLab::configuration();
   auto scenario = config.getString("scenario", "lighting-room");
   if (scenario != "lighting-room" && scenario != "raycast-room" && scenario != "encoding-room"
-      && scenario != "sha256-room" && scenario != "vlq-room")
+      && scenario != "sha256-room" && scenario != "vlq-room" && scenario != "bytes-room")
     throw StarException("BehaviorLab: unsupported scenario");
   m_behaviorRaycastRoom = scenario == "raycast-room";
   m_behaviorEncodingRoom = scenario == "encoding-room";
   m_behaviorSha256Room = scenario == "sha256-room";
   m_behaviorVlqRoom = scenario == "vlq-room";
+  m_behaviorBytesRoom = scenario == "bytes-room";
   if (config.getUInt("maxFrames", 1800) == 0 || config.getUInt("maxFrames", 1800) > 18000)
     throw StarException("BehaviorLab: maxFrames must be in [1, 18000]");
 
@@ -1559,7 +1566,7 @@ void ClientApplication::updateBehaviorScenario() {
       return;
     if (m_behaviorStage == 2) {
       Logger::info("BehaviorLab: {} completed (three acknowledged world frames)",
-          m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
+          m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
       m_behaviorPhase = 5;
       appController()->quit();
       return;
@@ -2030,6 +2037,172 @@ void ClientApplication::prepareBehaviorVlqFrame() {
   m_renderData.foregroundOverlays.append(std::move(drawable));
 }
 
+void ClientApplication::prepareBehaviorBytesFrame() {
+  if (!m_behaviorReady || BehaviorLab::hasPendingFrame() || m_renderData.isFullbright)
+    return;
+
+  if (m_behaviorBytesProof.isNull()) {
+    auto count = [](uint32_t op) -> uint64_t {
+#ifdef STAR_USE_RUST_BYTES
+      return star_bytes_call_count(op);
+#else
+      (void)op;
+      return 0;
+#endif
+    };
+    auto snapshot = [&]() {
+      std::array<uint64_t, 6> result;
+      for (uint32_t op = 0; op != 6; ++op)
+        result[op] = count(op);
+      return result;
+    };
+    auto delta = [&](std::array<uint64_t, 6> const& before) {
+      JsonArray result;
+      for (uint32_t op = 0; op != 6; ++op)
+        result.append(count(op) - before[op]);
+      return result;
+    };
+    String backend = "cpp";
+    JsonArray assetCalls{0, 0, 0, 0, 0, 0}, saveWriteExpected = assetCalls;
+    JsonArray saveReadExpected = assetCalls, packetWriteExpected = assetCalls, packetReadExpected = assetCalls;
+#ifdef STAR_USE_RUST_BYTES
+    backend = "rust";
+    assetCalls = JsonArray{0, 0, 0, 0, 0, 3};
+    saveWriteExpected = JsonArray{0, 0, 0, 5, 0, 0};
+    saveReadExpected = JsonArray{0, 0, 0, 0, 0, 5};
+    packetWriteExpected = JsonArray{0, 0, 0, 1, 0, 0};
+    packetReadExpected = JsonArray{0, 0, 0, 0, 0, 1};
+#endif
+    auto assetProof = bytesBehaviorAssetProof();
+    Json expectedAssets = JsonObject{{"backend", backend},
+        {"inputHex", "0603023fd0000000000000023fe0000000000000023fe8000000000000"},
+        {"values", JsonArray{0.25, 0.5, 0.75}}, {"rustCalls", assetCalls},
+        {"visualColor", JsonArray{64, 128, 192, 255}}};
+    auto assets = m_root->assets();
+    String const imagePath = "/behaviorlab/bytes-result.png";
+    // Lua postLoad failures are swallowed: proof AND real normal Assets pixels
+    // are required before any capture is accepted.
+    if (assetProof != expectedAssets || !assets->assetExists(imagePath))
+      throw StarException("BehaviorLab: missing or invalid bytes asset proof/image");
+    auto image = assets->image(imagePath);
+    if (image->size() != Vec2U(16, 16))
+      throw StarException("BehaviorLab: bytes result image must be 16x16");
+    for (unsigned y = 0; y != 16; ++y)
+      for (unsigned x = 0; x != 16; ++x)
+        if (image->get(x, y) != Vec4B(64, 128, 192, 255))
+          throw StarException("BehaviorLab: bytes result pixels differ from decoded values");
+
+    auto value = VersionedJson::fromJson(JsonObject{{"id", "byteslab"}, {"version", 16909060},
+        {"content", JsonArray{0.25, 0.5, 0.75}}, {"subVersions", JsonObject{}}});
+    String const saveInputHex = "5342564a30310862797465736c616201010203040603023fd0000000000000023fe0000000000000023fe800000000000000000001010b73756256657273696f6e730700";
+    auto saveInput = hexDecode(saveInputHex);
+    if (saveInput.size() != 68)
+      throw StarException("BehaviorLab: independent bytes save literal length mismatch");
+    DataStreamBuffer saveStream;
+    auto before = snapshot();
+    saveStream.writeData(VersionedJson::Magic, VersionedJson::MagicStringSize);
+    saveStream.write(value);
+    VersionedJson::writeSubVersioning(saveStream, value);
+    auto saveWriteCalls = delta(before);
+    DataStreamBuffer saveReader(saveInput);
+    before = snapshot();
+    auto magic = saveReader.readBytes(VersionedJson::MagicStringSize);
+    VersionedJson decoded;
+    saveReader.read(decoded);
+    VersionedJson::readSubVersioning(saveReader, decoded);
+    auto saveReadCalls = delta(before);
+    if (magic != ByteArray(VersionedJson::Magic, VersionedJson::MagicStringSize)
+        || saveStream.data() != saveInput || decoded.toJson() != value.toJson()
+        || saveReader.pos() != saveInput.size() || saveWriteCalls != saveWriteExpected
+        || saveReadCalls != saveReadExpected)
+      throw StarException("BehaviorLab: bytes save literal/value/receipts mismatch");
+    Json save = JsonObject{{"wireHex", hexEncode(saveStream.data())}, {"value", decoded.toJson()},
+        {"consumed", saveReader.pos()}, {"writeCalls", saveWriteCalls}, {"readCalls", saveReadCalls}};
+
+    // Explicit production codec calls, NOT transport: local release sockets
+    // bypass serialization. Never deliver these packets to the live session.
+    DataStreamBuffer currentWire, legacyWire;
+    before = snapshot();
+    PausePacket(true, 0.5f).write(currentWire, NetCompatibilityRules());
+    PausePacket(true, 0.5f).write(legacyWire, NetCompatibilityRules(LegacyVersion));
+    auto packetWriteCalls = delta(before);
+    DataStreamBuffer currentInput(hexDecode("013f000000")), legacyInput(hexDecode("01"));
+    PausePacket currentDecoded, legacyDecoded;
+    before = snapshot();
+    currentDecoded.read(currentInput, NetCompatibilityRules());
+    legacyDecoded.read(legacyInput, NetCompatibilityRules(LegacyVersion));
+    auto packetReadCalls = delta(before);
+    if (!currentDecoded.pause || !legacyDecoded.pause || currentDecoded.timescale != 0.5f
+        || legacyDecoded.timescale != 1.0f || !currentInput.atEnd() || !legacyInput.atEnd()
+        || hexEncode(currentWire.data()) != "013f000000" || hexEncode(legacyWire.data()) != "01"
+        || packetWriteCalls != packetWriteExpected || packetReadCalls != packetReadExpected)
+      throw StarException("BehaviorLab: bytes pause packet literal/value/receipts mismatch");
+    Json packets = JsonObject{{"currentInputHex", "013f000000"}, {"legacyInputHex", "01"},
+        {"currentWireHex", hexEncode(currentWire.data())}, {"legacyWireHex", hexEncode(legacyWire.data())},
+        {"currentConsumed", currentInput.pos()}, {"legacyConsumed", legacyInput.pos()},
+        {"paused", JsonArray{currentDecoded.pause, legacyDecoded.pause}},
+        {"timescales", JsonArray{currentDecoded.timescale, legacyDecoded.timescale}},
+        {"writeCalls", packetWriteCalls}, {"readCalls", packetReadCalls}};
+
+    before = snapshot();
+    auto rawBuffer = make_shared<Buffer>();
+    std::array<String, 3> const keys{"vlq-a", "vlq-b", "vlq-c"};
+    std::array<size_t, 3> const lengths{127, 128, 700};
+    std::array<ByteArray, 3> values;
+    for (size_t seed = 0; seed != values.size(); ++seed) {
+      values[seed].resize(lengths[seed]);
+      for (size_t i = 0; i != lengths[seed]; ++i)
+        values[seed][i] = static_cast<char>((i + seed) & 255);
+    }
+    // Same frozen key/insert/reopen sequence as the VLQ fixture; preserving
+    // keys also permits an independent raw-page oracle across both slices.
+    BTreeSha256Database database("behavior_vlq");
+    database.setIODevice(rawBuffer);
+    database.setBlockSize(512);
+    database.setAutoCommit(false);
+    if (!database.open())
+      throw StarException("BehaviorLab: bytes database unexpectedly existed");
+    for (size_t i = 0; i != keys.size(); ++i)
+      if (database.insert(keys[i], values[i]))
+        throw StarException("BehaviorLab: bytes database duplicate initial key");
+    database.commit();
+    auto pages = rawBuffer->data();
+    database.close(false);
+    BTreeSha256Database reopened("behavior_vlq");
+    reopened.setIODevice(rawBuffer);
+    reopened.setBlockSize(512);
+    if (reopened.open())
+      throw StarException("BehaviorLab: bytes database lost committed pages");
+    JsonArray foundHex, valueLengths;
+    for (size_t i = 0; i != keys.size(); ++i) {
+      auto found = reopened.find(keys[i]);
+      if (!found || *found != values[i])
+        throw StarException("BehaviorLab: bytes database reopened value mismatch");
+      valueLengths.append(found->size());
+      foundHex.append(hexEncode(*found));
+    }
+    reopened.close(false);
+    auto databaseCalls = delta(before);
+    for (size_t op = 0; op != 6; ++op) {
+      bool positive = false;
+#ifdef STAR_USE_RUST_BYTES
+      positive = op == 3 || op == 5;
+#endif
+      if (positive ? databaseCalls[op].toUInt() == 0 : databaseCalls[op].toUInt() != 0)
+        throw StarException("BehaviorLab: bytes database operation receipts mismatch");
+    }
+    Json databaseProof = JsonObject{{"valueLengths", valueLengths}, {"foundHex", foundHex},
+        {"pagesBase64", base64Encode(pages)}, {"rustCalls", databaseCalls}};
+    m_behaviorBytesProof = JsonObject{{"version", 1}, {"assets", assetProof}, {"save", save},
+        {"packets", packets}, {"database", databaseProof}};
+  }
+  float timescale = m_behaviorBytesProof.get("packets").getArray("timescales")[0].toFloat();
+  auto drawable = Drawable::makeImage("/behaviorlab/bytes-result.png",
+      4.0f * timescale / TilePixels, true, Vec2F(64, 48));
+  drawable.fullbright = true;
+  m_renderData.foregroundOverlays.append(std::move(drawable));
+}
+
 void ClientApplication::renderBehaviorScenario() {
   if (!m_behaviorReady || BehaviorLab::hasPendingFrame())
     return;
@@ -2068,7 +2241,7 @@ void ClientApplication::renderBehaviorScenario() {
       {"layout", "row-major-rgb-f32-bits"}, {"bits", std::move(lightmapBits)}};
   Json metadata = JsonObject{
       {"lightingDiagnostics", std::move(lightmapDiagnostic)},
-      {"scenario", m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
+      {"scenario", m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
       {"worldState", JsonObject{
           {"worldId", printWorldId(m_universeClient->clientContext()->playerWorldId())},
           {"worldSize", jsonFromVec2U(world->geometry().size())},
@@ -2119,6 +2292,11 @@ void ClientApplication::renderBehaviorScenario() {
     if (m_behaviorVlqProof.isNull())
       throw StarException("BehaviorLab: VLQ frame has no completed proof");
     metadata = metadata.set("vlqProof", m_behaviorVlqProof);
+  }
+  if (m_behaviorBytesRoom) {
+    if (m_behaviorBytesProof.isNull())
+      throw StarException("BehaviorLab: bytes frame has no completed proof");
+    metadata = metadata.set("bytesProof", m_behaviorBytesProof);
   }
   BehaviorLab::queueFrame(m_behaviorCapture, std::move(metadata));
   m_behaviorReady = false;
