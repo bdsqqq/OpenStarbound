@@ -1,0 +1,32 @@
+name: Migration lab checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  source-accounting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify the checked-in source inventory without regenerating it
+        run: sh scripts/migration-inventory.sh --check
+      - name: Exercise stale-output and source-drift detection
+        run: sh scripts/migration-inventory.sh --self-test
+
+  behavior-verifier-tests:
+    # These test verifier sensitivity, not actual gameplay parity. Native game
+    # captures need separately supplied licensed assets and a graphics session.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install Pillow==11.2.1
+      - name: Reject corrupted frames, wrong backends, unsafe paths and stale evidence
+        run: python -B -m unittest discover -s source/lab/behavior -p 'test_*.py' -v

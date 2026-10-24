@@ -8,12 +8,14 @@ INCLUDE_DIRECTORIES (
 SET (star_application_HEADERS
     StarApplication.hpp
     StarApplicationController.hpp
+    StarBehaviorLab.hpp
     StarMainApplication.hpp
     StarRenderer.hpp
   )
 
 SET (star_application_SOURCES
     StarApplication.cpp
+    StarBehaviorLab.cpp
     StarRenderer.cpp
   )
 

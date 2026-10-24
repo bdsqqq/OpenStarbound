@@ -1,4 +1,5 @@
 #include "StarMainApplication.hpp"
+#include "StarBehaviorLab.hpp"
 #include "StarLogging.hpp"
 #include "StarSignalHandler.hpp"
 #include "StarTickRateMonitor.hpp"
@@ -753,6 +754,12 @@ public:
 
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        if (BehaviorLab::hasPendingFrame()) {
+          int width = 0, height = 0;
+          if (!SDL_GetWindowSizeInPixels(m_sdlWindow, &width, &height) || width <= 0 || height <= 0)
+            throw StarException("BehaviorLab: cannot obtain drawable pixel dimensions");
+          BehaviorLab::captureFrame(Vec2U((unsigned)width, (unsigned)height));
+        }
         SDL_GL_SwapWindow(m_sdlWindow);
         m_renderRate = m_renderTicker.tick();
 

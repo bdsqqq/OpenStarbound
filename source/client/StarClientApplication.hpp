@@ -92,6 +92,22 @@ private:
 
   void updateCamera(float dt);
 
+  // Opt-in real-world fixture. Capture acknowledgement is a state barrier:
+  // never mutate the scene while the SDL host still owns its pending frame.
+  void updateBehaviorScenario();
+  void renderBehaviorScenario();
+  void validateBehaviorStorage();
+  unsigned m_behaviorFrames = 0;
+  unsigned m_behaviorSettledFrames = 0;
+  unsigned m_behaviorStage = 0;
+  unsigned m_behaviorPhase = 0;
+  bool m_behaviorReady = false;
+  bool m_behaviorLightingCompleted = false;
+  String m_behaviorCapture;
+  String m_behaviorLightObject;
+  EntityId m_behaviorLightId = NullEntityId;
+  MaterialId m_behaviorMaterial = EmptyMaterialId;
+
   RootUPtr m_root;
   ThreadFunction<void> m_rootLoader;
   CallbackListenerPtr m_reloadListener;

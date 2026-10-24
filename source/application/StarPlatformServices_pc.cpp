@@ -1,4 +1,5 @@
 #include "StarLogging.hpp"
+#include "StarBehaviorLab.hpp"
 #include "StarPlatformServices_pc.hpp"
 #include "StarP2PNetworkingService_pc.hpp"
 
@@ -20,6 +21,13 @@ PcPlatformServicesState::PcPlatformServicesState()
 #else
   {
 #endif
+
+  // Behavioral tests are offline and must not update the user's platform
+  // presence, statistics, workshop state, or registered account callbacks.
+  if (BehaviorLab::enabled()) {
+    Logger::info("Behavior lab: disabling external platform services");
+    return;
+  }
 
 #ifdef STAR_ENABLE_STEAM_INTEGRATION
   bool shouldLoadSteam = true;
@@ -218,7 +226,8 @@ bool PcPlatformServices::overlayActive() const {
 
 void PcPlatformServices::update() {
 #ifdef STAR_ENABLE_STEAM_INTEGRATION
-  SteamAPI_RunCallbacks();
+  if (m_state->steamAvailable)
+    SteamAPI_RunCallbacks();
 #endif
 }
 

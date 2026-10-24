@@ -1,0 +1,27 @@
+{
+  "objectName": "behaviorlabconstantlight",
+  "shortdescription": "Behavior lab constant light",
+  "description": "Test-only constant light; loaded only by the isolated behavior lab bootconfig.",
+  "objectType": "object",
+  "hasObjectItem": false,
+  "scannable": false,
+  "printable": false,
+  "unbreakable": true,
+  "lightColor": [255, 210, 160],
+  "pointLight": false,
+  "lightType": "PointAsSpread",
+  "scripts": [],
+  "animationScripts": [],
+  "orientations": [
+    {
+      "image": "constantlight.png",
+      "imagePosition": [0, 0],
+      "frames": 1,
+      "spaces": [[0, 0]],
+      "anchors": ["bottom"],
+      "anchorMaterial": "smoothmetal",
+      "lightPosition": [0, 0],
+      "collision": "none"
+    }
+  ]
+}

@@ -1,4 +1,16 @@
 #include "StarClientApplication.hpp"
+#include "StarBehaviorLab.hpp"
+#include "StarObjectDatabase.hpp"
+#include "StarObject.hpp"
+#include "StarMaterialDatabase.hpp"
+#include "StarActorMovementController.hpp"
+#include "StarWorldServer.hpp"
+#include "StarWorldGeneration.hpp"
+#include <filesystem>
+#include <cstring>
+#ifdef STAR_USE_RUST_LIGHTING
+#include "StarRustLighting.h"
+#endif
 #include "StarConfiguration.hpp"
 #include "StarJsonExtra.hpp"
 #include "StarFile.hpp"
@@ -164,6 +176,18 @@ void ClientApplication::startup(StringList const& cmdLineArgs) {
   RootLoader rootLoader({AdditionalAssetsSettings, AdditionalDefaultConfiguration, String("starbound.log"), LogLevel::Info, false, String("starbound.config")});
   rootLoader.setVersionName("Client");  
   m_root = rootLoader.initOrDie(cmdLineArgs).first;
+  if (BehaviorLab::enabled()) {
+    validateBehaviorStorage();
+    auto config = m_root->configuration();
+    config->set("clientIPJoinable", false);
+    config->set("clientP2PJoinable", false);
+    config->set("includeUGC", false);
+    config->set("zoomLevel", 2.0);
+    config->set("windowedResolution", JsonArray{1000, 600});
+    config->set("fullscreen", false);
+    config->set("borderless", false);
+    config->set("maximized", false);
+  }
   Logger::info("{}", rootLoader.getVersionString());
   #ifdef __clang__
   Logger::info("Compiled with Clang {}", __clang_version__);
@@ -296,7 +320,7 @@ void ClientApplication::renderInit(RendererPtr renderer) {
 
   #ifdef STAR_ENABLE_STEAM_INTEGRATION
   #ifdef STAR_SYSTEM_LINUX
-  if (g_steamIsFlatpak) {
+  if (g_steamIsFlatpak && !BehaviorLab::enabled()) {
     auto config = m_root->configuration();
     if (!config->get("steamFlatpakWarningShown").optBool().value()) {
       config->set("steamFlatpakWarningShown", true);
@@ -333,6 +357,8 @@ void ClientApplication::windowChanged(WindowMode windowMode, Vec2U screenSize) {
 }
 
 void ClientApplication::processInput(InputEvent const& event) {
+  if (BehaviorLab::enabled())
+    return;
   if (auto keyDown = event.ptr<KeyDownEvent>()) {
     m_heldKeyEvents.append(*keyDown);
     m_edgeKeyEvents.append(*keyDown);
@@ -379,6 +405,14 @@ void ClientApplication::processInput(InputEvent const& event) {
 void ClientApplication::update() {
   float dt = GlobalTimestep * GlobalTimescale;
   auto& app = appController();
+  if (BehaviorLab::enabled()) {
+    auto maxFrames = BehaviorLab::configuration().getUInt("maxFrames", 1800);
+    if (++m_behaviorFrames > maxFrames) {
+      Logger::error("BehaviorLab: scenario timed out at phase {} stage {}", m_behaviorPhase, m_behaviorStage);
+      app->quit();
+      return;
+    }
+  }
   if (m_state >= MainAppState::Title) {
     if (auto p2pNetworkingService = app->p2pNetworkingService()) {
       if (auto join = p2pNetworkingService->pullPendingJoin()) {
@@ -425,6 +459,9 @@ void ClientApplication::update() {
     m_voice->send(ext);
   } // TODO: directly disable encoding at menu so we don't have to do this
 
+  if (BehaviorLab::enabled() && m_state == MainAppState::SinglePlayer)
+    updateBehaviorScenario();
+
   m_guiContext->cleanup();
   m_edgeKeyEvents.clear();
   m_input->update();
@@ -466,7 +503,8 @@ void ClientApplication::render() {
 
       auto paintStart = Time::monotonicMicroseconds();
       m_worldPainter->render(m_renderData, [&]() -> bool {
-        return worldClient->waitForLighting(&m_renderData);
+        m_behaviorLightingCompleted = worldClient->waitForLighting(&m_renderData);
+        return m_behaviorLightingCompleted;
       });
       LogMap::set("client_render_world_painter", strf(u8"{:05d}\u00b5s", Time::monotonicMicroseconds() - paintStart));
       LogMap::set("client_render_world_total", strf(u8"{:05d}\u00b5s", Time::monotonicMicroseconds() - totalStart));
@@ -486,9 +524,13 @@ void ClientApplication::render() {
     }
     renderer->switchEffectConfig("interface");
     auto start = Time::monotonicMicroseconds();
-    m_mainInterface->renderInWorldElements();
-    m_mainInterface->render();
-    m_cinematicOverlay->render();
+    if (!BehaviorLab::enabled()) {
+      m_mainInterface->renderInWorldElements();
+      m_mainInterface->render();
+      m_cinematicOverlay->render();
+    } else {
+      renderBehaviorScenario();
+    }
     LogMap::set("client_render_interface", strf(u8"{:05d}\u00b5s", Time::monotonicMicroseconds() - start));
   }
 
@@ -727,7 +769,17 @@ void ClientApplication::changeState(MainAppState newState) {
   }
 
   if (m_state > MainAppState::Title) {
-    if (m_titleScreen->currentlySelectedPlayer()) {
+    if (BehaviorLab::enabled()) {
+      // Factory defaults, a fixed identity/UUID and isolated PlayerStorage avoid
+      // selecting or mutating any existing character.
+      auto factory = m_root->playerFactory();
+      auto character = factory->create()->diskStore().set("uuid", "00000000000000000000000000000042");
+      m_player = factory->diskLoadPlayer(character);
+      m_player->setName("Behavior Lab");
+      m_player->setAdmin(true);
+      m_player->log()->setIntroComplete(true);
+      m_playerStorage->savePlayer(m_player);
+    } else if (m_titleScreen->currentlySelectedPlayer()) {
       m_player = m_titleScreen->currentlySelectedPlayer();
     } else {
       if (auto uuid = m_playerStorage->playerUuidAt(0))
@@ -955,7 +1007,7 @@ void ClientApplication::updateModsWarning(float) {
 
 void ClientApplication::updateSplash(float dt) {
   m_cinematicOverlay->update(dt);
-  if (!m_rootLoader.isRunning() && (m_cinematicOverlay->completable() || m_cinematicOverlay->completed()))
+  if (!m_rootLoader.isRunning() && (BehaviorLab::enabled() || m_cinematicOverlay->completable() || m_cinematicOverlay->completed()))
     changeState(MainAppState::Title);
 }
 
@@ -965,6 +1017,10 @@ void ClientApplication::updateError(float) {
 }
 
 void ClientApplication::updateTitle(float dt) {
+  if (BehaviorLab::enabled()) {
+    changeState(MainAppState::SinglePlayer);
+    return;
+  }
   m_cinematicOverlay->update(dt);
 
   m_titleScreen->update(dt);
@@ -1345,12 +1401,250 @@ bool ClientApplication::isActionTakenEdge(InterfaceAction action) const {
   return false;
 }
 
+void ClientApplication::validateBehaviorStorage() {
+  auto const& config = BehaviorLab::configuration();
+  if (config.getString("scenario", "lighting-room") != "lighting-room")
+    throw StarException("BehaviorLab: unsupported scenario");
+  if (config.getUInt("maxFrames", 1800) == 0 || config.getUInt("maxFrames", 1800) > 18000)
+    throw StarException("BehaviorLab: maxFrames must be in [1, 18000]");
+
+  // canonical component comparison rejects sibling prefixes and symlink escapes.
+  // The capture host independently requires its output-directory sentinel.
+  namespace fs = std::filesystem;
+  auto output = fs::canonical(fs::path(config.getString("outputDirectory").utf8()));
+  auto storage = fs::weakly_canonical(fs::path(m_root->toStoragePath("").utf8()));
+  auto declaredStorage = fs::weakly_canonical(fs::path(config.getString("storageDirectory").utf8()));
+  if (storage != declaredStorage)
+    throw StarException("BehaviorLab: bootconfig storageDirectory does not match declared lab storage");
+  auto o = output.begin();
+  auto s = storage.begin();
+  for (; o != output.end() && s != storage.end() && *o == *s; ++o, ++s) {}
+  if (o != output.end() || s == storage.end())
+    throw StarException("BehaviorLab: storageDirectory must be a strict canonical descendant of outputDirectory");
+}
+
+void ClientApplication::updateBehaviorScenario() {
+  auto world = m_universeClient->worldClient();
+  if (!world || !world->inWorld())
+    return;
+  world->setAsyncLighting(false);
+  world->setFullBright(false);
+  CustomWorldId fixtureId("behavior-lighting-room");
+  if (m_behaviorPhase == 0) {
+    // The blank-world constructor normally chooses a random seed. Round-trip
+    // its ordinary persisted template to freeze that input.
+    auto blank = make_shared<WorldTemplate>(Vec2U(128, 96));
+    SkyParameters sky;
+    sky.seed = BehaviorLab::configuration().getUInt("seed", 42);
+    sky.horizonClouds = false;
+    sky.settings = JsonObject{
+        {"stars", JsonObject{{"frames", 0}, {"list", JsonArray()}, {"hyperlist", JsonArray()}}},
+        {"spaceDebrisFields", JsonArray()}
+    };
+    blank->setSkyParameters(sky);
+    auto data = blank->store().set("seed", BehaviorLab::configuration().getUInt("seed", 42));
+    auto fixture = make_shared<WorldTemplate>(data);
+    m_universeServer->createCustomWorld(fixtureId, fixture);
+    m_universeClient->warpPlayer(WarpToWorld(fixtureId, SpawnTargetPosition(Vec2F(12, 4))), false);
+    m_behaviorPhase = 1;
+    return;
+  }
+  if (m_universeClient->clientContext()->playerWorldId() != WorldId(fixtureId))
+    return;
+
+  m_cinematicOverlay->stop();
+  m_player->setPendingCinematic(Json());
+  // Keep the actual player alive but outside the fixed camera: blink, breath,
+  // equipment and idle humanoid animation are not part of this lighting slice.
+  m_player->movementController()->setPosition(Vec2F(12, 4));
+  m_player->movementController()->setVelocity(Vec2F());
+
+  if (m_behaviorPhase == 1) {
+    bool populated = false;
+    m_universeServer->executeForClient(world->connection(), [&](WorldServer* server, PlayerPtr) {
+      if (server->worldId() != printWorldId(fixtureId))
+        return;
+      server->generateRegion(RectI(6, 0, 90, 66));
+      m_behaviorMaterial = m_root->materialDatabase()->materialId("smoothmetal");
+      // Use the same authoritative tile writer as dungeon generation. Normal
+      // player placement requires adjacent terrain and cannot seed an empty world.
+      DungeonGeneratorWorld writer(server, false);
+      for (int x = 40; x <= 88; ++x) {
+        for (int y = 32; y <= 64; ++y) {
+          writer.setBackgroundMaterial(Vec2I(x, y), m_behaviorMaterial, 0, DefaultMaterialColorVariant);
+          if (x == 40 || x == 88 || y == 32 || y == 64)
+            writer.setForegroundMaterial(Vec2I(x, y), m_behaviorMaterial, 0, DefaultMaterialColorVariant);
+        }
+      }
+      for (int x = 8; x <= 18; ++x)
+        writer.setForegroundMaterial(Vec2I(x, 0), m_behaviorMaterial, 0, DefaultMaterialColorVariant);
+      // A small platform makes the lighting scene include horizontal geometry.
+      for (int x = 68; x <= 80; ++x)
+        writer.setForegroundMaterial(Vec2I(x, 40), m_behaviorMaterial, 0, DefaultMaterialColorVariant);
+      server->setSpawningEnabled(false);
+
+      auto objects = m_root->objectDatabase();
+      // Only the lab bootconfig loads this overlay. A single occupied tile at
+      // (52,33) anchors to the room floor at (52,32), without vanilla-lamp
+      // heuristics or bypassing ObjectDatabase placement/replication.
+      String const name = "behaviorlabconstantlight";
+      if (!objects->isObject(name))
+        throw StarException("BehaviorLab: required constant-light fixture overlay is missing");
+      auto objectConfig = objects->getConfig(name);
+      if (objectConfig->lightFlickering || objectConfig->lightColors.empty() || objectConfig->animationConfig
+          || !objectConfig->scripts.empty() || !objectConfig->animationScripts.empty()
+          || !objectConfig->soundEffect.empty())
+        throw StarException("BehaviorLab: constant-light fixture has dynamic behavior");
+      for (auto const& orientation : objectConfig->orientations) {
+        if (orientation->frames != 1 || !orientation->particleEmitters.empty())
+          throw StarException("BehaviorLab: constant-light fixture has animation or particles");
+      }
+      auto lamp = objects->createForPlacement(server, name, Vec2I(52, 33), Direction::Right);
+      if (!lamp)
+        throw StarException("BehaviorLab: constant-light fixture cannot anchor at (52,33)");
+      server->addEntity(lamp);
+      if (lamp->lightSources().size() != 1)
+        throw StarException("BehaviorLab: constant-light fixture must emit exactly one light");
+      m_behaviorLightId = lamp->entityId();
+      m_behaviorLightObject = name;
+      populated = true;
+    });
+    if (populated) {
+      m_behaviorPhase = 2;
+      m_behaviorSettledFrames = 0;
+    }
+    return;
+  }
+
+  if (m_behaviorPhase == 4) {
+    if (!BehaviorLab::frameCaptured(m_behaviorCapture))
+      return;
+    if (m_behaviorStage == 2) {
+      Logger::info("BehaviorLab: lighting-room completed (three acknowledged world frames)");
+      m_behaviorPhase = 5;
+      appController()->quit();
+      return;
+    }
+    ++m_behaviorStage;
+    auto material = m_behaviorStage == 1 ? m_behaviorMaterial : EmptyMaterialId;
+    bool changed = false;
+    m_universeServer->executeForClient(world->connection(), [&](WorldServer* server, PlayerPtr) {
+      if (server->worldId() != printWorldId(fixtureId))
+        return;
+      DungeonGeneratorWorld writer(server, false);
+      for (int y = 33; y <= 59; ++y)
+        writer.setForegroundMaterial(Vec2I(62, y), material, 0, DefaultMaterialColorVariant);
+      changed = true;
+    });
+    if (!changed)
+      throw StarException("BehaviorLab: lost authoritative fixture world during action");
+    m_behaviorPhase = 2;
+    m_behaviorSettledFrames = 0;
+  }
+
+  if (m_behaviorPhase == 2) {
+    bool replicated = world->material(Vec2I(40, 48), TileLayer::Foreground) == m_behaviorMaterial
+        && world->material(Vec2I(64, 48), TileLayer::Background) == m_behaviorMaterial
+        && world->entity(m_behaviorLightId);
+    auto expected = m_behaviorStage == 1 ? m_behaviorMaterial : EmptyMaterialId;
+    for (int y = 33; y <= 59; ++y)
+      replicated = replicated && world->material(Vec2I(62, y), TileLayer::Foreground) == expected;
+    if (!replicated) {
+      m_behaviorSettledFrames = 0;
+      return;
+    }
+    // Require real replication plus a bounded settling interval, not merely a
+    // timer from the send call. Rendering still waits for the lighting worker.
+    if (++m_behaviorSettledFrames >= 90)
+      m_behaviorReady = true;
+  }
+}
+
+void ClientApplication::renderBehaviorScenario() {
+  if (!m_behaviorReady || BehaviorLab::hasPendingFrame())
+    return;
+  auto world = m_universeClient->worldClient();
+  if (!world || !world->inWorld() || !m_behaviorLightingCompleted || m_renderData.isFullbright)
+    return;
+  auto lamp = as<Object>(world->entity(m_behaviorLightId));
+  if (!lamp || lamp->lightSources().empty())
+    return;
+  auto light = lamp->lightSources().first();
+  bool playerOutsideView = !m_worldPainter->camera().worldTileRect().padded(4).contains(Vec2I::floor(m_player->position()));
+  if (!playerOutsideView)
+    throw StarException("BehaviorLab: drawable viewport unexpectedly includes animated player");
+  m_behaviorCapture = StringList{"lit-room", "occluder-added", "occluder-restored"}.at(m_behaviorStage);
+  uint64_t calls = 0;
+  String backend = "cpp";
+#ifdef STAR_USE_RUST_LIGHTING
+  backend = "rust";
+  calls = star_lighting_call_count();
+#endif
+  // Preserve the exact CPU upload bits for diagnosing shader-visible rounding.
+  // These diagnostics never mask pixels or weaken semantic state comparisons.
+  JsonArray lightmapBits;
+  auto& lightmap = m_renderData.lightMap;
+  for (size_t i = 0; i < (size_t)lightmap.width() * lightmap.height() * 3; ++i) {
+    uint32_t bits;
+    std::memcpy(&bits, lightmap.data() + i, sizeof(bits));
+    lightmapBits.append(bits);
+  }
+  Json lightmapDiagnostic = JsonObject{{"size", jsonFromVec2U(lightmap.size())},
+      {"minPosition", jsonFromVec2I(m_renderData.lightMinPosition)},
+      {"layout", "row-major-rgb-f32-bits"}, {"bits", std::move(lightmapBits)}};
+  BehaviorLab::queueFrame(m_behaviorCapture, JsonObject{
+      {"lightingDiagnostics", std::move(lightmapDiagnostic)},
+      {"scenario", "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
+      {"worldState", JsonObject{
+          {"worldId", printWorldId(m_universeClient->clientContext()->playerWorldId())},
+          {"worldSize", jsonFromVec2U(world->geometry().size())},
+          {"cameraPosition", jsonFromVec2F(m_worldPainter->camera().centerWorldPosition())},
+          {"cameraPixelRatio", m_worldPainter->camera().pixelRatio()},
+          {"materialId", m_behaviorMaterial}, {"lightObject", m_behaviorLightObject},
+          {"lightEntityReplicated", true}, {"lightPosition", jsonFromVec2F(light.position)},
+          {"lightColor", jsonFromVec3F(light.color)},
+          {"occluderPresent", m_behaviorStage == 1},
+          {"observedOccluderMaterial", world->material(Vec2I(62, 48), TileLayer::Foreground)}
+      }},
+      {"inWorld", world->inWorld()},
+      {"worldId", printWorldId(m_universeClient->clientContext()->playerWorldId())},
+      {"worldSize", jsonFromVec2U(world->geometry().size())},
+      {"playerPosition", jsonFromVec2F(m_player->position())},
+      {"cameraPosition", jsonFromVec2F(m_worldPainter->camera().centerWorldPosition())},
+      {"cameraPixelRatio", m_worldPainter->camera().pixelRatio()},
+      {"playerOutsideView", playerOutsideView}, {"uiHidden", true},
+      {"stabilization", JsonObject{{"sky", "barren-black"}, {"stars", false}, {"debris", false},
+          {"spawning", false}, {"lightFlicker", false}, {"objectAnimation", false}}},
+      {"lightingBackend", backend}, {"rustLightingCalls", calls},
+      {"lightingCompleted", m_behaviorLightingCompleted}, {"fullbright", m_renderData.isFullbright},
+      {"material", "smoothmetal"}, {"materialId", m_behaviorMaterial},
+      {"lightObject", m_behaviorLightObject}, {"lightEntityId", m_behaviorLightId},
+      {"lightPosition", jsonFromVec2F(light.position)}, {"lightColor", jsonFromVec3F(light.color)},
+      {"lightType", LightTypeNames.getRight(light.type)},
+      {"lightEntityReplicated", (bool)world->entity(m_behaviorLightId)},
+      {"changedTileMin", JsonArray{62, 33}}, {"changedTileMax", JsonArray{62, 59}},
+      {"occluderPresent", m_behaviorStage == 1},
+      {"observedOccluderMaterial", world->material(Vec2I(62, 48), TileLayer::Foreground)},
+      {"action", m_behaviorStage == 0 ? "room-populated" : m_behaviorStage == 1 ? "foreground-occluder-added" : "foreground-occluder-removed"},
+      {"replicatedSettledUpdates", m_behaviorSettledFrames}, {"updateIndex", m_behaviorFrames},
+      {"seed", BehaviorLab::configuration().getUInt("seed", 42)}
+  });
+  m_behaviorReady = false;
+  m_behaviorPhase = 4;
+}
+
 void ClientApplication::updateCamera(float dt) {
   if (!m_universeClient->worldClient())
     return;
 
   WorldCamera& camera = m_worldPainter->camera();
   camera.update(dt);
+  if (BehaviorLab::enabled() && m_behaviorPhase >= 1) {
+    camera.setPixelRatio(2.0f);
+    m_worldPainter->setCameraPosition(m_universeClient->worldClient()->geometry(), Vec2F(64, 48));
+    m_universeClient->worldClient()->setClientWindow(camera.worldTileRect());
+    return;
+  }
 
   if (m_mainInterface->fixedCamera())
     return;

@@ -1,4 +1,6 @@
-# executed evidence
+# historical executed evidence
+
+this records the original `6ba80cce` lighting-port checkpoint. its source manifest and artifact hashes predate the successful-call instrumentation in `e8993038`; they are NOT current-source receipts. current numerical reruns and actual native framebuffer failures are recorded in [`../behavior/EVIDENCE.md`](../behavior/EVIDENCE.md).
 
 status: verified within the native macOS numerical-port scope. this is not proof of whole-game or universal bitwise equivalence.
 

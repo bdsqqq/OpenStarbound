@@ -1,0 +1,6 @@
+{
+  "name": "behavior-lab-fixtures",
+  "friendlyName": "Isolated behavior lab fixtures",
+  "description": "Test-only deterministic scene inputs; not a production asset overlay.",
+  "priority": 1000
+}

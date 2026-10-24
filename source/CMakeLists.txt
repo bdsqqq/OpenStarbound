@@ -582,13 +582,15 @@ endif()
 
 set(BUILD_SHARED_LIBS false)
 
-# First set output dir for the generic no-config case (e.g. macos / linux)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/../dist)
+# Separate reference/candidate builds must never overwrite one another's
+# executables. Ordinary builds retain the historical dist/ location.
+set(STAR_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/../dist" CACHE PATH "Executable output directory")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${STAR_RUNTIME_OUTPUT_DIRECTORY}")
 
 # Second, set output dir for multi-config builds (e.g. msvc)
 foreach(OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
   string(TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG)
-  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${PROJECT_SOURCE_DIR}/../dist)
+  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG} "${STAR_RUNTIME_OUTPUT_DIRECTORY}")
 endforeach(OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES)
 
 if(STAR_USE_RUST_LIGHTING)
