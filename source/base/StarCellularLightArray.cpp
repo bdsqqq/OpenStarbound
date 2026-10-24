@@ -1,4 +1,5 @@
 #include "StarCellularLightArray.hpp"
+#if !defined(STAR_USE_RUST_LIGHTING) || !STAR_USE_RUST_LIGHTING
 #include "StarInterpolation.hpp"
 // just specializing these in a cpp file so I can iterate on them without recompiling like 40 files!!
 
@@ -151,3 +152,4 @@ void CellularLightArray<ColoredLightTraits>::calculatePointLighting(size_t xmin,
 }
 
 }
+#endif

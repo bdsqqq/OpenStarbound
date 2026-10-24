@@ -143,6 +143,10 @@ option(STAR_USE_JEMALLOC "Use jemalloc allocators" OFF)
 option(STAR_USE_MIMALLOC "Use mimalloc allocators" OFF)
 option(STAR_USE_RPMALLOC "Use rpmalloc allocators" OFF)
 
+# Opt in while the native Rust backend is validated on additional platforms.
+option(STAR_USE_RUST_LIGHTING "Use the Rust cellular-lighting implementation" OFF)
+option(STAR_BUILD_LIGHTING_LAB "Build the differential cellular-lighting laboratory" OFF)
+
 # Report all the discovered system / environment settings and all options.
 
 message(STATUS "Source ID: ${STAR_SOURCE_IDENTIFIER}")
@@ -587,6 +591,14 @@ foreach(OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${PROJECT_SOURCE_DIR}/../dist)
 endforeach(OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES)
 
+if(STAR_USE_RUST_LIGHTING)
+  include(RustLighting)
+elseif(STAR_BUILD_LIGHTING_LAB)
+  message(FATAL_ERROR "STAR_BUILD_LIGHTING_LAB requires STAR_USE_RUST_LIGHTING=ON")
+else()
+  message(STATUS "Cellular lighting backend: C++")
+endif()
+
 # External code included with starbound source, which core depends on
 # Marked SYSTEM so that warnings from the bundled third party headers (fmt, etc.) are not reported
 include_directories(SYSTEM ${PROJECT_SOURCE_DIR}/extern)
@@ -627,6 +639,11 @@ option(BUILD_TESTING "Build test projects" OFF)
 if(BUILD_TESTING)
   enable_testing()
   add_subdirectory(test)
+endif()
+
+if(STAR_BUILD_LIGHTING_LAB)
+  enable_testing()
+  add_subdirectory(lab/lighting)
 endif()
 
 # Starbound stand-alone server.

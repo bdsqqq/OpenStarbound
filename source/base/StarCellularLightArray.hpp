@@ -3,6 +3,12 @@
 #include "StarList.hpp"
 #include "StarVector.hpp"
 
+#if defined(STAR_USE_RUST_LIGHTING) && STAR_USE_RUST_LIGHTING
+#include "StarException.hpp"
+#include "StarRustLighting.h"
+#include <type_traits>
+#endif
+
 namespace Star {
 
 // Operations for simple scalar lighting.
@@ -101,6 +107,7 @@ public:
   void calculate(size_t xMin, size_t yMin, size_t xMax, size_t yMax);
 
 private:
+#if !defined(STAR_USE_RUST_LIGHTING) || !STAR_USE_RUST_LIGHTING
   // Set 4 points based on interpolated light position and free space
   // attenuation.
   void setSpreadLightingPoints();
@@ -116,6 +123,15 @@ private:
   // summing each block that would be drawn to to produce an attenuation.  Not
   // circularized.
   float lineAttenuation(Vec2F const& start, Vec2F const& end, float perObstacleAttenuation, float maxAttenuation);
+
+#endif
+
+#if defined(STAR_USE_RUST_LIGHTING) && STAR_USE_RUST_LIGHTING
+  // Keep public cells stable and marshal explicitly: Vec3F and bool have no C ABI contract.
+  List<StarLightingCell> m_rustCells;
+  List<StarLightingSpreadLight> m_rustSpreadLights;
+  List<StarLightingPointLight> m_rustPointLights;
+#endif
 
   size_t m_width;
   size_t m_height;
@@ -293,10 +309,76 @@ auto CellularLightArray<LightTraits>::cellAtIndex(size_t index) -> Cell & {
 
 template <typename LightTraits>
 void CellularLightArray<LightTraits>::calculate(size_t xMin, size_t yMin, size_t xMax, size_t yMax) {
+#if defined(STAR_USE_RUST_LIGHTING) && STAR_USE_RUST_LIGHTING
+  constexpr bool scalar = std::is_same<LightValue, float>::value;
+  static_assert(scalar || std::is_same<LightValue, Vec3F>::value,
+      "Rust cellular lighting supports scalar float and Vec3F light values");
+  auto packLight = [](LightValue const& value, float* channels) {
+    if constexpr (scalar) {
+      channels[0] = value;
+      channels[1] = channels[2] = 0.0f;
+    } else {
+      for (size_t channel = 0; channel < 3; ++channel)
+        channels[channel] = value[channel];
+    }
+  };
+
+  // resize retains capacity across begin()/calculate() cycles. Copy every input,
+  // including cells outside the target rect: spread sweeps use the ambient border.
+  m_rustCells.resize(m_width * m_height);
+  for (size_t i = 0; i < m_rustCells.size(); ++i) {
+    packLight(m_cells[i].light, m_rustCells[i].light);
+    m_rustCells[i].obstacle = m_cells[i].obstacle ? 1u : 0u;
+  }
+  m_rustSpreadLights.resize(m_spreadLights.size());
+  for (size_t i = 0; i < m_spreadLights.size(); ++i) {
+    auto const& source = m_spreadLights[i];
+    auto& target = m_rustSpreadLights[i];
+    target.position[0] = source.position[0];
+    target.position[1] = source.position[1];
+    packLight(source.value, target.value);
+  }
+  m_rustPointLights.resize(m_pointLights.size());
+  for (size_t i = 0; i < m_pointLights.size(); ++i) {
+    auto const& source = m_pointLights[i];
+    auto& target = m_rustPointLights[i];
+    target.position[0] = source.position[0];
+    target.position[1] = source.position[1];
+    packLight(source.value, target.value);
+    target.beam = source.beam;
+    target.beam_angle = source.beamAngle;
+    target.beam_ambience = source.beamAmbience;
+    target.as_spread = source.asSpread ? 1u : 0u;
+  }
+  StarLightingParameters parameters{
+      m_spreadPasses, m_spreadMaxAir, m_spreadMaxObstacle,
+      m_pointMaxAir, m_pointMaxObstacle, m_pointObstacleBoost, m_pointAdditive ? 1u : 0u};
+  int32_t status = star_lighting_calculate(scalar ? 1u : 3u, m_width, m_height,
+      &parameters, m_rustCells.ptr(), m_rustCells.size(),
+      m_rustSpreadLights.ptr(), m_rustSpreadLights.size(),
+      m_rustPointLights.ptr(), m_rustPointLights.size(), xMin, yMin, xMax, yMax);
+  if (status == 1)
+    throw StarException("Rust cellular lighting rejected invalid inputs: expected finite values, positive attenuation distances, and bounds within a nonempty grid");
+  if (status == 2)
+    throw StarException("Rust cellular lighting failed: Rust panic caught at the C ABI boundary");
+  if (status != 0)
+    throw StarException("Rust cellular lighting failed with unexpected status " + std::to_string(status));
+
+  // Commit only successful results; preserve cell references and obstacle values.
+  for (size_t i = 0; i < m_rustCells.size(); ++i) {
+    if constexpr (scalar)
+      m_cells[i].light = m_rustCells[i].light[0];
+    else
+      m_cells[i].light = Vec3F(m_rustCells[i].light[0], m_rustCells[i].light[1], m_rustCells[i].light[2]);
+  }
+#else
   setSpreadLightingPoints();
   calculateLightSpread(xMin, yMin, xMax, yMax);
   calculatePointLighting(xMin, yMin, xMax, yMax);
+#endif
 }
+
+#if !defined(STAR_USE_RUST_LIGHTING) || !STAR_USE_RUST_LIGHTING
 
 template <typename LightTraits>
 void CellularLightArray<LightTraits>::setSpreadLightingPoints() {
@@ -534,5 +616,7 @@ float CellularLightArray<LightTraits>::lineAttenuation(Vec2F const& start, Vec2F
 
   return min(obstacleAttenuation, maxAttenuation);
 }
+
+#endif
 
 }
