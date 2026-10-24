@@ -1,0 +1,157 @@
+//! The engine's single Rust static archive owns the unmangled C ABI exports.
+//! Kernels remain rlibs so linking another kernel cannot add another Rust runtime.
+pub use star_lighting::{
+    StarLightingCell, StarLightingParameters, StarLightingPointLight, StarLightingSpreadLight,
+};
+
+#[no_mangle]
+pub extern "C" fn star_lighting_call_count() -> u64 {
+    star_lighting::star_lighting_call_count()
+}
+
+/// Forwards the precise ABI without changing validation, panic containment or receipts.
+///
+/// # Safety
+/// Nonempty pointers must refer to initialized allocations of the declared sizes.
+/// Cells must be writable and exclusively borrowed for the duration of the call.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn star_lighting_calculate(
+    channels: u32,
+    width: usize,
+    height: usize,
+    parameters: *const StarLightingParameters,
+    cells: *mut StarLightingCell,
+    cells_len: usize,
+    spread_lights: *const StarLightingSpreadLight,
+    spread_len: usize,
+    point_lights: *const StarLightingPointLight,
+    point_len: usize,
+    x_min: usize,
+    y_min: usize,
+    x_max: usize,
+    y_max: usize,
+) -> i32 {
+    star_lighting::star_lighting_calculate(
+        channels,
+        width,
+        height,
+        parameters,
+        cells,
+        cells_len,
+        spread_lights,
+        spread_len,
+        point_lights,
+        point_len,
+        x_min,
+        y_min,
+        x_max,
+        y_max,
+    )
+}
+
+/// Forwards the production ARM expression policy with the same ABI contracts.
+///
+/// # Safety
+/// Identical allocation and exclusive-borrow requirements to [star_lighting_calculate].
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn star_lighting_calculate_arm_fast(
+    channels: u32,
+    width: usize,
+    height: usize,
+    parameters: *const StarLightingParameters,
+    cells: *mut StarLightingCell,
+    cells_len: usize,
+    spread_lights: *const StarLightingSpreadLight,
+    spread_len: usize,
+    point_lights: *const StarLightingPointLight,
+    point_len: usize,
+    x_min: usize,
+    y_min: usize,
+    x_max: usize,
+    y_max: usize,
+) -> i32 {
+    star_lighting::star_lighting_calculate_arm_fast(
+        channels,
+        width,
+        height,
+        parameters,
+        cells,
+        cells_len,
+        spread_lights,
+        spread_len,
+        point_lights,
+        point_len,
+        x_min,
+        y_min,
+        x_max,
+        y_max,
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ptr::{null, null_mut};
+
+    #[test]
+    fn exports_share_kernel_types_status_and_counter() {
+        // These are the kernel's actual types, not a second set of ABI declarations.
+        let parameters = star_lighting::StarLightingParameters {
+            spread_passes: 0,
+            spread_max_air: 5.0,
+            spread_max_obstacle: 2.0,
+            point_max_air: 5.0,
+            point_max_obstacle: 2.0,
+            point_obstacle_boost: 0.0,
+            point_additive: 0,
+        };
+        let before = star_lighting_call_count();
+        for calculate in [star_lighting_calculate, star_lighting_calculate_arm_fast] {
+            let mut cells = [star_lighting::StarLightingCell::default(); 9];
+            cells[4].light[0] = 1.0;
+            let status = unsafe {
+                calculate(
+                    1,
+                    3,
+                    3,
+                    &parameters,
+                    cells.as_mut_ptr(),
+                    9,
+                    null(),
+                    0,
+                    null(),
+                    0,
+                    1,
+                    1,
+                    2,
+                    2,
+                )
+            };
+            assert_eq!(status, 0);
+            assert_eq!(cells[4].light, [1.0, 0.0, 0.0]);
+            let invalid = unsafe {
+                calculate(
+                    2,
+                    3,
+                    3,
+                    &parameters,
+                    null_mut(),
+                    9,
+                    null(),
+                    0,
+                    null(),
+                    0,
+                    1,
+                    1,
+                    2,
+                    2,
+                )
+            };
+            assert_eq!(invalid, 1);
+        }
+        assert_eq!(star_lighting_call_count(), before + 2);
+        assert_eq!(star_lighting::star_lighting_call_count(), before + 2);
+    }
+}

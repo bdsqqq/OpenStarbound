@@ -2,6 +2,19 @@
 
 current result: **exact framebuffer/state gate PASSED for the three-stage lighting-room fixture**, on apple clang 21 / aarch64 / fast-math. this is finite scenario evidence, not universal bitwise or whole-game equivalence. the initial failure is retained below.
 
+## archive aggregation follow-up
+
+VERIFIED — `build/behavior/aggregate-r1/`: one workspace/static FFI archive now owns the three unchanged C exports; lighting is an rlib and the legacy CMake target is an alias. only export ownership, packaging and build boundaries changed, not arithmetic. primary rebuilt both source-bound clients and reran the actual fixture: baseline repeatability, exact candidate state/pixels and restoration all PASS. all nine framebuffer hashes and all reference/candidate CPU upload maps equal the preceding `arm-policy-r1` artifacts, binding the existing inspected scene evidence to these artifacts.
+
+```text
+e89020b0ad9636392a4c95c3130a6f3132f5a661fe311617d7bbeb86f4e4f116  reference/bin/starbound
+3b4407d452b53f24c8d5c4ba1cb2b70c69893707c325c669c848e32d35562f9e  candidate/bin/starbound
+```
+
+paths relative to `build/behavior/`; canonical source-map fingerprint `6b6a41fd15f39f95f232078e048956f6a208a6074e2f16689b03add423fda028`. current checks: workspace15 tests in debug/release, fmt, nine numerical CTests and 14,734,528 channels per mode serial/concurrent (seed1592594996), C consumer invocation of all3 exports, target isolation and architecture rejection controls, 40 behavior/provenance tests. no tolerance changes. primary removed duplicate alias/global archive references from numerical lab links: the Rust lab link contains exactly one aggregate and the C++ fallback link contains none; the Rust-OFF native graph contains no Rust target. logs `/tmp/openstarbound-aggregate-{native-build,real,primary-numeric,behavior-tests}.log`.
+
+this remains native-client fixture evidence, not a fresh dedicated-server session or other-platform certification. source/workspace receipts are unsigned local stale-build guards with the limitations recorded above/below.
+
 ## production-arm arithmetic follow-up
 
 VERIFIED — `build/behavior/arm-policy-r1/`, rebuilt source-bound clients, first arithmetic repair attempt:

@@ -9,9 +9,9 @@ if [[ ! -f "$build/CMakeCache.txt" ]]; then
   exit 2
 fi
 python3 "$root/source/lab/lighting/verify_oracle.py" --self-test
-cargo fmt --manifest-path "$root/source/rust/lighting/Cargo.toml" --check
-CARGO_TARGET_DIR="$build/rust-lighting" cargo test --manifest-path "$root/source/rust/lighting/Cargo.toml" --locked --offline
-CARGO_TARGET_DIR="$build/rust-lighting" cargo test --manifest-path "$root/source/rust/lighting/Cargo.toml" --release --locked --offline
+cargo fmt --manifest-path "$root/source/rust/Cargo.toml" --all --check
+CARGO_TARGET_DIR="$build/rust-engine-ffi" cargo test --manifest-path "$root/source/rust/Cargo.toml" --workspace --locked --offline
+CARGO_TARGET_DIR="$build/rust-engine-ffi" cargo test --manifest-path "$root/source/rust/Cargo.toml" --workspace --release --locked --offline
 cmake --build "$build" --target lighting_lab lighting_lab_fastmath lighting_lab_cpp --parallel "${CMAKE_BUILD_PARALLEL_LEVEL:-8}"
 ctest --test-dir "$build" --output-on-failure -R '^lighting_lab'
 for mode in lighting_lab lighting_lab_fastmath lighting_lab_cpp; do

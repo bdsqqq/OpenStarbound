@@ -1,8 +1,8 @@
 {
   "cmake_extraction_limits": [
     {
-      "line": 37,
-      "path": "cmake/RustLighting.cmake",
+      "line": 38,
+      "path": "cmake/Rust.cmake",
       "reason": "glob not expanded; filesystem registry still covers files"
     },
     {
@@ -2714,30 +2714,30 @@
       "cmake_membership": [
         {
           "cmake": "source/lab/lighting/CMakeLists.txt",
-          "source_line": 11,
+          "source_line": 15,
           "static_context": [
             "foreach(lab_target lighting_lab lighting_lab_fastmath lighting_lab_cpp)"
           ],
           "target": "lighting_lab",
-          "target_line": 8
+          "target_line": 12
         },
         {
           "cmake": "source/lab/lighting/CMakeLists.txt",
-          "source_line": 11,
+          "source_line": 15,
           "static_context": [
             "foreach(lab_target lighting_lab lighting_lab_fastmath lighting_lab_cpp)"
           ],
           "target": "lighting_lab_cpp",
-          "target_line": 8
+          "target_line": 12
         },
         {
           "cmake": "source/lab/lighting/CMakeLists.txt",
-          "source_line": 11,
+          "source_line": 15,
           "static_context": [
             "foreach(lab_target lighting_lab lighting_lab_fastmath lighting_lab_cpp)"
           ],
           "target": "lighting_lab_fastmath",
-          "target_line": 8
+          "target_line": 12
         },
         {
           "cmake": "source/base/CMakeLists.txt",
@@ -19649,30 +19649,30 @@
       "cmake_membership": [
         {
           "cmake": "source/lab/lighting/CMakeLists.txt",
-          "source_line": 9,
+          "source_line": 13,
           "static_context": [
             "foreach(lab_target lighting_lab lighting_lab_fastmath lighting_lab_cpp)"
           ],
           "target": "lighting_lab",
-          "target_line": 8
+          "target_line": 12
         },
         {
           "cmake": "source/lab/lighting/CMakeLists.txt",
-          "source_line": 9,
+          "source_line": 13,
           "static_context": [
             "foreach(lab_target lighting_lab lighting_lab_fastmath lighting_lab_cpp)"
           ],
           "target": "lighting_lab_cpp",
-          "target_line": 8
+          "target_line": 12
         },
         {
           "cmake": "source/lab/lighting/CMakeLists.txt",
-          "source_line": 9,
+          "source_line": 13,
           "static_context": [
             "foreach(lab_target lighting_lab lighting_lab_fastmath lighting_lab_cpp)"
           ],
           "target": "lighting_lab_fastmath",
-          "target_line": 8
+          "target_line": 12
         }
       ],
       "disposition": "oracle/harness",
@@ -19727,30 +19727,30 @@
       "cmake_membership": [
         {
           "cmake": "source/lab/lighting/CMakeLists.txt",
-          "source_line": 10,
+          "source_line": 14,
           "static_context": [
             "foreach(lab_target lighting_lab lighting_lab_fastmath lighting_lab_cpp)"
           ],
           "target": "lighting_lab",
-          "target_line": 8
+          "target_line": 12
         },
         {
           "cmake": "source/lab/lighting/CMakeLists.txt",
-          "source_line": 10,
+          "source_line": 14,
           "static_context": [
             "foreach(lab_target lighting_lab lighting_lab_fastmath lighting_lab_cpp)"
           ],
           "target": "lighting_lab_cpp",
-          "target_line": 8
+          "target_line": 12
         },
         {
           "cmake": "source/lab/lighting/CMakeLists.txt",
-          "source_line": 10,
+          "source_line": 14,
           "static_context": [
             "foreach(lab_target lighting_lab lighting_lab_fastmath lighting_lab_cpp)"
           ],
           "target": "lighting_lab_fastmath",
-          "target_line": 8
+          "target_line": 12
         }
       ],
       "disposition": "oracle/harness",
@@ -19779,6 +19779,36 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/lighting/verify_oracle.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/traversal/StarBlocksAlongLine.frozen.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/traversal/lab.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/traversal/run.py",
       "rule": "laboratories"
     },
     {
@@ -20216,6 +20246,16 @@
       "module": "presentation.renderer",
       "path": "source/rendering/StarWorldPainter.hpp",
       "rule": "renderer"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "ffi-adapter",
+      "language": "rust",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "foundation.runtime",
+      "path": "source/rust/ffi/src/lib.rs",
+      "rule": "rust-ffi-runtime"
     },
     {
       "cmake_membership": [],
@@ -23131,8 +23171,12 @@
       "sha256": "109dcdc2bc169bcf99438a0ace989806ff47b7c929e609dc99afee7fb9ea2ba2"
     },
     {
+      "path": "cmake/Rust.cmake",
+      "sha256": "ec4d4a5a0a81e4e0e20a9fc0dcc02d739e113f445125c3349f73bf7deae7a79c"
+    },
+    {
       "path": "cmake/RustLighting.cmake",
-      "sha256": "bbb93dda93d5a182827c188d2737d9730628dc6bd532f4cff65bcc4fc91b3f09"
+      "sha256": "6c066c6ce4084793fe5d9a4cefda4654361124d411aa07a176c90d0e5833b907"
     },
     {
       "path": "cmake/TargetArch.cmake",
@@ -23736,11 +23780,11 @@
     },
     {
       "path": "scripts/lighting-cmake-check.sh",
-      "sha256": "e370376e597cc19d2cd3ad463c43bb996c219c7779d9045627e9411d21e1dcdc"
+      "sha256": "cd95904c603367c8bdc0b9f329464df1eb960ae8c4d95ca93cc714c0f1184166"
     },
     {
       "path": "scripts/lighting-lab.sh",
-      "sha256": "848703160159c337e40a0070debb340f6135043ef3d9cdf8ea87edf42f2c4bdb"
+      "sha256": "34fc6f470f952634f56caad9c20ea51af0fef0287ba8d78d13f1bf0a13b04164"
     },
     {
       "path": "scripts/linux/autotag_objects.sh",
@@ -27880,7 +27924,7 @@
     },
     {
       "path": "source/lab/lighting/CMakeLists.txt",
-      "sha256": "f85ce6c9127252db8106d427f2e819b9fa52b27871c9fe3b8f7e64d6e37f2f20"
+      "sha256": "574201909b6887f4acca139df892872f29d1a6375579e8e46e16e18a42af8f8e"
     },
     {
       "path": "source/lab/lighting/LightingLab.cpp",
@@ -27920,7 +27964,19 @@
     },
     {
       "path": "source/lab/migration/modules.json",
-      "sha256": "0175dade3ef5a1136b2d1da3c708e00c1b82722546941989b88a1295b0336522"
+      "sha256": "13f3494a2cd67ac2eb861ae56259a64b492fe683d95278de44264d124380fc37"
+    },
+    {
+      "path": "source/lab/traversal/StarBlocksAlongLine.frozen.hpp",
+      "sha256": "c917ceeeba883c8c267b03861e0b171d0c7c3f2098b9cc419e6e463ea006d077"
+    },
+    {
+      "path": "source/lab/traversal/lab.cpp",
+      "sha256": "b7cd82b3efb64fd7e9aade688615d8f169caaebc356d18ef46819e9003ed29a5"
+    },
+    {
+      "path": "source/lab/traversal/run.py",
+      "sha256": "80c99371c26080e4e8d76a88dcae587e231683834ac9269290f456ce2e1eea04"
     },
     {
       "path": "source/mod_uploader/CMakeLists.txt",
@@ -28039,8 +28095,12 @@
       "sha256": "9cf229c19cc87531869fcfc5073b7e7f7b76147875865488e63d4b5aeb9f39f8"
     },
     {
+      "path": "source/rust/ffi/src/lib.rs",
+      "sha256": "7b8dbabaca86c5c0f72b53d720c54803133e3582745235e4037adbafbe370123"
+    },
+    {
       "path": "source/rust/lighting/src/lib.rs",
-      "sha256": "b25d90147fff6d88842c284df1c526b90b7c6d50bc18c167343a90baec30935b"
+      "sha256": "0e8698cd4a5db0cb84bfa479fb44412ed1093d3475c49ec716a80221df33cdd5"
     },
     {
       "path": "source/rust/lighting/src/tests.rs",
@@ -28781,7 +28841,7 @@
     "foundation.math-geometry": "Math, interpolation, geometric primitives, spatial indexing and path search.",
     "foundation.media": "Images, colors, fonts and audio decoding.",
     "foundation.random": "Random generators, noise and weighted sampling; preserve sequences.",
-    "foundation.runtime": "Threads, time, errors, logging and process/platform support.",
+    "foundation.runtime": "Threads, time, errors, logging, process/platform support and shared Rust FFI/runtime ownership.",
     "foundation.serialization": "JSON, patches, byte encoding and streams.",
     "foundation.storage": "Files, databases, caching and dynamic libraries.",
     "foundation.text": "Unicode, strings, formatting and lexical conversion.",
@@ -28860,11 +28920,12 @@
   },
   "summary": {
     "by_disposition": {
+      "ffi-adapter": 1,
       "harness": 6,
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 12,
+      "oracle/harness": 15,
       "retain-tooling": 20,
       "retained-third-party": 296,
       "rust-candidate": 1,
@@ -28879,7 +28940,7 @@
       "foundation.math-geometry": 14,
       "foundation.media": 14,
       "foundation.random": 10,
-      "foundation.runtime": 37,
+      "foundation.runtime": 38,
       "foundation.serialization": 33,
       "foundation.storage": 17,
       "foundation.text": 13,
@@ -28905,14 +28966,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 35,
-      "validation.oracles-harness": 18,
+      "validation.oracles-harness": 21,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1397,
+    "files": 1401,
     "modules": 39,
-    "no_direct_target": 291
+    "no_direct_target": 295
   }
 }

@@ -3,5 +3,12 @@
 version = 4
 
 [[package]]
+name = "star-engine-ffi"
+version = "0.1.0"
+dependencies = [
+ "star-lighting",
+]
+
+[[package]]
 name = "star-lighting"
 version = "0.1.0"

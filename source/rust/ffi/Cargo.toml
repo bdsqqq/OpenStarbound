@@ -1,0 +1,12 @@
+[package]
+name = "star-engine-ffi"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "star_engine_ffi"
+crate-type = ["staticlib"]
+
+[dependencies]
+star-lighting = { path = "../lighting" }

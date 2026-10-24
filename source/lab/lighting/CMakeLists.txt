@@ -4,6 +4,10 @@ if(NOT STAR_USE_RUST_LIGHTING)
 endif()
 enable_testing()
 find_package(Threads REQUIRED)
+# Link the single aggregate explicitly only for Rust adapter tests. Keeping it
+# out of the shared list also makes the C++ fallback a Rust-free link boundary.
+set(lab_ext_libs ${STAR_EXT_LIBS})
+list(REMOVE_ITEM lab_ext_libs star_rust_lighting star_rust_engine_ffi)
 foreach(lab_target lighting_lab lighting_lab_fastmath lighting_lab_cpp)
   add_executable(${lab_target}
     LightingLab.cpp
@@ -11,7 +15,7 @@ foreach(lab_target lighting_lab lighting_lab_fastmath lighting_lab_cpp)
     ${PROJECT_SOURCE_DIR}/base/StarCellularLightArray.cpp
     $<TARGET_OBJECTS:star_core>)
   target_include_directories(${lab_target} PRIVATE ${STAR_CORE_INCLUDES} ${STAR_BASE_INCLUDES})
-  target_link_libraries(${lab_target} PRIVATE star_extern ${STAR_EXT_LIBS} Threads::Threads)
+  target_link_libraries(${lab_target} PRIVATE star_extern ${lab_ext_libs} Threads::Threads)
   if(lab_target STREQUAL "lighting_lab_cpp")
     # Directory-wide definitions must not silently turn this into another Rust test.
     if(MSVC)

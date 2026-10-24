@@ -8,7 +8,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 // running WorldClient actually selected and executed this implementation.
 static SUCCESSFUL_CALCULATIONS: AtomicU64 = AtomicU64::new(0);
 
-#[no_mangle]
 pub extern "C" fn star_lighting_call_count() -> u64 {
     SUCCESSFUL_CALCULATIONS.load(Ordering::Relaxed)
 }
@@ -461,7 +460,6 @@ unsafe fn borrowed<'a, T>(ptr: *const T, len: usize) -> &'a [T] {
 /// Nonempty pointers must designate initialized allocations of the declared sizes, valid for
 /// this call. Cells must be writable and exclusively borrowed. Numeric pointer checks cannot
 /// establish allocation provenance or protect against concurrent writes by foreign code.
-#[no_mangle]
 #[allow(clippy::too_many_arguments)]
 pub unsafe extern "C" fn star_lighting_calculate(
     channels: u32,
@@ -503,7 +501,6 @@ pub unsafe extern "C" fn star_lighting_calculate(
 ///
 /// # Safety
 /// Identical pointer/allocation requirements to [star_lighting_calculate].
-#[no_mangle]
 #[allow(clippy::too_many_arguments)]
 pub unsafe extern "C" fn star_lighting_calculate_arm_fast(
     channels: u32,

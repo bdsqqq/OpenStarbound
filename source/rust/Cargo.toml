@@ -1,0 +1,6 @@
+[workspace]
+members = ["lighting", "ffi"]
+resolver = "2"
+
+[profile.release]
+panic = "unwind"

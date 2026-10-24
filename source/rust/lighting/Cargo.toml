@@ -6,7 +6,4 @@ publish = false
 
 [lib]
 name = "star_lighting"
-crate-type = ["staticlib", "rlib"]
-
-[profile.release]
-panic = "unwind"
+crate-type = ["rlib"]
