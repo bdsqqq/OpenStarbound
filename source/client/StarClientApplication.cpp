@@ -3,6 +3,7 @@
 #include "StarSha256Lab.hpp"
 #include "StarVlqLab.hpp"
 #include "StarBytesLab.hpp"
+#include "StarUnicodeLab.hpp"
 #ifdef STAR_USE_RUST_BYTES
 #include "StarRustBytes.h"
 #endif
@@ -534,6 +535,8 @@ void ClientApplication::render() {
         prepareBehaviorVlqFrame();
       if (BehaviorLab::enabled() && m_behaviorBytesRoom)
         prepareBehaviorBytesFrame();
+      if (BehaviorLab::enabled() && m_behaviorUnicodeRoom)
+        prepareBehaviorUnicodeFrame();
 
       auto paintStart = Time::monotonicMicroseconds();
       m_worldPainter->render(m_renderData, [&]() -> bool {
@@ -563,6 +566,19 @@ void ClientApplication::render() {
       m_mainInterface->render();
       m_cinematicOverlay->render();
     } else {
+      if (m_behaviorUnicodeRoom && !m_behaviorUnicodeProof.isNull()) {
+        // Normal Font -> TextPainter -> GPU glyph path; only ASCII coverage is
+        // claimed. Screen-space coordinates avoid the 64px world-image area.
+        m_guiContext->clearTextStyle();
+        m_guiContext->setDefaultFont();
+        m_guiContext->setFontSize(16, 1.0f);
+        m_guiContext->setFontColor(Vec4B(255, 255, 255, 255));
+        m_guiContext->setFontMode(FontMode::Normal);
+        m_guiContext->setFontProcessingDirectives("");
+        m_guiContext->renderText(m_behaviorUnicodeProof.get("assets").getString("label"),
+            TextPositioning(Vec2F(m_guiContext->windowSize()) * 0.5f + Vec2F(-35, 70)));
+        m_guiContext->clearTextStyle();
+      }
       renderBehaviorScenario();
     }
     LogMap::set("client_render_interface", strf(u8"{:05d}\u00b5s", Time::monotonicMicroseconds() - start));
@@ -1439,13 +1455,15 @@ void ClientApplication::validateBehaviorStorage() {
   auto const& config = BehaviorLab::configuration();
   auto scenario = config.getString("scenario", "lighting-room");
   if (scenario != "lighting-room" && scenario != "raycast-room" && scenario != "encoding-room"
-      && scenario != "sha256-room" && scenario != "vlq-room" && scenario != "bytes-room")
+      && scenario != "sha256-room" && scenario != "vlq-room" && scenario != "bytes-room"
+      && scenario != "unicode-room")
     throw StarException("BehaviorLab: unsupported scenario");
   m_behaviorRaycastRoom = scenario == "raycast-room";
   m_behaviorEncodingRoom = scenario == "encoding-room";
   m_behaviorSha256Room = scenario == "sha256-room";
   m_behaviorVlqRoom = scenario == "vlq-room";
   m_behaviorBytesRoom = scenario == "bytes-room";
+  m_behaviorUnicodeRoom = scenario == "unicode-room";
   if (config.getUInt("maxFrames", 1800) == 0 || config.getUInt("maxFrames", 1800) > 18000)
     throw StarException("BehaviorLab: maxFrames must be in [1, 18000]");
 
@@ -1566,7 +1584,7 @@ void ClientApplication::updateBehaviorScenario() {
       return;
     if (m_behaviorStage == 2) {
       Logger::info("BehaviorLab: {} completed (three acknowledged world frames)",
-          m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
+          m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
       m_behaviorPhase = 5;
       appController()->quit();
       return;
@@ -2203,6 +2221,123 @@ void ClientApplication::prepareBehaviorBytesFrame() {
   m_renderData.foregroundOverlays.append(std::move(drawable));
 }
 
+void ClientApplication::prepareBehaviorUnicodeFrame() {
+  auto world = m_universeClient->worldClient();
+  if (!world || !world->inWorld())
+    return;
+  if (m_behaviorUnicodeProof.isNull()) {
+    String const textHex = "41c3a9f09f9880005a";
+    auto assetProof = unicodeBehaviorAssetProof();
+    auto assets = m_root->assets();
+    String const imagePath = "/behaviorlab/unicode-result.png";
+    String backend = "cpp";
+#ifdef STAR_USE_RUST_UNICODE
+    backend = "rust";
+#endif
+    if (assetProof.isNull() || assetProof.getString("backend") != backend
+        || assetProof.getString("textHex") != textHex
+        || assetProof.getString("label") != "UNICODE"
+        || assetProof.getArray("visualColor") != JsonArray{65, 195, 169, 255}
+        || !assets->assetExists(imagePath))
+      throw StarException("BehaviorLab: missing or invalid unicode asset proof/image");
+    auto requireCalls = [&](JsonArray const& calls, std::initializer_list<size_t> positive) {
+      if (calls.size() != 10)
+        throw StarException("BehaviorLab: unicode receipt vector must have ten operations");
+      for (size_t op = 0; op != 10; ++op) {
+        auto count = calls[op].toUInt();
+        if (backend == "cpp" && count != 0)
+          throw StarException("BehaviorLab: C++ unicode receipt is nonzero");
+      }
+      if (backend == "rust")
+        for (auto op : positive)
+          if (calls[op].toUInt() == 0)
+            throw StarException("BehaviorLab: required unicode operation did not execute");
+    };
+    requireCalls(assetProof.getArray("parseCalls"), {1, 3, 4, 6});
+    auto image = assets->image(imagePath);
+    if (image->size() != Vec2U(16, 16))
+      throw StarException("BehaviorLab: unicode image must be 16x16");
+    for (unsigned y = 0; y != 16; ++y)
+      for (unsigned x = 0; x != 16; ++x)
+        if (image->get(x, y) != Vec4B(65, 195, 169, 255))
+          throw StarException("BehaviorLab: unicode pixels differ from decoded bytes");
+
+    auto text = assets->json("/behaviorlab/unicode-input.json").getString("text");
+    if (text.utf8Size() != 9 || hexEncode(text.utf8Bytes()) != textHex)
+      throw StarException("BehaviorLab: unicode text byte literal mismatch");
+    auto before = unicodeLabSnapshot();
+    bool valid = text.isValid();
+    auto boundedLength = text.size();
+    auto sentinelLength = utf8Length(text.utf8Ptr(), NPos);
+    auto stringCounts = unicodeLabDelta(before);
+    UnicodeLabCounts expectedStringCounts{};
+#ifdef STAR_USE_RUST_UNICODE
+    expectedStringCounts[0] = 1;
+    expectedStringCounts[1] = 2;
+#endif
+    if (!valid || boundedLength != 5 || sentinelLength != 3 || stringCounts != expectedStringCounts)
+      throw StarException("BehaviorLab: unicode String length/validation/receipts mismatch");
+    Json stringProof = JsonObject{{"boundedLength", boundedLength}, {"sentinelLength", sentinelLength},
+        {"validUtf8", valid}, {"rustCalls", unicodeLabJson(stringCounts)}};
+
+    // Read an INDEPENDENT literal, not the candidate writer's result.
+    String const jsonInputHex = "2241c3a9f09f98805c75303030305a22";
+    auto jsonInputBytes = hexDecode(jsonInputHex);
+    String jsonInput(jsonInputBytes.ptr(), jsonInputBytes.size());
+    Json textValue(text);
+    before = unicodeLabSnapshot();
+    // printJson rejects scalar roots; repr is its normal underlying writer.
+    auto wire = textValue.repr();
+    auto writeCounts = unicodeLabDelta(before);
+    before = unicodeLabSnapshot();
+    auto readValue = Json::parse(jsonInput);
+    auto readCounts = unicodeLabDelta(before);
+    if (hexEncode(wire.utf8Bytes()) != jsonInputHex || readValue.toString() != text)
+      throw StarException("BehaviorLab: unicode JSON literal/value mismatch");
+    auto jsonWriteCalls = unicodeLabJson(writeCounts), jsonReadCalls = unicodeLabJson(readCounts);
+    requireCalls(jsonWriteCalls, {5});
+    requireCalls(jsonReadCalls, {3, 4, 6});
+    Json jsonProof = JsonObject{{"wireHex", hexEncode(wire.utf8Bytes())}, {"textHex", textHex},
+        {"writeCalls", jsonWriteCalls}, {"readCalls", jsonReadCalls}};
+
+    auto value = VersionedJson::fromJson(JsonObject{{"id", "unicodelab"}, {"version", 1},
+        {"content", JsonObject{{"text", text}}}, {"subVersions", JsonObject{}}});
+    // SBVJ01 + id + Maybe<u32> + binary JSON content + subversion suffix.
+    auto saveInput = hexDecode("5342564a30310a756e69636f64656c6162010000000107010474657874050941c3a9f09f9880005a00000001010b73756256657273696f6e730700");
+    if (saveInput.size() != 59)
+      throw StarException("BehaviorLab: unicode independent save literal length mismatch");
+    DataStreamBuffer saveStream;
+    before = unicodeLabSnapshot();
+    saveStream.writeData(VersionedJson::Magic, VersionedJson::MagicStringSize);
+    saveStream.write(value);
+    VersionedJson::writeSubVersioning(saveStream, value);
+    auto saveWriteCounts = unicodeLabDelta(before);
+    DataStreamBuffer saveReader(saveInput);
+    VersionedJson decoded;
+    before = unicodeLabSnapshot();
+    auto magic = saveReader.readBytes(VersionedJson::MagicStringSize);
+    saveReader.read(decoded);
+    VersionedJson::readSubVersioning(saveReader, decoded);
+    auto saveReadCounts = unicodeLabDelta(before);
+    if (magic != ByteArray(VersionedJson::Magic, VersionedJson::MagicStringSize)
+        || saveStream.data() != saveInput || decoded.toJson() != value.toJson()
+        || saveReader.pos() != saveInput.size())
+      throw StarException("BehaviorLab: unicode save literal/value mismatch");
+    auto saveWriteCalls = unicodeLabJson(saveWriteCounts), saveReadCalls = unicodeLabJson(saveReadCounts);
+    requireCalls(saveWriteCalls, {});
+    requireCalls(saveReadCalls, {});
+    Json saveProof = JsonObject{{"wireHex", hexEncode(saveStream.data())}, {"value", decoded.toJson()},
+        {"consumed", saveReader.pos()}, {"writeCalls", saveWriteCalls}, {"readCalls", saveReadCalls}};
+    m_behaviorUnicodeProof = JsonObject{{"version", 1}, {"assets", assetProof}, {"string", stringProof},
+        {"json", jsonProof}, {"save", saveProof}};
+  }
+  float length = m_behaviorUnicodeProof.get("string").getUInt("boundedLength");
+  auto drawable = Drawable::makeImage("/behaviorlab/unicode-result.png",
+      (length - 3.0f) / TilePixels, true, Vec2F(64, 48));
+  drawable.fullbright = true;
+  m_renderData.foregroundOverlays.append(std::move(drawable));
+}
+
 void ClientApplication::renderBehaviorScenario() {
   if (!m_behaviorReady || BehaviorLab::hasPendingFrame())
     return;
@@ -2241,7 +2376,7 @@ void ClientApplication::renderBehaviorScenario() {
       {"layout", "row-major-rgb-f32-bits"}, {"bits", std::move(lightmapBits)}};
   Json metadata = JsonObject{
       {"lightingDiagnostics", std::move(lightmapDiagnostic)},
-      {"scenario", m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
+      {"scenario", m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
       {"worldState", JsonObject{
           {"worldId", printWorldId(m_universeClient->clientContext()->playerWorldId())},
           {"worldSize", jsonFromVec2U(world->geometry().size())},
@@ -2297,6 +2432,11 @@ void ClientApplication::renderBehaviorScenario() {
     if (m_behaviorBytesProof.isNull())
       throw StarException("BehaviorLab: bytes frame has no completed proof");
     metadata = metadata.set("bytesProof", m_behaviorBytesProof);
+  }
+  if (m_behaviorUnicodeRoom) {
+    if (m_behaviorUnicodeProof.isNull())
+      throw StarException("BehaviorLab: unicode frame has no completed proof");
+    metadata = metadata.set("unicodeProof", m_behaviorUnicodeProof);
   }
   BehaviorLab::queueFrame(m_behaviorCapture, std::move(metadata));
   m_behaviorReady = false;

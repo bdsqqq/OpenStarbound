@@ -1,9 +1,42 @@
 #include "StarUnicode.hpp"
 #include "StarEncode.hpp"
+#ifdef STAR_USE_RUST_UNICODE
+#include "StarRustUnicode.h"
+#include <limits>
+#include <stdexcept>
+#endif
 
 namespace Star {
+#ifdef STAR_USE_RUST_UNICODE
+namespace {
+void rustUnicodeStatus(int32_t status, bool hexFrom = false) {
+  if (status == 0)
+    return;
+  if (status == 4)
+    throw UnicodeException("Invalid lead surrogate passed to utf32FromUtf16SurrogatePair");
+  if (status == 5)
+    throw UnicodeException("Invalid trail surrogate passed to utf32FromUtf16SurrogatePair");
+  if (status == 6)
+    throw UnicodeException(hexFrom ? "Codepoint too big in hexStringFromUtf32" : "Invalid codepoint passed to utf32ToUtf16SurrogatePair");
+  throw std::runtime_error("Rust Unicode ABI failure");
+}
+bool rustUnicodeInput(void const* input, size_t n) {
+  if (n == NPos)
+    return true;
+  auto p = reinterpret_cast<uintptr_t>(input);
+  return n <= static_cast<size_t>(PTRDIFF_MAX) && n <= std::numeric_limits<uintptr_t>::max() - p;
+}
+}
+#endif
 
 bool isValidUtf8(const Utf8Type* utf8, size_t remain) {
+#ifdef STAR_USE_RUST_UNICODE
+  if (rustUnicodeInput(utf8, remain)) {
+    uint32_t result;
+    rustUnicodeStatus(star_unicode_validate(reinterpret_cast<uint8_t const*>(utf8), remain, &result));
+    return result != 0;
+  }
+#endif
   bool stopOnNull = remain == NPos;
 
   while (true) {
@@ -75,6 +108,13 @@ bool isValidUtf8(const Utf8Type* utf8, size_t remain) {
 }
 
 size_t utf8Length(const Utf8Type* utf8, size_t remain) {
+#ifdef STAR_USE_RUST_UNICODE
+  if (rustUnicodeInput(utf8, remain)) {
+    size_t result;
+    rustUnicodeStatus(star_unicode_length(reinterpret_cast<uint8_t const*>(utf8), remain, &result));
+    return result;
+  }
+#endif
   bool stopOnNull = remain == NPos;
   size_t length = 0;
 
@@ -175,6 +215,16 @@ size_t utf8Length(const Utf8Type* utf8, size_t remain) {
 }
 
 size_t utf8DecodeChar(const Utf8Type* utf8, Utf32Type* utf32, size_t remain) {
+#ifdef STAR_USE_RUST_UNICODE
+  if (rustUnicodeInput(utf8, remain)) {
+    uint32_t result;
+    size_t consumed;
+    rustUnicodeStatus(star_unicode_decode(reinterpret_cast<uint8_t const*>(utf8), remain, &result, &consumed));
+    if (consumed)
+      *utf32 = static_cast<Utf32Type>(result);
+    return consumed;
+  }
+#endif
   const Utf8Type* start = utf8;
   bool stopOnNull = remain == NPos;
 
@@ -244,6 +294,11 @@ size_t utf8DecodeChar(const Utf8Type* utf8, Utf32Type* utf32, size_t remain) {
 }
 
 size_t utf8EncodeChar(Utf8Type* utf8, Utf32Type utf32, size_t len) {
+#ifdef STAR_USE_RUST_UNICODE
+  size_t result;
+  rustUnicodeStatus(star_unicode_encode(reinterpret_cast<uint8_t*>(utf8), len, utf32, &result));
+  return result;
+#else
   if (utf32 > 0x10FFFFu || isUtf16Surrogate(utf32))
     return utf8EncodeChar(utf8, STAR_UTF32_REPLACEMENT_CHAR, len);
 
@@ -281,6 +336,8 @@ size_t utf8EncodeChar(Utf8Type* utf8, Utf32Type utf32, size_t len) {
 
     return 4;
   }
+
+#endif
 }
 
 static const char32_t MIN_LEAD = 0xd800;
@@ -309,19 +366,37 @@ Utf32Type hexStringToUtf32(std::string const& codepoint, Maybe<Utf32Type> previo
 
   auto res = fromBigEndian(*(Utf32Type*)hexBytes.ptr());
 
+#ifdef STAR_USE_RUST_UNICODE
+  uint32_t result;
+  rustUnicodeStatus(star_unicode_hex_to(static_cast<uint32_t>(res),
+      previousCodepoint ? static_cast<uint32_t>(*previousCodepoint) : 0,
+      continuation ? 1 : 0, &result));
+  return static_cast<Utf32Type>(result);
+#else
   if (continuation) {
     res = utf32FromUtf16SurrogatePair(*previousCodepoint, res);
   }
 
   return res;
+#endif
 }
 
 std::string hexStringFromUtf32(Utf32Type character) {
+#ifdef STAR_USE_RUST_UNICODE
+  Utf32Type lead;
+  Maybe<Utf32Type> trail;
+  uint32_t leadValue, trailValue, hasTrail;
+  rustUnicodeStatus(star_unicode_hex_from(character, &leadValue, &trailValue, &hasTrail), true);
+  lead = static_cast<Utf32Type>(leadValue);
+  if (hasTrail)
+    trail = static_cast<Utf32Type>(trailValue);
+#else
   if (character > MAX_CODEPOINT)
     throw UnicodeException("Codepoint too big in hexStringFromUtf32");
   Utf32Type lead;
   Maybe<Utf32Type> trail;
   tie(lead, trail) = utf32ToUtf16SurrogatePair(character);
+#endif
 
   char16_t leadOut = toBigEndian((char16_t)lead);
   auto leadHex = hexEncode(reinterpret_cast<char*>(&leadOut), sizeof(leadOut)).takeUtf8();
@@ -340,14 +415,32 @@ std::string hexStringFromUtf32(Utf32Type character) {
 }
 
 bool isUtf16LeadSurrogate(Utf32Type codepoint) {
+#ifdef STAR_USE_RUST_UNICODE
+  uint32_t result;
+  rustUnicodeStatus(star_unicode_is_lead(codepoint, &result));
+  return result != 0;
+#else
   return codepoint >= MIN_LEAD && codepoint <= MAX_LEAD;
+#endif
 }
 
 bool isUtf16TrailSurrogate(Utf32Type codepoint) {
+#ifdef STAR_USE_RUST_UNICODE
+  uint32_t result;
+  rustUnicodeStatus(star_unicode_is_trail(codepoint, &result));
+  return result != 0;
+#else
   return codepoint >= MIN_TRAIL && codepoint <= MAX_TRAIL;
+
+#endif
 }
 
 Utf32Type utf32FromUtf16SurrogatePair(Utf32Type lead, Utf32Type trail) {
+#ifdef STAR_USE_RUST_UNICODE
+  uint32_t result;
+  rustUnicodeStatus(star_unicode_pair_from(lead, trail, &result));
+  return static_cast<Utf32Type>(result);
+#else
   if (!isUtf16LeadSurrogate(lead))
     throw UnicodeException("Invalid lead surrogate passed to utf32FromUtf16SurrogatePair");
   if (!isUtf16TrailSurrogate(trail))
@@ -359,9 +452,16 @@ Utf32Type utf32FromUtf16SurrogatePair(Utf32Type lead, Utf32Type trail) {
   Utf32Type codepoint = (lead << 10) + trail + MIN_PAIR;
 
   return codepoint;
+
+#endif
 }
 
 pair<Utf32Type, Maybe<Utf32Type>> utf32ToUtf16SurrogatePair(Utf32Type codepoint) {
+#ifdef STAR_USE_RUST_UNICODE
+  uint32_t lead, trail, hasTrail;
+  rustUnicodeStatus(star_unicode_pair_to(codepoint, &lead, &trail, &hasTrail));
+  return {static_cast<Utf32Type>(lead), hasTrail ? Maybe<Utf32Type>(static_cast<Utf32Type>(trail)) : Maybe<Utf32Type>()};
+#else
   if (codepoint >= MIN_PAIR) {
     codepoint -= MIN_PAIR;
     Utf32Type lead = (codepoint >> 10) + MIN_LEAD;
@@ -374,6 +474,8 @@ pair<Utf32Type, Maybe<Utf32Type>> utf32ToUtf16SurrogatePair(Utf32Type codepoint)
   }
 
   return {codepoint, {}};
+
+#endif
 }
 
 }// namespace Star

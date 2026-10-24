@@ -1,0 +1,7 @@
+{
+  "name": "behavior-unicode-fixtures",
+  "friendlyName": "Isolated Unicode behavior fixtures",
+  "description": "Normal escaped text Assets JSON, explicit-length Lua bytes and native font; requires behavior-lab-fixtures.",
+  "priority": 1100,
+  "scripts": {"postLoad": ["/behaviorlab/unicode.lua"]}
+}

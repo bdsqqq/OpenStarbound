@@ -26,6 +26,7 @@ import encoding_proof
 import sha256_proof
 import vlq_proof
 import bytes_proof
+import unicode_proof
 
 ROOT = Path(__file__).resolve().parents[3]
 BUILD = ROOT / "build"
@@ -35,7 +36,7 @@ ASSET_OVERLAYS = {
     "behavior-fixture": ROOT / "source/lab/behavior/assets",
 }
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,95}\Z")
-SCENARIOS = ("lighting-room", "raycast-room", "encoding-room", "sha256-room", "vlq-room", "bytes-room")
+SCENARIOS = ("lighting-room", "raycast-room", "encoding-room", "sha256-room", "vlq-room", "bytes-room", "unicode-room")
 MAX_PIXELS = 16_777_216
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
 
@@ -171,6 +172,11 @@ def semantic_world_state(receipt: dict) -> dict:
             native["bytesProof"] = bytes_proof.validate(receipt)
         except ValueError as error:
             raise LabError(str(error)) from error
+    if receipt.get("scenario") == "unicode-room":
+        try:
+            native["unicodeProof"] = unicode_proof.validate(receipt)
+        except ValueError as error:
+            raise LabError(str(error)) from error
     # A native declared object supplements, rather than weakens, the frozen
     # flat schema: retain both when the driver supplies both representations.
     return native if state is None else {"declared": state, "native": native}
@@ -236,10 +242,15 @@ def captures(directory: Path) -> dict:
                 bytes_proof.visible(frame, receipt)
             except ValueError as error:
                 raise LabError(str(error)) from error
+        if receipt["scenario"] == "unicode-room":
+            try:
+                unicode_proof.visible(frame, receipt)
+            except ValueError as error:
+                raise LabError(str(error)) from error
         result[name] = {"receipt": receipt, "png": pngs[name], "dimensions": list(frame.size),
                         "pngSha256": sha(pngs[name]), "receiptSha256": sha(receipts[name]),
                         "pixelsSha256": hashlib.sha256(frame.tobytes()).hexdigest()}
-    if scenarios in ({"lighting-room"}, {"encoding-room"}, {"sha256-room"}, {"vlq-room"}, {"bytes-room"}):
+    if scenarios in ({"lighting-room"}, {"encoding-room"}, {"sha256-room"}, {"vlq-room"}, {"bytes-room"}, {"unicode-room"}):
         validate_lighting_sequence(result)
         if scenarios == {"encoding-room"}:
             proofs = [encoding_proof.validate(frame["receipt"]) for frame in result.values()]
@@ -257,6 +268,10 @@ def captures(directory: Path) -> dict:
             proofs = [bytes_proof.validate(frame["receipt"]) for frame in result.values()]
             if any(proof != proofs[0] for proof in proofs[1:]):
                 raise LabError("byte-order wire/database evidence changed across scene stages")
+        if scenarios == {"unicode-room"}:
+            proofs = [unicode_proof.validate(frame["receipt"]) for frame in result.values()]
+            if any(proof != proofs[0] for proof in proofs[1:]):
+                raise LabError("Unicode bytes changed across scene stages")
     else:
         validate_raycast_sequence(result)
     return result
@@ -500,7 +515,14 @@ def pair_compare(reference: Path, candidate: Path, output: Path, same_backend=Fa
                     row["errors"].append(f"{field} differs")
             if ref_meta["scenario"] != cand_meta["scenario"]:
                 row["errors"].append("scenario differs")
-            if ref_meta["scenario"] == "bytes-room":
+            if ref_meta["scenario"] == "unicode-room":
+                wanted = "cpp" if same_backend else "rust"
+                if (ref_meta["unicodeProof"]["assets"]["backend"] != "cpp"
+                        or cand_meta["unicodeProof"]["assets"]["backend"] != wanted):
+                    row["errors"].append("expected C++ reference and correct Unicode backend")
+                if ref_meta["lightingBackend"] != "cpp" or (same_backend and cand_meta["lightingBackend"] != "cpp"):
+                    row["errors"].append("expected C++ reference lighting")
+            elif ref_meta["scenario"] == "bytes-room":
                 wanted = "cpp" if same_backend else "rust"
                 if (ref_meta["bytesProof"]["assets"]["backend"] != "cpp"
                         or cand_meta["bytesProof"]["assets"]["backend"] != wanted):
@@ -593,6 +615,8 @@ def asset_overlays(scenario="lighting-room") -> dict:
         overlays["vlq-fixture"] = ROOT / "source/lab/behavior/vlq-assets"
     if scenario == "bytes-room":
         overlays["bytes-fixture"] = ROOT / "source/lab/behavior/bytes-assets"
+    if scenario == "unicode-room":
+        overlays["unicode-fixture"] = ROOT / "source/lab/behavior/unicode-assets"
     return overlays
 
 

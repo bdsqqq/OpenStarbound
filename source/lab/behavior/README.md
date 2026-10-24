@@ -1,5 +1,11 @@
 # framebuffer behavior lab
 
+## unicode-room
+
+Build `scripts/build-behavior-lab.sh unicode` (or `unicode-combined`), then `run --scenario unicode-room` against `build/behavior/<mode>/candidate/bin/starbound`. Earlier modes explicitly keep Unicode OFF; line queries stay OFF.
+
+Escaped text JSON must pass through normal Assets parsing and Lua with its supplementary character and embedded NUL intact. Those actual bytes drive the image; actual String length drives geometry. Normal Font/TextPainter renders the separate ASCII label. This does NOT certify emoji glyph coverage or port the generic Unicode iterators. Independent JSON/save bytes and scoped operation receipts prevent a screenshot or paired round-trip from standing in for codec proof. See `EVIDENCE.md` and `../unicode/EVIDENCE.md`.
+
 ## bytes-room
 
 Build `scripts/build-behavior-lab.sh bytes` (or `bytes-combined`), then `run --scenario bytes-room` against its candidate under `build/behavior/<mode>/candidate/bin/starbound`. All earlier build modes explicitly keep bytes OFF; line queries stay OFF.

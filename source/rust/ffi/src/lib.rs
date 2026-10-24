@@ -1,5 +1,8 @@
 //! The engine's single Rust static archive owns the unmangled C ABI exports.
 //! Kernels remain rlibs so linking another kernel cannot add another Rust runtime.
+mod unicode;
+pub use unicode::*;
+
 mod bytes;
 pub use bytes::{star_bytes_call_count, star_bytes_transform};
 

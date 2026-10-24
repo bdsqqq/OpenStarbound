@@ -20,6 +20,7 @@
 #include "StarSha256Lab.hpp"
 #include "StarVlqLab.hpp"
 #include "StarBytesLab.hpp"
+#include "StarUnicodeLab.hpp"
 #ifdef STAR_USE_RUST_BYTES
 #include "StarRustBytes.h"
 #endif
@@ -52,6 +53,14 @@ std::mutex VlqAssetProofMutex;
 Json VlqAssetProof;
 std::mutex BytesAssetProofMutex;
 Json BytesAssetProof;
+std::mutex UnicodeAssetProofMutex;
+Json UnicodeAssetProof;
+Json UnicodeParsedAssetProof;
+}
+
+Json unicodeBehaviorAssetProof() {
+  std::lock_guard<std::mutex> lock(UnicodeAssetProofMutex);
+  return UnicodeAssetProof;
 }
 
 Json bytesBehaviorAssetProof() {
@@ -196,6 +205,9 @@ Assets::Assets(Settings settings, StringList assetSources) {
     VlqAssetProof = Json();
     std::lock_guard<std::mutex> bytesLock(BytesAssetProofMutex);
     BytesAssetProof = Json();
+    std::lock_guard<std::mutex> unicodeLock(UnicodeAssetProofMutex);
+    UnicodeAssetProof = Json();
+    UnicodeParsedAssetProof = Json();
   }
   const char* AssetsPatchSuffix = ".patch";
   const char* AssetsPatchListSuffix = ".patchlist";
@@ -220,6 +232,15 @@ Assets::Assets(Settings settings, StringList assetSources) {
     // Lab-only, executing-thread receipts: no application dependency or config
     // access here, since these callbacks also run during Root construction.
     if (std::getenv("STAR_BEHAVIOR_LAB")) {
+      callbacks.registerCallback("recordUnicodeLabProof", [](Json proof) {
+        std::lock_guard<std::mutex> lock(UnicodeAssetProofMutex);
+        if (UnicodeParsedAssetProof.isNull())
+          throw AssetException("BehaviorLab: unicode input was not parsed");
+        // Native source/parse receipts cannot be supplied or overridden by Lua.
+        UnicodeAssetProof = UnicodeParsedAssetProof
+            .set("visualColor", proof.get("visualColor"))
+            .set("label", proof.get("label"));
+      });
       callbacks.registerCallback("bytesLabCounts", []() -> Json {
         JsonArray counts;
         for (uint32_t op = 0; op != 6; ++op) {
@@ -274,7 +295,28 @@ Assets::Assets(Settings settings, StringList assetSources) {
       });
     }
     callbacks.registerCallbackWithSignature<StringSet, String>("byExtension", bind(&Assets::scanExtension, this, _1));
-    callbacks.registerCallbackWithSignature<Json, String>("json", bind(&Assets::json, this, _1));
+    callbacks.registerCallback("json", [this](String const& path) -> Json {
+      if (!std::getenv("STAR_BEHAVIOR_LAB") || path != "/behaviorlab/unicode-input.json")
+        return json(path);
+      // First uncached normal JSON load: conversion to Lua happens AFTER the
+      // native snapshot, so explicit-length Lua strings cannot pollute counts.
+      auto before = unicodeLabSnapshot();
+      auto result = json(path);
+      auto calls = unicodeLabDelta(before);
+      auto source = read(path);
+      auto text = result.getString("text");
+      String backend = "cpp";
+#ifdef STAR_USE_RUST_UNICODE
+      backend = "rust";
+#endif
+      Json proof = JsonObject{{"backend", backend}, {"sourceHex", hexEncode(source)},
+          {"textHex", hexEncode(text.utf8Bytes())}, {"parseCalls", unicodeLabJson(calls)}};
+      std::lock_guard<std::mutex> lock(UnicodeAssetProofMutex);
+      if (!UnicodeParsedAssetProof.isNull())
+        throw AssetException("BehaviorLab: unicode input parsed more than once");
+      UnicodeParsedAssetProof = std::move(proof);
+      return result;
+    });
     callbacks.registerCallbackWithSignature<bool, String>("exists", bind(&Assets::assetExists, this, _1));
 
     callbacks.registerCallback("sourcePaths", [this](LuaEngine& engine, Maybe<bool> withMetaData) -> LuaTable {
