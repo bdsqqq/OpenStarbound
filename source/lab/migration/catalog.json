@@ -20222,6 +20222,106 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/compression/StarCompression.original.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/compression/StarCompression.original.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/compression/StarCompression.reference.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/compression/StarCompression.reference.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/compression/host_contract.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/compression/host_contract.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/compression/host_contract_test.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/compression/host_run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/compression/lab.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/compression/run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/encode/StarEncode.original.cpp",
       "rule": "laboratories"
     },
@@ -29501,6 +29601,46 @@
       "sha256": "aed5ff69b3324482f8036b49b5281410fa681184fec6a7f8b69eb34a2d1694dc"
     },
     {
+      "path": "source/lab/compression/StarCompression.original.cpp",
+      "sha256": "4d2390bdafa176ac739dd542f9fb0ad3f12f2820b6c3946a28557e824bda2d78"
+    },
+    {
+      "path": "source/lab/compression/StarCompression.original.hpp",
+      "sha256": "3de6ea0b297dccb2ab1a28d20a3350847a4f30a66994a2c77d717a2e1b90c036"
+    },
+    {
+      "path": "source/lab/compression/StarCompression.reference.cpp",
+      "sha256": "23dea961c9aae23ffd57218b2c63158a3c72be80da56708bde15b62227c23ab3"
+    },
+    {
+      "path": "source/lab/compression/StarCompression.reference.hpp",
+      "sha256": "6a8e0014516b81549f30afe020aa1814eed49cc4b9d340a63264633a23961ee8"
+    },
+    {
+      "path": "source/lab/compression/host_contract.cpp",
+      "sha256": "76b4365d5dd8e8f853a39b4c902bb5e274d0c9c040e9ebea32dfd2114b2d461f"
+    },
+    {
+      "path": "source/lab/compression/host_contract.hpp",
+      "sha256": "127a4c044c84bb441687e9314647cc0515e767d9d1039d2040799cbb3505e103"
+    },
+    {
+      "path": "source/lab/compression/host_contract_test.cpp",
+      "sha256": "4e123560c9f4e59f7fecf53484eed0783dd1fd9bea062412018a258864634311"
+    },
+    {
+      "path": "source/lab/compression/host_run.py",
+      "sha256": "f6cc63844850803b0b78c644d1ea142499fa7793eaedabcb182b013077bac4ce"
+    },
+    {
+      "path": "source/lab/compression/lab.cpp",
+      "sha256": "329096612a288cb1184b22470b831fb23cc7820e8e8a2e3a17ed700f1335948e"
+    },
+    {
+      "path": "source/lab/compression/run.py",
+      "sha256": "3cc8c527e52c4690c3bb3a0e8ec7d6d4c846ff57702df5c538d5c2f6da3107ab"
+    },
+    {
       "path": "source/lab/encode/StarEncode.original.cpp",
       "sha256": "75271b7d7db92682250259ceed417f714a9f55f1d428d37b354398ad808cec0c"
     },
@@ -30815,7 +30955,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 114,
+      "oracle/harness": 124,
       "retain-tooling": 20,
       "retained-third-party": 296,
       "rust-candidate": 14,
@@ -30856,14 +30996,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 35,
-      "validation.oracles-harness": 129,
+      "validation.oracles-harness": 139,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1536,
+    "files": 1546,
     "modules": 39,
-    "no_direct_target": 430
+    "no_direct_target": 440
   }
 }
