@@ -1,5 +1,8 @@
 //! The engine's single Rust static archive owns the unmangled C ABI exports.
 //! Kernels remain rlibs so linking another kernel cannot add another Rust runtime.
+mod encode;
+pub use encode::{star_encode, star_encode_call_count};
+
 mod line_query;
 pub use line_query::{star_line_query_call_count, star_line_query_f32, star_line_query_f64};
 

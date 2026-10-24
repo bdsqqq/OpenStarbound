@@ -1,0 +1,7 @@
+{
+  "name": "behavior-encoding-fixtures",
+  "friendlyName": "Isolated encoding behavior fixtures",
+  "description": "Test-only postLoad image encoding roundtrip; requires behavior-lab-fixtures.",
+  "priority": 1100,
+  "scripts": {"postLoad": ["/behaviorlab/encoding.lua"]}
+}

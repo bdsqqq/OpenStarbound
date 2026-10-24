@@ -50,6 +50,8 @@
     {"id":"rust-line-query","module":"foundation.math-geometry","disposition":"rust-candidate","pattern":"source/rust/ffi/src/line_query\\.rs"},
     {"id":"core-math","module":"foundation.math-geometry","disposition":"migrate","pattern":"source/core/Star(?:AStar|Interpolation|Line|MathCommon|Matrix3|MultiArrayInterpolator|ParametricFunction|PeriodicFunction|Poly|Rect|SectorArray2D|SpatialHash2D|Spline|Vector)\\.(?:hpp|cpp)"},
     {"id":"core-random","module":"foundation.random","disposition":"migrate","pattern":"source/core/Star(?:Perlin|Random|RandomPoint|SecureRandom|StaticRandom|WeightedPool)(?:_(?:unix|windows))?\\.(?:hpp|cpp)"},
+    {"id":"rust-encode-abi","module":"foundation.serialization","disposition":"ffi-adapter","pattern":"source/core/StarRustEncode\\.h"},
+    {"id":"rust-encode","module":"foundation.serialization","disposition":"rust-candidate","pattern":"source/rust/ffi/src/encode\\.rs"},
     {"id":"core-serialization","module":"foundation.serialization","disposition":"migrate","pattern":"source/core/Star(?:Buffer|ByteArray|Bytes|DataStream|DataStreamDevices|DataStreamExtra|Encode|FormattedJson|IODevice|IODeviceCallbacks|Json|JsonBuilder|JsonExtra|JsonParser|JsonPath|JsonPatch|JsonRpc|ObserverStream|VlqEncoding)\\.(?:hpp|cpp)"},
     {"id":"core-compression","module":"foundation.compression-crypto","disposition":"migrate","pattern":"source/core/Star(?:Compression|Curve25519|Hash|Sha256|XXHash|ZSTDCompression)\\.(?:hpp|cpp)"},
     {"id":"core-storage","module":"foundation.storage","disposition":"migrate","pattern":"source/core/Star(?:BTree|BTreeDatabase|DynamicLib|File|LockFile|LruCache|PathEmbed|TtlCache)(?:_(?:unix|windows))?\\.(?:hpp|cpp)"},

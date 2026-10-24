@@ -1,8 +1,75 @@
 #include "StarEncode.hpp"
 
+#ifdef STAR_USE_RUST_ENCODE
+#include "StarRustEncode.h"
+#include <climits>
+#include <limits>
+#include <stdexcept>
+#endif
+
 namespace Star {
 
+#ifdef STAR_USE_RUST_ENCODE
+namespace {
+// NPos is a write limit, not an allocation size. Bound it before checking ranges.
+bool rustEncode(uint32_t op, char const* input, size_t len, char* output,
+    size_t outLen, bool url, size_t& written) {
+  if (op >= 3 && len > INT_MAX)
+    return false;
+  size_t capacity;
+  if (op == 0)
+    capacity = 2 * std::min(len, outLen / 2);
+  else if (op == 1)
+    capacity = std::min(outLen, len / 2);
+  else if (op == 2)
+    capacity = std::min(outLen, len);
+  else if (op == 3) {
+    size_t groups = len / 3;
+    size_t tail = len % 3 ? 4 : 0;
+    if (groups > (std::numeric_limits<size_t>::max() - tail) / 4)
+      return false;
+    capacity = std::min(outLen, 4 * groups + tail);
+  } else
+    capacity = std::min(outLen, 3 * (len / 4) + (len % 4 >= 2 ? len % 4 - 1 : 0));
+
+  auto range = [](void const* p, size_t n, uintptr_t& end) {
+    auto start = reinterpret_cast<uintptr_t>(p);
+    if ((n && !p) || n > static_cast<size_t>(PTRDIFF_MAX)
+        || n > std::numeric_limits<uintptr_t>::max() - start)
+      return false;
+    end = start + n;
+    return true;
+  };
+  uintptr_t inputEnd, outputEnd;
+  if (!range(input, len, inputEnd) || !range(output, capacity, outputEnd))
+    return false;
+  auto inputStart = reinterpret_cast<uintptr_t>(input);
+  auto outputStart = reinterpret_cast<uintptr_t>(output);
+  // Aliasing retains the original C++ read/write order, with no Rust receipt.
+  if (len && capacity && inputStart < outputEnd && outputStart < inputEnd)
+    return false;
+  uint8_t accepted[256];
+  if (op == 4) {
+    for (unsigned i = 0; i < 256; ++i)
+      accepted[i] = !!(isalnum(static_cast<unsigned char>(i)) || i == '+' || i == '/'
+          || i == '-' || i == '_');
+  }
+  auto status = star_encode(op, reinterpret_cast<uint8_t const*>(input), len,
+      reinterpret_cast<uint8_t*>(output), capacity, url ? 1 : 0,
+      op == 4 ? accepted : nullptr, &written);
+  if (status != 0)
+    throw std::runtime_error("Rust encoding ABI failure");
+  return true;
+}
+}
+#endif
+
 size_t hexEncode(char const* data, size_t len, char* output, size_t outLen) {
+#ifdef STAR_USE_RUST_ENCODE
+  size_t written;
+  if (rustEncode(0, data, len, output, outLen, false, written))
+    return written;
+#endif
   static char const hex[] = "0123456789abcdef";
 
   len = std::min(len, outLen / 2);
@@ -15,6 +82,11 @@ size_t hexEncode(char const* data, size_t len, char* output, size_t outLen) {
 }
 
 size_t hexDecode(char const* src, size_t len, char* output, size_t outLen) {
+#ifdef STAR_USE_RUST_ENCODE
+  size_t written;
+  if (rustEncode(1, src, len, output, outLen, false, written))
+    return written;
+#endif
   for (size_t i = 0; i < len / 2; ++i) {
     if (i >= outLen)
       return i;
@@ -44,6 +116,11 @@ size_t hexDecode(char const* src, size_t len, char* output, size_t outLen) {
 }
 
 size_t nibbleDecode(char const* src, size_t len, char* output, size_t outLen) {
+#ifdef STAR_USE_RUST_ENCODE
+  size_t written;
+  if (rustEncode(2, src, len, output, outLen, false, written))
+    return written;
+#endif
   for (size_t i = 0; i < len; ++i) {
     if (i >= outLen)
       return i;
@@ -67,6 +144,13 @@ static const std::string base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm
 static const std::string base64url_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 size_t base64Encode(char const* data, size_t len, char* output, size_t outLen, bool useUrl) {
+#ifdef STAR_USE_RUST_ENCODE
+  // Normal-operation byte equivalence; Rust does not copy the C++ alphabet
+  // allocation, so allocator-fault-injection exception equivalence is excluded.
+  size_t rustWritten;
+  if (rustEncode(3, data, len, output, outLen, useUrl, rustWritten))
+    return rustWritten;
+#endif
   if (outLen == 0)
     return 0;
   size_t written = 0;
@@ -145,6 +229,11 @@ static inline size_t decodeBase64Char(unsigned char c) {
 }
 
 size_t base64Decode(char const* src, size_t len, char* output, size_t outLen) {
+#ifdef STAR_USE_RUST_ENCODE
+  size_t rustWritten;
+  if (rustEncode(4, src, len, output, outLen, false, rustWritten))
+    return rustWritten;
+#endif
   if (outLen == 0)
     return 0;
 

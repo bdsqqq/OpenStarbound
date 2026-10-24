@@ -8,6 +8,10 @@
 #include "StarWorldGeneration.hpp"
 #include <filesystem>
 #include <cstring>
+#include "StarImageProcessing.hpp"
+#ifdef STAR_USE_RUST_ENCODE
+#include "StarRustEncode.h"
+#endif
 #ifdef STAR_USE_RUST_LIGHTING
 #include "StarRustLighting.h"
 #endif
@@ -506,6 +510,8 @@ void ClientApplication::render() {
 
       if (BehaviorLab::enabled() && m_behaviorRaycastRoom)
         prepareBehaviorRaycastFrame();
+      if (BehaviorLab::enabled() && m_behaviorEncodingRoom)
+        prepareBehaviorEncodingFrame();
 
       auto paintStart = Time::monotonicMicroseconds();
       m_worldPainter->render(m_renderData, [&]() -> bool {
@@ -1410,9 +1416,10 @@ bool ClientApplication::isActionTakenEdge(InterfaceAction action) const {
 void ClientApplication::validateBehaviorStorage() {
   auto const& config = BehaviorLab::configuration();
   auto scenario = config.getString("scenario", "lighting-room");
-  if (scenario != "lighting-room" && scenario != "raycast-room")
+  if (scenario != "lighting-room" && scenario != "raycast-room" && scenario != "encoding-room")
     throw StarException("BehaviorLab: unsupported scenario");
   m_behaviorRaycastRoom = scenario == "raycast-room";
+  m_behaviorEncodingRoom = scenario == "encoding-room";
   if (config.getUInt("maxFrames", 1800) == 0 || config.getUInt("maxFrames", 1800) > 18000)
     throw StarException("BehaviorLab: maxFrames must be in [1, 18000]");
 
@@ -1533,7 +1540,7 @@ void ClientApplication::updateBehaviorScenario() {
       return;
     if (m_behaviorStage == 2) {
       Logger::info("BehaviorLab: {} completed (three acknowledged world frames)",
-          m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
+          m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
       m_behaviorPhase = 5;
       appController()->quit();
       return;
@@ -1665,6 +1672,57 @@ void ClientApplication::prepareBehaviorRaycastFrame() {
   appendLine(markerEnd - Vec2F(0, 0.3f), markerEnd + Vec2F(0, 0.3f), Color::Yellow);
 }
 
+void ClientApplication::prepareBehaviorEncodingFrame() {
+  if (!m_behaviorReady || BehaviorLab::hasPendingFrame() || m_renderData.isFullbright)
+    return;
+
+  if (m_behaviorEncodingProof.isNull()) {
+    auto assets = m_root->assets();
+    String const proofPath = "/behaviorlab/encoding-proof.json";
+    String const imagePath = "/behaviorlab/encoding-roundtrip.png";
+    // Load-script exceptions are logged and swallowed by Assets. Demand both
+    // generated outputs, never a seed fallback or a fabricated receipt.
+    if (!assets->assetExists(proofPath) || !assets->assetExists(imagePath))
+      throw StarException("BehaviorLab: encoding postLoad outputs are missing");
+    auto proof = assets->json(proofPath);
+    if (proof.getUInt("version") != 1 || proof.getArray("patternSize") != JsonArray{16, 16}
+        || assets->image(imagePath)->size() != Vec2U(16, 16)
+        || assets->image("/objects/behaviorlab/constantlight/constantlight.png")->size() != Vec2U(16, 16))
+      throw StarException("BehaviorLab: invalid encoding postLoad outputs");
+    // Measure only canonical production serialization. The resulting directive
+    // is the actual foreground image path, not a disconnected encoding probe.
+    auto count = [](uint32_t op) -> uint64_t {
+#ifdef STAR_USE_RUST_ENCODE
+      return star_encode_call_count(op);
+#else
+      return 0;
+#endif
+    };
+    uint64_t before[5];
+    for (uint32_t op = 0; op != 5; ++op)
+      before[op] = count(op);
+    auto directive = imageOperationToString(MultiplyImageOperation{Vec4B(255, 255, 255, 255)});
+    JsonArray receipts;
+    for (uint32_t op = 0; op != 5; ++op)
+      receipts.append(count(op) - before[op]);
+    if (directive != "multiply=ffffff")
+      throw StarException("BehaviorLab: unexpected encoding draw directive");
+    String backend = "cpp";
+#ifdef STAR_USE_RUST_ENCODE
+    backend = "rust";
+#endif
+    m_behaviorEncodingImage = imagePath + "?" + directive;
+    m_behaviorEncodingProof = proof.set("backend", backend).set("drawDirective", directive)
+        .set("drawReceipts", std::move(receipts));
+  }
+  // Foreground overlays are normal WorldPainter image drawables, rebuilt after
+  // WorldClient::render clears them. 16 * (2/TilePixels) * TilePixels * camera
+  // ratio 2 = 64 physical pixels, centered at the unchanged camera (64,48).
+  auto drawable = Drawable::makeImage(m_behaviorEncodingImage, 2.0f / TilePixels, true, Vec2F(64, 48));
+  drawable.fullbright = true;
+  m_renderData.foregroundOverlays.append(std::move(drawable));
+}
+
 void ClientApplication::renderBehaviorScenario() {
   if (!m_behaviorReady || BehaviorLab::hasPendingFrame())
     return;
@@ -1703,7 +1761,7 @@ void ClientApplication::renderBehaviorScenario() {
       {"layout", "row-major-rgb-f32-bits"}, {"bits", std::move(lightmapBits)}};
   Json metadata = JsonObject{
       {"lightingDiagnostics", std::move(lightmapDiagnostic)},
-      {"scenario", m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
+      {"scenario", m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
       {"worldState", JsonObject{
           {"worldId", printWorldId(m_universeClient->clientContext()->playerWorldId())},
           {"worldSize", jsonFromVec2U(world->geometry().size())},
@@ -1740,6 +1798,11 @@ void ClientApplication::renderBehaviorScenario() {
   };
   if (m_behaviorRaycastRoom)
     metadata = metadata.set("raycastState", m_behaviorRaycastState);
+  if (m_behaviorEncodingRoom) {
+    if (m_behaviorEncodingProof.isNull())
+      throw StarException("BehaviorLab: encoding frame has no asset/draw proof");
+    metadata = metadata.set("encodingProof", m_behaviorEncodingProof);
+  }
   BehaviorLab::queueFrame(m_behaviorCapture, std::move(metadata));
   m_behaviorReady = false;
   m_behaviorPhase = 4;

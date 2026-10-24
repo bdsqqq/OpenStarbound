@@ -6031,6 +6031,16 @@
       "language": "c/c++",
       "line": 1,
       "membership_status": "no-direct-target-found",
+      "module": "foundation.serialization",
+      "path": "source/core/StarRustEncode.h",
+      "rule": "rust-encode-abi"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "ffi-adapter",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
       "module": "foundation.math-geometry",
       "path": "source/core/StarRustLine.h",
       "rule": "rust-line-query-abi"
@@ -19652,6 +19662,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/encoding_proof.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/behavior/test_behavior_lab.py",
       "rule": "laboratories"
     },
@@ -19663,6 +19683,56 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/behavior/test_build_provenance.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/test_encoding_proof.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/encode/StarEncode.original.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/encode/StarEncode.original.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/encode/lab.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/encode/run.py",
       "rule": "laboratories"
     },
     {
@@ -20336,6 +20406,16 @@
       "module": "base.geometry",
       "path": "source/rust/ffi/src/blocks_along_line.rs",
       "rule": "rust-traversal"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "rust-candidate",
+      "language": "rust",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "foundation.serialization",
+      "path": "source/rust/ffi/src/encode.rs",
+      "rule": "rust-encode"
     },
     {
       "cmake_membership": [],
@@ -23928,7 +24008,7 @@
     },
     {
       "path": "source/CMakeLists.txt",
-      "sha256": "d524e966f02d6b8b896e8e5b2c73a0f9a001c7ac8cc1bfc4bc0dbad0641235cf"
+      "sha256": "aaf7c20333b9ed1cbfbcd4e33df3c964efacd155f4ff2f8bb4ff410dc9d71c3e"
     },
     {
       "path": "source/application/CMakeLists.txt",
@@ -24164,7 +24244,7 @@
     },
     {
       "path": "source/base/StarAssets.cpp",
-      "sha256": "40c0d7e3aa26f0506c60f09868e510821e58a600da8082dc12f94afcf09df99e"
+      "sha256": "ebff9f0ae0daf78c321527375d263451439a464ce0e47101be4458cb915656ac"
     },
     {
       "path": "source/base/StarAssets.hpp",
@@ -24280,11 +24360,11 @@
     },
     {
       "path": "source/client/StarClientApplication.cpp",
-      "sha256": "b520f2d4641a34f6a49c368d7aa6057607d1e690cfb6c1659efb7cf73a2b56d8"
+      "sha256": "f9042779d863611ad45f0ba6ad759e77134bdb0a25ccdad6c635d586e7fe0774"
     },
     {
       "path": "source/client/StarClientApplication.hpp",
-      "sha256": "89651a6bfd2f4634835454a7377917edd17f33604945a364f751adb840b5846d"
+      "sha256": "efe2937abd01302997edf7db791283fe1efa17d0afb6d884edf3ad6e811d2e75"
     },
     {
       "path": "source/client/StarRenderingLuaBindings.cpp",
@@ -24448,7 +24528,7 @@
     },
     {
       "path": "source/core/StarEncode.cpp",
-      "sha256": "75271b7d7db92682250259ceed417f714a9f55f1d428d37b354398ad808cec0c"
+      "sha256": "d9a4f71b0556ca134b58e9e79769c719f8d62824c49a8820d0d2c809d9f41e19"
     },
     {
       "path": "source/core/StarEncode.hpp",
@@ -24913,6 +24993,10 @@
     {
       "path": "source/core/StarRpcPromise.hpp",
       "sha256": "2d9fc8e6ffec8b3bf0937cb36e671bc4999e3834bfabf9ff64d13275969155bc"
+    },
+    {
+      "path": "source/core/StarRustEncode.h",
+      "sha256": "bf05c98fffc6c922adce71013d00d48850603c37256c742682fbabcee8d90745"
     },
     {
       "path": "source/core/StarRustLine.h",
@@ -28016,11 +28100,15 @@
     },
     {
       "path": "source/lab/behavior/behavior_lab.py",
-      "sha256": "29415e6005a5a329248928cbaf466430b762542dcab2e83b33dea69ed6306d1a"
+      "sha256": "94a232d3daed7b8c8d088bd5e714ca42470f7fe92033eb4a9f3bef9bc71891e5"
     },
     {
       "path": "source/lab/behavior/build_provenance.py",
       "sha256": "851f75f4832c5e0a620f05f85cc0d2db220dd2494adf444acfa37870c8e57b33"
+    },
+    {
+      "path": "source/lab/behavior/encoding_proof.py",
+      "sha256": "5bce653d3a3911a97dec1bf4c3a9f55e40a04126edf0d09547a303242deb26e9"
     },
     {
       "path": "source/lab/behavior/test_behavior_lab.py",
@@ -28029,6 +28117,26 @@
     {
       "path": "source/lab/behavior/test_build_provenance.py",
       "sha256": "d3bd32c2ec0eb82e9779a6dd68b1c1d67f8f9d7af37352648b0824d25c09c1d1"
+    },
+    {
+      "path": "source/lab/behavior/test_encoding_proof.py",
+      "sha256": "3ab0d9c38998d0cb910b8563f083ca4c6491e0d2ec2bc61f4ac7a4185c74f798"
+    },
+    {
+      "path": "source/lab/encode/StarEncode.original.cpp",
+      "sha256": "75271b7d7db92682250259ceed417f714a9f55f1d428d37b354398ad808cec0c"
+    },
+    {
+      "path": "source/lab/encode/StarEncode.original.hpp",
+      "sha256": "3610df48913a01098c9846d363182ce994b1726ab66ea66ec062205f95b90723"
+    },
+    {
+      "path": "source/lab/encode/lab.cpp",
+      "sha256": "9180e41d4fb010b6b2082e13c86bf4beab8c49a9ed574994218e361b64179390"
+    },
+    {
+      "path": "source/lab/encode/run.py",
+      "sha256": "681cafaf4d87b9e1797d3434b6f60db75baf8731a8f3c617d865efd05da9091e"
     },
     {
       "path": "source/lab/lighting/CMakeLists.txt",
@@ -28092,7 +28200,7 @@
     },
     {
       "path": "source/lab/migration/modules.json",
-      "sha256": "3eb3c746224a1724d700d3bfd0481076a33ae17fa5dea0c04279c2363e16be6d"
+      "sha256": "a62c1715b80a72312f47c4d2288586dbf4e98a73f19a9bc176d6ac45e3db9dd5"
     },
     {
       "path": "source/lab/traversal/StarBlocksAlongLine.frozen.hpp",
@@ -28231,8 +28339,12 @@
       "sha256": "eda62a9d160bf6f34383b726811c8174ad49a494428c151c2a116be2434e7277"
     },
     {
+      "path": "source/rust/ffi/src/encode.rs",
+      "sha256": "e634c7ff84e85eba2f23ea9811f9d344b10f8794c0d688c586438985873feef2"
+    },
+    {
       "path": "source/rust/ffi/src/lib.rs",
-      "sha256": "f8b7f8a7b57e5fa8e542d2f47255e3ce9a8c9480aa5eab75607974b219f2fefd"
+      "sha256": "c376ea5bde0ae00b9a215239a5ee6b96bef7163e0d237d0e6b9e4fdb28cfbf1a"
     },
     {
       "path": "source/rust/ffi/src/line_query.rs",
@@ -29060,15 +29172,15 @@
   },
   "summary": {
     "by_disposition": {
-      "ffi-adapter": 3,
+      "ffi-adapter": 4,
       "harness": 6,
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 21,
+      "oracle/harness": 27,
       "retain-tooling": 20,
       "retained-third-party": 296,
-      "rust-candidate": 3,
+      "rust-candidate": 4,
       "test": 57
     },
     "by_module": {
@@ -29081,7 +29193,7 @@
       "foundation.media": 14,
       "foundation.random": 10,
       "foundation.runtime": 38,
-      "foundation.serialization": 33,
+      "foundation.serialization": 35,
       "foundation.storage": 17,
       "foundation.text": 13,
       "gameplay.ai": 32,
@@ -29106,14 +29218,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 35,
-      "validation.oracles-harness": 27,
+      "validation.oracles-harness": 33,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1411,
+    "files": 1419,
     "modules": 39,
-    "no_direct_target": 305
+    "no_direct_target": 313
   }
 }

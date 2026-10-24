@@ -24,6 +24,10 @@
 #include "StarConfiguration.hpp"
 #include "StarPathEmbed.hpp"
 #include "StarRootBase.hpp"
+#include <cstdlib>
+#ifdef STAR_USE_RUST_ENCODE
+#include "StarRustEncode.h"
+#endif
 
 namespace Star {
 
@@ -166,6 +170,21 @@ Assets::Assets(Settings settings, StringList assetSources) {
 
   auto makeBaseAssetCallbacks = [this]() {
     LuaCallbacks callbacks;
+    // Lab-only, executing-thread receipts: no application dependency or config
+    // access here, since these callbacks also run during Root construction.
+    if (std::getenv("STAR_BEHAVIOR_LAB")) {
+      callbacks.registerCallback("encodingLabCounts", []() -> Json {
+        JsonArray counts;
+        for (uint32_t op = 0; op != 5; ++op) {
+#ifdef STAR_USE_RUST_ENCODE
+          counts.append(star_encode_call_count(op));
+#else
+          counts.append(0);
+#endif
+        }
+        return counts;
+      });
+    }
     callbacks.registerCallbackWithSignature<StringSet, String>("byExtension", bind(&Assets::scanExtension, this, _1));
     callbacks.registerCallbackWithSignature<Json, String>("json", bind(&Assets::json, this, _1));
     callbacks.registerCallbackWithSignature<bool, String>("exists", bind(&Assets::assetExists, this, _1));

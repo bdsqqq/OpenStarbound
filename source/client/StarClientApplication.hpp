@@ -97,6 +97,7 @@ private:
   void updateBehaviorScenario();
   void renderBehaviorScenario();
   void prepareBehaviorRaycastFrame();
+  void prepareBehaviorEncodingFrame();
   void validateBehaviorStorage();
   unsigned m_behaviorFrames = 0;
   unsigned m_behaviorSettledFrames = 0;
@@ -104,6 +105,9 @@ private:
   unsigned m_behaviorPhase = 0;
   bool m_behaviorReady = false;
   bool m_behaviorRaycastRoom = false;
+  bool m_behaviorEncodingRoom = false;
+  Json m_behaviorEncodingProof;
+  String m_behaviorEncodingImage;
   // Replaced before every paint; the post-paint receipt never re-queries the world.
   Json m_behaviorRaycastState;
   bool m_behaviorLightingCompleted = false;
