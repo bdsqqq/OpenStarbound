@@ -1,0 +1,11 @@
+{
+  "name": "behavior-shell-fixtures",
+  "friendlyName": "Isolated shell command fixtures",
+  "description": "Normal image for observed local gravity command geometry.",
+  "priority": 1100,
+  "scripts": {
+    "postLoad": [
+      "/behaviorlab/shell.lua"
+    ]
+  }
+}

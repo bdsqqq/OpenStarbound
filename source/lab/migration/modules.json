@@ -67,6 +67,8 @@
     {"id":"sha256-lab-contract","module":"validation.oracles-harness","disposition":"harness","pattern":"source/base/StarSha256Lab\\.hpp"},
     {"id":"core-compression","module":"foundation.compression-crypto","disposition":"migrate","pattern":"source/core/Star(?:Compression|Curve25519|Hash|Sha256|XXHash|ZSTDCompression)\\.(?:hpp|cpp)"},
     {"id":"core-storage","module":"foundation.storage","disposition":"migrate","pattern":"source/core/Star(?:BTree|BTreeDatabase|DynamicLib|File|LockFile|LruCache|PathEmbed|TtlCache)(?:_(?:unix|windows))?\\.(?:hpp|cpp)"},
+    {"id":"rust-shell-abi","module":"foundation.runtime","disposition":"ffi-adapter","pattern":"source/core/StarRustShell\\.h"},
+    {"id":"rust-shell","module":"foundation.runtime","disposition":"rust-candidate","pattern":"source/rust/ffi/src/shell\\.rs"},
     {"id":"core-runtime","module":"foundation.runtime","disposition":"migrate","pattern":"source/core/Star(?:Config|Exception|Listener|Logging|MiniDump|OptionParser|OutputProxy|Pch|Periodic|RpcPromise|ShellParser|SignalHandler|Thread|TickRateMonitor|Time|Uuid|Version|WorkerPool)(?:_(?:unix|windows))?\\.(?:hpp|cpp|cpp\\.in)"},
     {"id":"core-media","module":"foundation.media","disposition":"migrate","pattern":"source/core/Star(?:Audio|Color|Directives|Font|Image|ImageProcessing|ImageScaling)\\.(?:hpp|cpp)"},
     {"id":"http","module":"services.http","disposition":"migrate","pattern":"source/core/StarHttpClient\\.(?:hpp|cpp)"},

@@ -1,5 +1,11 @@
 # framebuffer behavior lab
 
+## shell-room
+
+Build `scripts/build-behavior-lab.sh shell` (or `shell-combined`), then `run --scenario shell-room`. Earlier modes explicitly keep shell OFF; line queries stay OFF.
+
+Only hardcoded local `setgravity`, `gravity` and `resetgravity` builtins are allowed. Unknown processor commands can broadcast chat, so this fixture must never forward arbitrary commands or use chat submission. The fresh isolated player's admin flag is scoped and restored; no server privilege request is sent. Actual queried post-command gravity drives normal image geometry, then gravity is reset BEFORE physics/capture. Separate direct token and actual processor receipts distinguish lexical observations from the consumer effect. See `EVIDENCE.md` and `../shell/EVIDENCE.md`; no transport, ongoing-gravity or allocation-failure-timing claim.
+
 ## unicode-room
 
 Build `scripts/build-behavior-lab.sh unicode` (or `unicode-combined`), then `run --scenario unicode-room` against `build/behavior/<mode>/candidate/bin/starbound`. Earlier modes explicitly keep Unicode OFF; line queries stay OFF.

@@ -1,4 +1,9 @@
 #include "StarClientApplication.hpp"
+#include "StarClientCommandProcessor.hpp"
+#ifdef STAR_USE_RUST_SHELL
+#include "StarRustShell.h"
+#endif
+#include <cmath>
 #include "StarBehaviorLab.hpp"
 #include "StarSha256Lab.hpp"
 #include "StarVlqLab.hpp"
@@ -537,6 +542,8 @@ void ClientApplication::render() {
         prepareBehaviorBytesFrame();
       if (BehaviorLab::enabled() && m_behaviorUnicodeRoom)
         prepareBehaviorUnicodeFrame();
+      if (BehaviorLab::enabled() && m_behaviorShellRoom)
+        prepareBehaviorShellFrame();
 
       auto paintStart = Time::monotonicMicroseconds();
       m_worldPainter->render(m_renderData, [&]() -> bool {
@@ -566,7 +573,8 @@ void ClientApplication::render() {
       m_mainInterface->render();
       m_cinematicOverlay->render();
     } else {
-      if (m_behaviorUnicodeRoom && !m_behaviorUnicodeProof.isNull()) {
+      if ((m_behaviorUnicodeRoom && !m_behaviorUnicodeProof.isNull())
+          || (m_behaviorShellRoom && !m_behaviorShellProof.isNull())) {
         // Normal Font -> TextPainter -> GPU glyph path; only ASCII coverage is
         // claimed. Screen-space coordinates avoid the 64px world-image area.
         m_guiContext->clearTextStyle();
@@ -575,8 +583,9 @@ void ClientApplication::render() {
         m_guiContext->setFontColor(Vec4B(255, 255, 255, 255));
         m_guiContext->setFontMode(FontMode::Normal);
         m_guiContext->setFontProcessingDirectives("");
-        m_guiContext->renderText(m_behaviorUnicodeProof.get("assets").getString("label"),
-            TextPositioning(Vec2F(m_guiContext->windowSize()) * 0.5f + Vec2F(-35, 70)));
+        m_guiContext->renderText(m_behaviorShellRoom ? m_behaviorShellProof.get("visual").getString("label")
+            : m_behaviorUnicodeProof.get("assets").getString("label"),
+            TextPositioning(Vec2F(m_guiContext->windowSize()) * 0.5f + Vec2F(m_behaviorShellRoom ? -25 : -35, 70)));
         m_guiContext->clearTextStyle();
       }
       renderBehaviorScenario();
@@ -1456,7 +1465,7 @@ void ClientApplication::validateBehaviorStorage() {
   auto scenario = config.getString("scenario", "lighting-room");
   if (scenario != "lighting-room" && scenario != "raycast-room" && scenario != "encoding-room"
       && scenario != "sha256-room" && scenario != "vlq-room" && scenario != "bytes-room"
-      && scenario != "unicode-room")
+      && scenario != "unicode-room" && scenario != "shell-room")
     throw StarException("BehaviorLab: unsupported scenario");
   m_behaviorRaycastRoom = scenario == "raycast-room";
   m_behaviorEncodingRoom = scenario == "encoding-room";
@@ -1464,6 +1473,7 @@ void ClientApplication::validateBehaviorStorage() {
   m_behaviorVlqRoom = scenario == "vlq-room";
   m_behaviorBytesRoom = scenario == "bytes-room";
   m_behaviorUnicodeRoom = scenario == "unicode-room";
+  m_behaviorShellRoom = scenario == "shell-room";
   if (config.getUInt("maxFrames", 1800) == 0 || config.getUInt("maxFrames", 1800) > 18000)
     throw StarException("BehaviorLab: maxFrames must be in [1, 18000]");
 
@@ -1584,7 +1594,7 @@ void ClientApplication::updateBehaviorScenario() {
       return;
     if (m_behaviorStage == 2) {
       Logger::info("BehaviorLab: {} completed (three acknowledged world frames)",
-          m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
+          m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
       m_behaviorPhase = 5;
       appController()->quit();
       return;
@@ -2338,6 +2348,105 @@ void ClientApplication::prepareBehaviorUnicodeFrame() {
   m_renderData.foregroundOverlays.append(std::move(drawable));
 }
 
+void ClientApplication::prepareBehaviorShellFrame() {
+  if (!m_behaviorReady || BehaviorLab::hasPendingFrame() || m_renderData.isFullbright)
+    return;
+  if (m_behaviorShellProof.isNull()) {
+    auto world = m_universeClient->worldClient();
+    auto processor = m_mainInterface->commandProcessor();
+    auto count = []() -> uint64_t {
+#ifdef STAR_USE_RUST_SHELL
+      return star_shell_call_count();
+#else
+      return 0;
+#endif
+    };
+    String backend = "cpp";
+    uint64_t expectedCalls = 0;
+#ifdef STAR_USE_RUST_SHELL
+    backend = "rust";
+    expectedCalls = 1;
+#endif
+    // Login can overwrite the isolated player's initial admin flag. Scope this
+    // local-only command capability to the fixture, never a server/admin packet.
+    struct RestoreAdmin {
+      PlayerPtr player;
+      bool previous;
+      ~RestoreAdmin() { player->setAdmin(previous); }
+    } restoreAdmin{m_player, m_player->isAdmin()};
+    m_player->setAdmin(true);
+    if (!m_player->isAdmin())
+      throw StarException("BehaviorLab: shell fixture is not admin");
+    Vec2F const position(64, 48);
+    float original = world->gravity(position);
+    if (!std::isfinite(original) || original == 0.25f)
+      throw StarException("BehaviorLab: shell fixture needs distinct finite original gravity");
+    String const arguments[2] = {R"("\u0030.25")", R"("0.25")"};
+    String const setters[2] = {"/setgravity " + arguments[0], "/setgravity " + arguments[1]};
+    // Unknown processor commands may broadcast chat. Only these literal
+    // builtins are permitted; never route this fixture through chat submission.
+    auto invoke = [&](String const& command) {
+      if (command != setters[0] && command != setters[1]
+          && command != "/gravity" && command != "/resetgravity")
+        throw StarException("BehaviorLab: shell command is not allowlisted");
+      return processor->handleCommand(command, false);
+    };
+    JsonArray commands;
+    for (unsigned i = 0; i != 2; ++i) {
+      ShellParser parser;
+      auto before = count();
+      auto tokens = parser.tokenizeToStringList(arguments[i]);
+      auto tokenCalls = count() - before;
+      before = count();
+      auto responses = invoke(setters[i]);
+      auto commandCalls = count() - before;
+      float gravity = world->gravity(position);
+      uint32_t bits;
+      std::memcpy(&bits, &gravity, sizeof(bits));
+      if (tokens != StringList{"0.25"} || tokenCalls != expectedCalls
+          || responses != StringList{"Gravity set to 0.25 (This is client-side!)"}
+          || commandCalls != expectedCalls || bits != 0x3e800000u) {
+        invoke("/resetgravity");
+        throw StarException("BehaviorLab: shell command/token/gravity/receipt mismatch");
+      }
+      JsonArray tokenHex;
+      for (auto const& token : tokens)
+        tokenHex.append(hexEncode(token.utf8().data(), token.utf8Size()));
+      commands.append(JsonObject{{"commandHex", hexEncode(setters[i].utf8().data(), setters[i].utf8Size())},
+          {"tokenHex", tokenHex}, {"tokenCalls", tokenCalls}, {"responses", jsonFromStringList(responses)},
+          {"gravity", gravity}, {"gravityBits", "3e800000"}, {"rustCalls", commandCalls}});
+    }
+    auto before = count();
+    auto queryResponses = invoke("/gravity");
+    auto queryCalls = count() - before;
+    float queried = world->gravity(position);
+    before = count();
+    auto restoreResponses = invoke("/resetgravity");
+    auto restoreCalls = count() - before;
+    float restored = world->gravity(position);
+    if (queryResponses != StringList{"0.25"} || queryCalls != 0 || queried != 0.25f
+        || restoreResponses != StringList{"Gravity reset"} || restoreCalls != 0 || restored != original)
+      throw StarException("BehaviorLab: shell gravity query/restoration mismatch");
+    auto image = m_root->assets()->image("/behaviorlab/shell-result.png");
+    if (image->size() != Vec2U(16, 16))
+      throw StarException("BehaviorLab: shell image dimensions differ");
+    for (unsigned y = 0; y != 16; ++y)
+      for (unsigned x = 0; x != 16; ++x)
+        if (image->get(x, y) != Vec4B(224, 160, 32, 255))
+          throw StarException("BehaviorLab: shell image pixels differ");
+    m_behaviorShellProof = JsonObject{{"version", 1}, {"backend", backend}, {"admin", true},
+        {"queryPosition", JsonArray{64, 48}}, {"originalGravity", original}, {"commands", commands},
+        {"query", JsonObject{{"responses", jsonFromStringList(queryResponses)}, {"gravity", queried}, {"rustCalls", queryCalls}}},
+        {"restore", JsonObject{{"responses", jsonFromStringList(restoreResponses)}, {"gravity", restored}, {"rustCalls", restoreCalls}}},
+        {"visual", JsonObject{{"gravity", queried}, {"imagePath", "/behaviorlab/shell-result.png"},
+            {"label", "SHELL"}, {"color", JsonArray{224, 160, 32, 255}}}}};
+  }
+  auto gravity = m_behaviorShellProof.get("visual").getFloat("gravity");
+  auto drawable = Drawable::makeImage("/behaviorlab/shell-result.png", gravity * 8.0f / TilePixels, true, Vec2F(64, 48));
+  drawable.fullbright = true;
+  m_renderData.foregroundOverlays.append(std::move(drawable));
+}
+
 void ClientApplication::renderBehaviorScenario() {
   if (!m_behaviorReady || BehaviorLab::hasPendingFrame())
     return;
@@ -2376,7 +2485,7 @@ void ClientApplication::renderBehaviorScenario() {
       {"layout", "row-major-rgb-f32-bits"}, {"bits", std::move(lightmapBits)}};
   Json metadata = JsonObject{
       {"lightingDiagnostics", std::move(lightmapDiagnostic)},
-      {"scenario", m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
+      {"scenario", m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
       {"worldState", JsonObject{
           {"worldId", printWorldId(m_universeClient->clientContext()->playerWorldId())},
           {"worldSize", jsonFromVec2U(world->geometry().size())},
@@ -2432,6 +2541,11 @@ void ClientApplication::renderBehaviorScenario() {
     if (m_behaviorBytesProof.isNull())
       throw StarException("BehaviorLab: bytes frame has no completed proof");
     metadata = metadata.set("bytesProof", m_behaviorBytesProof);
+  }
+  if (m_behaviorShellRoom) {
+    if (m_behaviorShellProof.isNull())
+      throw StarException("BehaviorLab: shell proof missing");
+    metadata = metadata.set("shellProof", m_behaviorShellProof);
   }
   if (m_behaviorUnicodeRoom) {
     if (m_behaviorUnicodeProof.isNull())

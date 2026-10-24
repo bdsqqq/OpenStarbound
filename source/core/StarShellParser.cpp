@@ -1,5 +1,49 @@
 #include "StarShellParser.hpp"
 
+#ifdef STAR_USE_RUST_SHELL
+#include "StarRustShell.h"
+#include <cctype>
+#include <exception>
+#include <vector>
+
+namespace {
+struct RustShellCollector {
+  Star::List<Star::ShellParser::Token>* tokens;
+  Star::String word;
+  std::exception_ptr failure;
+};
+
+int32_t shellClassify(void* context, uint32_t cp, uint32_t* isHex) noexcept {
+  auto& collector = *static_cast<RustShellCollector*>(context);
+  try {
+    // Keep the historical locale and int conversion, only for requested digits.
+    *isHex = std::isxdigit(static_cast<int>(cp)) ? 1 : 0;
+    return 0;
+  } catch (...) {
+    collector.failure = std::current_exception();
+    return 1;
+  }
+}
+
+int32_t shellEmit(void* context, uint32_t event, uint32_t cp) noexcept {
+  auto& collector = *static_cast<RustShellCollector*>(context);
+  try {
+    if (event == 0) {
+      collector.word.append(static_cast<Star::String::Char>(cp));
+    } else {
+      collector.tokens->append(Star::ShellParser::Token{
+          Star::ShellParser::TokenType::Word, std::move(collector.word)});
+      collector.word = Star::String();
+    }
+    return 0;
+  } catch (...) {
+    collector.failure = std::current_exception();
+    return 1;
+  }
+}
+}
+#endif
+
 namespace Star {
 
 ShellParser::ShellParser()
@@ -10,9 +54,29 @@ auto ShellParser::tokenize(String const& command) -> List<Token> {
 
   init(command);
 
+#ifdef STAR_USE_RUST_SHELL
+  // Use the same String iterator as the C++ parser, including embedded NUL and
+  // its malformed-UTF8 policy. This staging changes allocation-failure timing.
+  std::vector<uint32_t> input;
+  for (auto current = command.begin(), end = command.end(); current != end; ++current)
+    input.push_back(static_cast<uint32_t>(*current));
+  RustShellCollector collector{&res, String(), {}};
+  size_t count;
+  uint32_t quote;
+  auto status = star_shell_tokenize(input.data(), input.size(), shellClassify,
+      shellEmit, &collector, &count, &quote);
+  if (collector.failure)
+    std::rethrow_exception(collector.failure);
+  // An executing backend is never retried: it may already have emitted words.
+  if (status != 0)
+    throw ShellParsingException("Rust shell parser failed");
+  m_quotedType = static_cast<Char>(quote);
+  m_current = m_end;
+#else
   while (notDone()) {
     res.append(Token{TokenType::Word, word()});
   }
+#endif
 
   return res;
 }
