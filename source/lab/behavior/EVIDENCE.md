@@ -1,8 +1,37 @@
 # native behavioral evidence — 2026-10-24
 
-status: laboratory exercised; **exact rust framebuffer parity FAILED**. do not advance the migration gate or describe this as complete game equivalence.
+current result: **exact framebuffer/state gate PASSED for the three-stage lighting-room fixture**, on apple clang 21 / aarch64 / fast-math. this is finite scenario evidence, not universal bitwise or whole-game equivalence. the initial failure is retained below.
 
-## tested artifacts
+## production-arm arithmetic follow-up
+
+VERIFIED — `build/behavior/arm-policy-r1/`, rebuilt source-bound clients, first arithmetic repair attempt:
+
+- both independent c++ baselines retain the original `21f3ef31` pixel hashes for all three stages; no reference flags, scene inputs, goldens or tolerances changed.
+- rust matches c++ exactly in every RGBA pixel and semantic state field for `lit-room`, `occluder-added`, `occluder-restored`: max channel error **0**, changed pixels **0**, per 1000×600 frame. each run restores the initial frame and observed material/state exactly.
+- final frame hashes bind inspection to the already inspected c++ images described below. the machine report still leaves `parityCertified: false` by design; this inspected claim is limited to the stated fixture/host.
+- explicit per-invocation arithmetic policy matches traced production expressions: RGB spread FMA, RGB subtraction reciprocal multiplication, source-placement reassociation, fused distance, circular-attenuation reassociation. selection requires Apple clang major21 + aarch64 + fast-math; other callers retain the original precise entrypoint. no shared mutable math mode or C struct layout change.
+- the actual production `StarCellularLighting.cpp.o` imports `_star_lighting_calculate_arm_fast`. all three candidate receipts report successful Rust execution. a separate C++ adapter fixture deliberately redirected to the old entrypoint fails with the exact arithmetic-route diagnostic (exit2), rather than merely a build/link failure.
+- **14 CPU lightmap channels still differ** in each stage, max absolute difference `2.9802322387695312e-8`. Wu accumulation remains precise. complete production floating-point equivalence is NOT established; different scenes/viewports may expose other quantization boundaries.
+- independent source review found no actionable defect in the five-file arithmetic diff. primary reran 14 debug +14 release Rust tests, fmt, nine native CTests, ABI/config checks, 40 behavior/provenance tests and the route negative control. fixed scalar/RGB numerical corpus: seeds `1592594996`, `1`, `4294967295`, **44,122,768 channels per mode** serially and again concurrently. precise/fallback maximum error0; fast maximum error `1.00136e-5`, budget fraction `0.216513` under the unchanged numerical gate.
+
+native binary SHA256, relative to `build/behavior/`:
+
+```text
+bb19b6cee55f82523cd22c09f0f9b7bc4d062dbab4718e7e89750509db8d9b61  reference/bin/starbound
+b544ffd294a620ac914f74b9f73bb4a2b6945b666f54f41aff602533847c9291  candidate/bin/starbound
+```
+
+source-map fingerprint (same canonical method below): `f2fa547aed2eddade15d199d9db72c43c4d6f02dd654073e7a805b6ae5921521`. full source/tool/cache receipts remain in the sealed manifests. logs: `/tmp/openstarbound-arm-policy-{build,real,numeric}-r1.log`, `/tmp/openstarbound-arm-policy-extra-seeds.log`, `/tmp/openstarbound-arm-policy-route-negative.log`.
+
+current numerical artifacts:
+
+```text
+5ba30dcc5b534d342243ece2efd12339b163408c2d9553dd458332d62f373045  dist/lighting_lab
+58300be6e09c9f5b715898b4a81f6af4d2a8b6e071675ac717e14fc32caeff66  dist/lighting_lab_fastmath
+7fa4c0089ef600f5c2989c3655eb6d6f5a47d00558b8415d6fe8bb57b0268fc9  dist/lighting_lab_cpp
+```
+
+## original failure at checkpoint 21f3ef31: tested artifacts
 
 host: apple m2 pro / arm64 macOS; GL vendor `Apple`, renderer `Apple M2 Pro`, version `4.1 Metal - 91.7`. captures are 1000×600, final default framebuffer after imgui and before swap. both clients have steam/discord integrations OFF.
 
@@ -15,7 +44,7 @@ current native evidence: `build/behavior/real-game-r2-diagnostic/`. both clients
 
 paths above are relative to `build/behavior/`. canonical source-map SHA256: `92b57ba79c60ccc897ac58ca959bca3f5fea4ceb5cc784cbfdff693ff0b406d3` (UTF-8 JSON of `buildProvenance.source_files`, sorted keys, separators `,` and `:`). the full maps remain in each frame manifest. current-source preflight and post-run verification both passed.
 
-## observed behavior
+### observed behavior before repair
 
 VERIFIED — `reference/frames/`, `reference-repeat/frames/`, `candidate/frames/`:
 
@@ -29,15 +58,15 @@ VERIFIED — `reference/frames/`, `reference-repeat/frames/`, `candidate/frames/
 
 primary inspected all three reference PNGs from the first fixture run `real-game-r1`, then all three diagnostic-run candidate PNGs and its initial diff; independent reviewer also inspected reference stages, candidate initial and initial diff. all nine diagnostic-run pixel hashes match their first-run counterparts. the one-step diff is not meaningfully visible at ordinary scale; exact pixel extraction locates it. CPU upload bits were inspected numerically. no passing visual-parity claim is made.
 
-## discrepancy localization, not a completed repair
+### discrepancy localization before repair
 
 VERIFIED — `metadata.lightingDiagnostics` in the diagnostic run preserves the actual uploaded 66×40 RGB float map, world minimum `(31,28)`. reference/rust differ in 513 channels initially/restored and 469 while occluded; maximum absolute difference `5.960464477539063e-8`, maximum ULP distance 20. these diagnostic values do not mask pixels or replace the exact state/framebuffer gate.
 
 VERIFIED — isolated expression/production-assembly probe `source/lab/lighting/diagnostic/run.py`, independently rerun by primary; outputs in `build/lighting-fp/`. production ARM fast-math uses fused arithmetic, reciprocal multiplication and circular-attenuation reassociation. diagnostic rust formulas matched production-fast c++ at seven sampled expression sites (300,000 scalar outputs). this is NOT complete-kernel equivalence.
 
-HUNCH — those compiler arithmetic differences cause the observed threshold crossing. causal replay of exact selected kernel inputs and a production arithmetic-policy repair remain OPEN. do not change fixture colors/positions, reference flags, goldens or tolerances to obtain a pass.
+HUNCH at this checkpoint — those compiler arithmetic differences cause the threshold crossing. the follow-up policy above repairs the observed pixel without changing scene/reference/tolerance; attribution to an individual expression and complete-kernel equivalence remain unproven.
 
-## verifier and numerical checks
+### original verifier and numerical checks
 
 - 40 Python tests passed: native-only receipt/phase validation, pixel/color/tile/alpha corruption, independent baseline, unsafe paths/storage, private timeout cleanup, overlay integrity, missing/stale build proof, source additions/deletions, build-time edits and compiler/cache mutations. synthetic unit clients do not prove native gameplay.
 - eight migration-inventory tests passed; catalog check accounts for 1,397 files / 39 modules. diagnostic rust is classified as harness code, not a production port.

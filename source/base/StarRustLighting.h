@@ -52,6 +52,17 @@ int32_t star_lighting_calculate(
     StarLightingPointLight const* point_lights, size_t point_len,
     size_t x_min, size_t y_min, size_t x_max, size_t y_max);
 
+/* Explicit production ARM expression policy, traced on Apple clang 21 with
+ * -ffast-math. Same memory/status/counter contract as the precise entrypoint.
+ * Not a promise of other compilers' fast-math or complete framebuffer parity. */
+int32_t star_lighting_calculate_arm_fast(
+    uint32_t channels, size_t width, size_t height,
+    StarLightingParameters const* parameters,
+    StarLightingCell* cells, size_t cells_len,
+    StarLightingSpreadLight const* spread_lights, size_t spread_len,
+    StarLightingPointLight const* point_lights, size_t point_len,
+    size_t x_min, size_t y_min, size_t x_max, size_t y_max);
+
 /* Successful calculations in this process; no reset/global configuration.
  * Integration evidence only, never used to decide simulation behavior. */
 uint64_t star_lighting_call_count(void);

@@ -73,7 +73,7 @@ fn intensity(v: [f32; 3], n: usize) -> f32 {
         max(max(v[0], v[1]), v[2])
     }
 }
-fn subtract(mut v: [f32; 3], drop: f32, n: usize) -> [f32; 3] {
+fn subtract<const ARM_FAST: bool>(mut v: [f32; 3], drop: f32, n: usize) -> [f32; 3] {
     if n == 1 {
         v[0] = max(v[0] - drop, 0.0);
     } else {
@@ -82,13 +82,22 @@ fn subtract(mut v: [f32; 3], drop: f32, n: usize) -> [f32; 3] {
             return v;
         }
         for c in &mut v {
-            let d = (drop * *c) / m;
+            let d = if ARM_FAST {
+                (drop * *c) * (1.0 / m)
+            } else {
+                (drop * *c) / m
+            };
             *c = if *c > d { *c - d } else { 0.0 };
         }
     }
     v
 }
-fn spread(source: [f32; 3], mut dest: [f32; 3], mut drop: f32, n: usize) -> [f32; 3] {
+fn spread<const ARM_FAST: bool>(
+    source: [f32; 3],
+    mut dest: [f32; 3],
+    mut drop: f32,
+    n: usize,
+) -> [f32; 3] {
     if n == 1 {
         dest[0] = max(source[0] - drop, dest[0]);
     } else {
@@ -98,20 +107,31 @@ fn spread(source: [f32; 3], mut dest: [f32; 3], mut drop: f32, n: usize) -> [f32
         }
         drop /= m;
         for c in 0..3 {
-            dest[c] = max(source[c] - source[c] * drop, dest[c]);
+            dest[c] = max(
+                if ARM_FAST {
+                    (-source[c]).mul_add(drop, source[c])
+                } else {
+                    source[c] - source[c] * drop
+                },
+                dest[c],
+            );
         }
     }
     dest
 }
 
-struct Array<'a> {
+// Explicit expression policy traced by source/lab/lighting/diagnostic/{fp_sites.cpp,
+// policy.rs,run.py} against Apple clang 21, AArch64, -ffast-math. Not general fast-math
+// emulation: sites without a matching formula (including Wu accumulation) stay precise.
+// A per-instantiation policy keeps concurrent precise/production calls independent.
+struct Array<'a, const ARM_FAST: bool = false> {
     width: usize,
     height: usize,
     n: usize,
     p: StarLightingParameters,
     cells: &'a mut [StarLightingCell],
 }
-impl Array<'_> {
+impl<const ARM_FAST: bool> Array<'_, ARM_FAST> {
     fn obstacle(&self, x: i64, y: i64) -> bool {
         // Wu's second antialias sample may leave the array even at valid endpoints.
         x >= 0
@@ -143,16 +163,31 @@ impl Array<'_> {
                 } else {
                     self.p.spread_max_air
                 };
+            let distances = if ARM_FAST {
+                [
+                    xd + yd,
+                    (xd + 1.0) - yd,
+                    (yd - 1.0) + (2.0 - xd),
+                    (2.0 - xd) - yd,
+                ]
+            } else {
+                [
+                    2.0 - (1.0 - xd) - (1.0 - yd),
+                    2.0 - (1.0 - xd) - yd,
+                    2.0 - xd - (1.0 - yd),
+                    2.0 - xd - yd,
+                ]
+            };
             for (cx, cy, d) in [
-                (x, y, 2.0 - (1.0 - xd) - (1.0 - yd)),
-                (x, y + 1, 2.0 - (1.0 - xd) - yd),
-                (x + 1, y, 2.0 - xd - (1.0 - yd)),
-                (x + 1, y + 1, 2.0 - xd - yd),
+                (x, y, distances[0]),
+                (x, y + 1, distances[1]),
+                (x + 1, y, distances[2]),
+                (x + 1, y + 1, distances[3]),
             ] {
                 if cx < 0 || cy < 0 || cx as usize >= self.width || cy as usize >= self.height {
                     continue;
                 }
-                let v = subtract(light.value, att * d, self.n);
+                let v = subtract::<ARM_FAST>(light.value, att * d, self.n);
                 let cell = &mut self.cells[cx as usize * self.height + cy as usize];
                 for (c, value) in v.iter().enumerate().take(self.n) {
                     cell.light[c] = max(cell.light[c], *value);
@@ -214,7 +249,7 @@ impl Array<'_> {
             (nx, y - 1, diag),
         ] {
             let cell = &mut self.cells[dx * self.height + dy];
-            cell.light = spread(source.light, cell.light, d, self.n);
+            cell.light = spread::<ARM_FAST>(source.light, cell.light, d, self.n);
         }
     }
     fn line(&self, start: [f32; 2], end: [f32; 2], per: f32, limit: f32) -> f32 {
@@ -328,8 +363,13 @@ impl Array<'_> {
                     let old = self.cells[index].light;
                     let block = [x as f32 + 0.5, y as f32 + 0.5];
                     let relative = [block[0] - px, block[1] - py];
-                    let distance =
-                        ((0.0 + relative[0] * relative[0]) + relative[1] * relative[1]).sqrt();
+                    let distance = if ARM_FAST {
+                        relative[1]
+                            .mul_add(relative[1], relative[0] * relative[0])
+                            .sqrt()
+                    } else {
+                        ((0.0 + relative[0] * relative[0]) + relative[1] * relative[1]).sqrt()
+                    };
                     // This branch intentionally adds even in max mode, without hybrid scaling.
                     if distance == 0.0 {
                         for c in 0..self.n {
@@ -355,14 +395,24 @@ impl Array<'_> {
                     if remaining <= 0.0 {
                         continue;
                     }
-                    let circular = per_obs / max(direction[0].abs(), direction[1].abs());
+                    let direction_max = max(direction[0].abs(), direction[1].abs());
+                    let circular = if ARM_FAST {
+                        let obstacle_distance = if as_spread {
+                            self.p.spread_max_obstacle
+                        } else {
+                            self.p.point_max_obstacle
+                        };
+                        1.0 / (obstacle_distance * direction_max)
+                    } else {
+                        per_obs / direction_max
+                    };
                     let blocked = self.line(block, light.position, circular, remaining);
                     attenuation += blocked;
                     if !as_spread {
                         attenuation += min(blocked, circular) * self.p.point_obstacle_boost;
                     }
                     if attenuation < 1.0 {
-                        let value = subtract(light.value, attenuation, self.n);
+                        let value = subtract::<ARM_FAST>(light.value, attenuation, self.n);
                         if self.p.point_additive != 0 {
                             if intensity(value, self.n) > 0.0001 {
                                 for c in 0..self.n {
@@ -414,6 +464,83 @@ unsafe fn borrowed<'a, T>(ptr: *const T, len: usize) -> &'a [T] {
 #[no_mangle]
 #[allow(clippy::too_many_arguments)]
 pub unsafe extern "C" fn star_lighting_calculate(
+    channels: u32,
+    width: usize,
+    height: usize,
+    parameters: *const StarLightingParameters,
+    cells: *mut StarLightingCell,
+    cells_len: usize,
+    spread_lights: *const StarLightingSpreadLight,
+    spread_len: usize,
+    point_lights: *const StarLightingPointLight,
+    point_len: usize,
+    x_min: usize,
+    y_min: usize,
+    x_max: usize,
+    y_max: usize,
+) -> i32 {
+    calculate::<false>(
+        channels,
+        width,
+        height,
+        parameters,
+        cells,
+        cells_len,
+        spread_lights,
+        spread_len,
+        point_lights,
+        point_len,
+        x_min,
+        y_min,
+        x_max,
+        y_max,
+    )
+}
+
+/// Production AArch64/Apple clang 21 fast-math expression compatibility candidate.
+/// Same validation, panic containment, borrowed-memory and receipt contract as the
+/// precise entrypoint; no universal compiler or framebuffer equivalence is implied.
+///
+/// # Safety
+/// Identical pointer/allocation requirements to [star_lighting_calculate].
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn star_lighting_calculate_arm_fast(
+    channels: u32,
+    width: usize,
+    height: usize,
+    parameters: *const StarLightingParameters,
+    cells: *mut StarLightingCell,
+    cells_len: usize,
+    spread_lights: *const StarLightingSpreadLight,
+    spread_len: usize,
+    point_lights: *const StarLightingPointLight,
+    point_len: usize,
+    x_min: usize,
+    y_min: usize,
+    x_max: usize,
+    y_max: usize,
+) -> i32 {
+    calculate::<true>(
+        channels,
+        width,
+        height,
+        parameters,
+        cells,
+        cells_len,
+        spread_lights,
+        spread_len,
+        point_lights,
+        point_len,
+        x_min,
+        y_min,
+        x_max,
+        y_max,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+unsafe fn calculate<const ARM_FAST: bool>(
     channels: u32,
     width: usize,
     height: usize,
@@ -490,7 +617,7 @@ pub unsafe extern "C" fn star_lighting_calculate(
         if cells.iter().any(|c| c.light.iter().any(|v| !v.is_finite())) {
             return 1;
         }
-        let mut array = Array {
+        let mut array = Array::<ARM_FAST> {
             width,
             height,
             n: channels as usize,

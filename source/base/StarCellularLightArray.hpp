@@ -353,7 +353,15 @@ void CellularLightArray<LightTraits>::calculate(size_t xMin, size_t yMin, size_t
   StarLightingParameters parameters{
       m_spreadPasses, m_spreadMaxAir, m_spreadMaxObstacle,
       m_pointMaxAir, m_pointMaxObstacle, m_pointObstacleBoost, m_pointAdditive ? 1u : 0u};
-  int32_t status = star_lighting_calculate(scalar ? 1u : 3u, m_width, m_height,
+  // The explicit policy models observed Apple clang 21 production ARM arithmetic,
+  // not arbitrary fast-math implementations. Other compilers/targets retain
+  // the precise policy until their emitted expressions have been traced.
+#if defined(__aarch64__) && defined(__FAST_MATH__) && defined(__apple_build_version__) && __clang_major__ == 21
+  auto calculateRust = star_lighting_calculate_arm_fast;
+#else
+  auto calculateRust = star_lighting_calculate;
+#endif
+  int32_t status = calculateRust(scalar ? 1u : 3u, m_width, m_height,
       &parameters, m_rustCells.ptr(), m_rustCells.size(),
       m_rustSpreadLights.ptr(), m_rustSpreadLights.size(),
       m_rustPointLights.ptr(), m_rustPointLights.size(), xMin, yMin, xMax, yMax);

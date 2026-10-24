@@ -31,6 +31,85 @@ fn array(cells: &mut [StarLightingCell], n: usize) -> Array<'_> {
     }
 }
 #[test]
+fn arm_fast_is_explicit_and_independent_of_precise_calls() {
+    // The fixed bits come from the isolated clang 21 ARM probe, not a tolerance.
+    // One interior source in a 3x3 grid makes its right neighbour a single spread.
+    let run = |calculate: Calculate, expected| {
+        let mut cells = [StarLightingCell::default(); 9];
+        cells[4].light = [
+            0.24970240890979767,
+            0.05007189139723778,
+            0.04367992654442787,
+        ];
+        let mut p = params();
+        p.spread_max_air = 5.0;
+        let before = star_lighting_call_count();
+        assert_eq!(
+            unsafe {
+                calculate(
+                    3,
+                    3,
+                    3,
+                    &p,
+                    cells.as_mut_ptr(),
+                    9,
+                    std::ptr::null(),
+                    0,
+                    std::ptr::null(),
+                    0,
+                    0,
+                    0,
+                    3,
+                    3,
+                )
+            },
+            0
+        );
+        assert_eq!(cells[7].light[0].to_bits(), expected);
+        assert!(star_lighting_call_count() > before);
+    };
+    std::thread::scope(|scope| {
+        scope.spawn(|| {
+            for _ in 0..32 {
+                run(star_lighting_calculate, 0x3d4b94c0);
+            }
+        });
+        scope.spawn(|| {
+            for _ in 0..32 {
+                run(star_lighting_calculate_arm_fast, 0x3d4b94bf);
+            }
+        });
+    });
+}
+
+#[test]
+fn arm_fast_sampled_rgb_expressions_retain_probed_rounding() {
+    let source = [2.6911070346832275, 2.811753511428833, 2.6305959224700928];
+    let dest = [
+        0.03542102873325348,
+        0.028175126761198044,
+        0.08660677075386047,
+    ];
+    assert_eq!(
+        spread::<false>(source, dest, 0.6016060709953308, 3)[0],
+        2.115314483642578
+    );
+    assert_eq!(
+        spread::<true>(source, dest, 0.6016060709953308, 3)[0],
+        2.1153147220611572
+    );
+    let source = [1.0632493495941162, 1.8769252300262451, 2.188105583190918];
+    assert_eq!(
+        subtract::<false>(source, 0.4833781123161316, 3)[0],
+        0.8283651471138
+    );
+    assert_eq!(
+        subtract::<true>(source, 0.4833781123161316, 3)[0],
+        0.8283650875091553
+    );
+}
+
+#[test]
 fn abi_layout() {
     assert_eq!(size_of::<StarLightingParameters>(), 28);
     assert_eq!(size_of::<StarLightingCell>(), 16);
@@ -40,13 +119,19 @@ fn abi_layout() {
 }
 #[test]
 fn proportional_color_and_scalar_subtraction_differ() {
-    assert_eq!(subtract([1.0, 0.5, 0.25], 0.5, 3), [0.5, 0.25, 0.125]);
-    assert_eq!(subtract([1.0, 0.5, 0.25], 0.5, 1), [0.5, 0.5, 0.25]);
     assert_eq!(
-        spread([1.0, 0.5, 0.25], [0.0; 3], 0.5, 3),
+        subtract::<false>([1.0, 0.5, 0.25], 0.5, 3),
         [0.5, 0.25, 0.125]
     );
-    assert_eq!(subtract([-1.0; 3], 0.5, 3), [-1.0; 3]);
+    assert_eq!(
+        subtract::<false>([1.0, 0.5, 0.25], 0.5, 1),
+        [0.5, 0.5, 0.25]
+    );
+    assert_eq!(
+        spread::<false>([1.0, 0.5, 0.25], [0.0; 3], 0.5, 3),
+        [0.5, 0.25, 0.125]
+    );
+    assert_eq!(subtract::<false>([-1.0; 3], 0.5, 3), [-1.0; 3]);
 }
 #[test]
 fn placement_is_column_major_and_obstacle_dependent() {
@@ -146,14 +231,33 @@ fn point_obstacle_boost_and_as_spread_bypass() {
     a.points(&[p], [0, 0, 5, 5]);
     assert_eq!(a.cells[17].light[0], 0.5);
 }
+type Calculate = unsafe extern "C" fn(
+    u32,
+    usize,
+    usize,
+    *const StarLightingParameters,
+    *mut StarLightingCell,
+    usize,
+    *const StarLightingSpreadLight,
+    usize,
+    *const StarLightingPointLight,
+    usize,
+    usize,
+    usize,
+    usize,
+    usize,
+) -> i32;
+const ENTRYPOINTS: [Calculate; 2] = [star_lighting_calculate, star_lighting_calculate_arm_fast];
+
 unsafe fn call(
+    calculate: Calculate,
     width: usize,
     height: usize,
     p: *const StarLightingParameters,
     cells: *mut StarLightingCell,
     len: usize,
 ) -> i32 {
-    star_lighting_calculate(
+    calculate(
         1,
         width,
         height,
@@ -172,69 +276,96 @@ unsafe fn call(
 }
 #[test]
 fn ffi_validates_before_mutation_and_allows_null_empty_sources() {
-    let calls_before = star_lighting_call_count();
-    let mut cells = [StarLightingCell::default(); 25];
-    let mut p = params();
-    unsafe {
-        assert_eq!(call(5, 5, &p, cells.as_mut_ptr(), 25), 0);
-        // Other Rust tests may call the ABI concurrently; only monotonicity is
-        // contractual, not an exact process-global count at this instant.
-        assert!(star_lighting_call_count() > calls_before);
-        assert_eq!(call(5, 5, std::ptr::null(), cells.as_mut_ptr(), 25), 1);
-        assert_eq!(call(5, 5, &p, std::ptr::null_mut(), 25), 1);
-        assert_eq!(call(5, 5, &p, cells.as_mut_ptr(), 24), 1);
-        assert_eq!(call(usize::MAX, 2, &p, cells.as_mut_ptr(), 25), 1);
-        assert_eq!(
-            call(5, 5, &p, (cells.as_mut_ptr() as *mut u8).add(1).cast(), 25),
-            1
-        );
-        assert_eq!(call(5, 5, cells.as_ptr().cast(), cells.as_mut_ptr(), 25), 1);
-        p.spread_max_air = 0.0;
-        assert_eq!(call(5, 5, &p, cells.as_mut_ptr(), 25), 1);
-        p = params();
-        // The C++ parameter accepts negative obstacle boosts (reduced shadowing).
-        p.point_obstacle_boost = -0.5;
-        assert_eq!(call(5, 5, &p, cells.as_mut_ptr(), 25), 0);
-        cells[4].light[2] = f32::NAN;
-        assert_eq!(call(5, 5, &p, cells.as_mut_ptr(), 25), 1);
+    for calculate in ENTRYPOINTS {
+        let calls_before = star_lighting_call_count();
+        let mut cells = [StarLightingCell::default(); 25];
+        let mut p = params();
+        unsafe {
+            assert_eq!(call(calculate, 5, 5, &p, cells.as_mut_ptr(), 25), 0);
+            // Other Rust tests may call the ABI concurrently; only monotonicity is
+            // contractual, not an exact process-global count at this instant.
+            assert!(star_lighting_call_count() > calls_before);
+            assert_eq!(
+                call(calculate, 5, 5, std::ptr::null(), cells.as_mut_ptr(), 25),
+                1
+            );
+            assert_eq!(call(calculate, 5, 5, &p, std::ptr::null_mut(), 25), 1);
+            assert_eq!(call(calculate, 5, 5, &p, cells.as_mut_ptr(), 24), 1);
+            assert_eq!(
+                call(calculate, usize::MAX, 2, &p, cells.as_mut_ptr(), 25),
+                1
+            );
+            assert_eq!(
+                call(
+                    calculate,
+                    5,
+                    5,
+                    &p,
+                    (cells.as_mut_ptr() as *mut u8).add(1).cast(),
+                    25
+                ),
+                1
+            );
+            assert_eq!(
+                call(
+                    calculate,
+                    5,
+                    5,
+                    cells.as_ptr().cast(),
+                    cells.as_mut_ptr(),
+                    25
+                ),
+                1
+            );
+            p.spread_max_air = 0.0;
+            assert_eq!(call(calculate, 5, 5, &p, cells.as_mut_ptr(), 25), 1);
+            p = params();
+            // The C++ parameter accepts negative obstacle boosts (reduced shadowing).
+            p.point_obstacle_boost = -0.5;
+            assert_eq!(call(calculate, 5, 5, &p, cells.as_mut_ptr(), 25), 0);
+            cells[4].light[2] = f32::NAN;
+            assert_eq!(call(calculate, 5, 5, &p, cells.as_mut_ptr(), 25), 1);
+        }
     }
 }
 #[test]
 fn ffi_rejects_source_pointer_lengths_nonfinite_and_bad_bounds() {
-    let mut cells = [StarLightingCell::default(); 25];
-    let p = params();
-    let mut source = StarLightingSpreadLight {
-        position: [1.0; 2],
-        value: [1.0; 3],
-    };
-    unsafe {
-        let run = |sources, len, xmin, xmax| {
-            star_lighting_calculate(
-                3,
-                5,
-                5,
-                &p,
-                cells.as_mut_ptr(),
-                25,
-                sources,
-                len,
-                std::ptr::null(),
-                0,
-                xmin,
-                0,
-                xmax,
-                5,
-            )
+    for calculate in ENTRYPOINTS {
+        let mut cells = [StarLightingCell::default(); 25];
+        let p = params();
+        let mut source = StarLightingSpreadLight {
+            position: [1.0; 2],
+            value: [1.0; 3],
         };
-        let mut run = run;
-        assert_eq!(run(std::ptr::null(), 1, 0, 5), 1);
-        assert_eq!(run(&source, usize::MAX, 0, 5), 1);
-        assert_eq!(run(&source, 1, 6, 5), 1);
-        assert_eq!(run(&source, 1, 0, 6), 1);
-        source.value[0] = f32::INFINITY;
-        assert_eq!(run(&source, 1, 0, 5), 1);
+        unsafe {
+            let run = |sources, len, xmin, xmax| {
+                calculate(
+                    3,
+                    5,
+                    5,
+                    &p,
+                    cells.as_mut_ptr(),
+                    25,
+                    sources,
+                    len,
+                    std::ptr::null(),
+                    0,
+                    xmin,
+                    0,
+                    xmax,
+                    5,
+                )
+            };
+            let mut run = run;
+            assert_eq!(run(std::ptr::null(), 1, 0, 5), 1);
+            assert_eq!(run(&source, usize::MAX, 0, 5), 1);
+            assert_eq!(run(&source, 1, 6, 5), 1);
+            assert_eq!(run(&source, 1, 0, 6), 1);
+            source.value[0] = f32::INFINITY;
+            assert_eq!(run(&source, 1, 0, 5), 1);
+        }
+        assert!(cells.iter().all(|c| c.light == [0.0; 3]));
     }
-    assert!(cells.iter().all(|c| c.light == [0.0; 3]));
 }
 #[test]
 fn additive_threshold_and_hard_unit_attenuation_cutoff() {
@@ -259,7 +390,7 @@ fn tiny_grids_and_far_sources_are_safe() {
     for width in 1..=2 {
         for height in 1..=2 {
             let mut cells = vec![StarLightingCell::default(); width * height];
-            let mut a = Array {
+            let mut a = Array::<false> {
                 width,
                 height,
                 n: 3,

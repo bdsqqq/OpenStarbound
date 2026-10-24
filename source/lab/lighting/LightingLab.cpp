@@ -42,6 +42,26 @@ static_assert(offsetof(StarLightingPointLight, beam_angle) == 24);
 static_assert(offsetof(StarLightingPointLight, beam_ambience) == 28);
 static_assert(offsetof(StarLightingPointLight, as_spread) == 32);
 
+// A tolerance cannot detect accidentally routing the fast target back through
+// the precise ABI. This single-spread input distinguishes the two by one bit.
+void checkArithmeticRoute() {
+  ColoredCellularLightArray a;
+  a.setParameters(1, 5.0f, 2.0f, 4.0f, 2.0f, 0.0f, false);
+  a.begin(3, 3);
+  a.setLight(1, 1, Vec3F(0.24970240890979767f, 0.05007189139723778f, 0.04367992654442787f));
+  a.calculate(0, 0, 3, 3);
+  float actual = a.getLight(2, 1)[0];
+  uint32_t bits;
+  std::memcpy(&bits, &actual, sizeof(bits));
+#if defined(STAR_USE_RUST_LIGHTING) && STAR_USE_RUST_LIGHTING && defined(__aarch64__) && defined(__FAST_MATH__) && defined(__apple_build_version__) && __clang_major__ == 21
+  constexpr uint32_t expected = 0x3d4b94bf;
+#else
+  constexpr uint32_t expected = 0x3d4b94c0;
+#endif
+  if (bits != expected)
+    throw std::runtime_error("adapter arithmetic route did not preserve expected rounding");
+}
+
 constexpr double AbsTolerance = 1e-5;
 constexpr double RelTolerance = 1e-5;
 
@@ -264,6 +284,7 @@ int main(int argc,char** argv) {
       else if(arg=="--help") {std::cout<<"--seed N --random N --self-test --inject-mismatch --benchmark\n";return 0;}
       else throw std::runtime_error("invalid argument: "+arg);
     }
+    checkArithmeticRoute();
     if(selfTest) {
       Input c;c.clear();c.name="deliberate-perturbation";
       ScalarCellularLightArray a;LightingOracle::ScalarCellularLightArray o;load(a,c);load(o,c);

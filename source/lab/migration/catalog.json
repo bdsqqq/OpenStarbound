@@ -24036,7 +24036,7 @@
     },
     {
       "path": "source/base/StarCellularLightArray.hpp",
-      "sha256": "68d39444ea1ddafab50bb899e7b83f4cd23f4a607e87f7929d5580397af2f9bb"
+      "sha256": "8b69a9f4fdfd5c8760df7334bac7a57d1c35e49305a02359d86a17d844b03565"
     },
     {
       "path": "source/base/StarCellularLighting.cpp",
@@ -24100,7 +24100,7 @@
     },
     {
       "path": "source/base/StarRustLighting.h",
-      "sha256": "aebe61b64e862b8e4f1f8f9c9a3b2296f40b44c98ed1fdcea2a8fec823371140"
+      "sha256": "51bb2d33d5039f6e7c8aa20e5a02c500c2dad1510248a37c7af6120e77b13459"
     },
     {
       "path": "source/base/StarVersionOptionParser.cpp",
@@ -27884,7 +27884,7 @@
     },
     {
       "path": "source/lab/lighting/LightingLab.cpp",
-      "sha256": "e25fb74cd6e1f89b022e28870609035be4421c4c28a2f419ff6ebc3589abc401"
+      "sha256": "4b6929c640fde6127daa80b23c88a9c8ee9ed01dd125cefd1ac6f09ed59e2e48"
     },
     {
       "path": "source/lab/lighting/diagnostic/fp_sites.cpp",
@@ -28040,11 +28040,11 @@
     },
     {
       "path": "source/rust/lighting/src/lib.rs",
-      "sha256": "126f9235b692997971b7cfa2470535ad2962513d0e06c2dad12763c31cf9e667"
+      "sha256": "b25d90147fff6d88842c284df1c526b90b7c6d50bc18c167343a90baec30935b"
     },
     {
       "path": "source/rust/lighting/src/tests.rs",
-      "sha256": "09964d2c556c9b5d8b1f894430a6a72141bf549389ad45d709225798ac8e35ca"
+      "sha256": "866f882fea645391cf2c2a2283ff5cc3d18e64759c31a8e55434de40bed04fd8"
     },
     {
       "path": "source/server/CMakeLists.txt",
