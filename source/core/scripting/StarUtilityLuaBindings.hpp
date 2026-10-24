@@ -7,6 +7,11 @@ namespace Star {
 namespace LuaBindings {
   LuaCallbacks makeUtilityCallbacks();
 
+  // Only the exact lab postLoad script may arm this executing-thread recorder.
+  void beginRandomMwcLab();
+  void abortRandomMwcLab();
+  Json finishRandomMwcLab();
+
   String formatLua(String const& string, List<LuaValue> const& args);
 
   namespace UtilityCallbacks {

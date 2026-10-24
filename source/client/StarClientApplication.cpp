@@ -11,6 +11,7 @@
 #include "StarUnicodeLab.hpp"
 #include "StarJsonPathLab.hpp"
 #include "StarAssetPathLab.hpp"
+#include "StarRandomMwcLab.hpp"
 #ifdef STAR_USE_RUST_BYTES
 #include "StarRustBytes.h"
 #endif
@@ -550,6 +551,8 @@ void ClientApplication::render() {
         prepareBehaviorJsonPathFrame();
       if (BehaviorLab::enabled() && m_behaviorAssetPathRoom)
         prepareBehaviorAssetPathFrame();
+      if (BehaviorLab::enabled() && m_behaviorRandomMwcRoom)
+        prepareBehaviorRandomMwcFrame();
 
       auto paintStart = Time::monotonicMicroseconds();
       m_worldPainter->render(m_renderData, [&]() -> bool {
@@ -582,7 +585,8 @@ void ClientApplication::render() {
       if ((m_behaviorUnicodeRoom && !m_behaviorUnicodeProof.isNull())
           || (m_behaviorShellRoom && !m_behaviorShellProof.isNull())
           || (m_behaviorJsonPathRoom && !m_behaviorJsonPathProof.isNull())
-          || (m_behaviorAssetPathRoom && !m_behaviorAssetPathProof.isNull())) {
+          || (m_behaviorAssetPathRoom && !m_behaviorAssetPathProof.isNull())
+          || (m_behaviorRandomMwcRoom && !m_behaviorRandomMwcProof.isNull())) {
         // Normal Font -> TextPainter -> GPU glyph path; only ASCII coverage is
         // claimed. Screen-space coordinates avoid the 64px world-image area.
         m_guiContext->clearTextStyle();
@@ -591,7 +595,8 @@ void ClientApplication::render() {
         m_guiContext->setFontColor(Vec4B(255, 255, 255, 255));
         m_guiContext->setFontMode(FontMode::Normal);
         m_guiContext->setFontProcessingDirectives("");
-        m_guiContext->renderText(m_behaviorAssetPathRoom ? m_behaviorAssetPathProof.get("visual").getString("label")
+        m_guiContext->renderText(m_behaviorRandomMwcRoom ? m_behaviorRandomMwcProof.get("visual").getString("label")
+            : m_behaviorAssetPathRoom ? m_behaviorAssetPathProof.get("visual").getString("label")
             : m_behaviorJsonPathRoom ? m_behaviorJsonPathProof.get("visual").getString("label")
             : m_behaviorShellRoom ? m_behaviorShellProof.get("visual").getString("label")
             : m_behaviorUnicodeProof.get("assets").getString("label"),
@@ -1475,7 +1480,8 @@ void ClientApplication::validateBehaviorStorage() {
   auto scenario = config.getString("scenario", "lighting-room");
   if (scenario != "lighting-room" && scenario != "raycast-room" && scenario != "encoding-room"
       && scenario != "sha256-room" && scenario != "vlq-room" && scenario != "bytes-room"
-      && scenario != "unicode-room" && scenario != "shell-room" && scenario != "jsonpath-room" && scenario != "assetpath-room")
+      && scenario != "unicode-room" && scenario != "shell-room" && scenario != "jsonpath-room" && scenario != "assetpath-room"
+      && scenario != "random-room")
     throw StarException("BehaviorLab: unsupported scenario");
   m_behaviorRaycastRoom = scenario == "raycast-room";
   m_behaviorEncodingRoom = scenario == "encoding-room";
@@ -1486,6 +1492,7 @@ void ClientApplication::validateBehaviorStorage() {
   m_behaviorShellRoom = scenario == "shell-room";
   m_behaviorJsonPathRoom = scenario == "jsonpath-room";
   m_behaviorAssetPathRoom = scenario == "assetpath-room";
+  m_behaviorRandomMwcRoom = scenario == "random-room";
   if (config.getUInt("maxFrames", 1800) == 0 || config.getUInt("maxFrames", 1800) > 18000)
     throw StarException("BehaviorLab: maxFrames must be in [1, 18000]");
 
@@ -1606,7 +1613,7 @@ void ClientApplication::updateBehaviorScenario() {
       return;
     if (m_behaviorStage == 2) {
       Logger::info("BehaviorLab: {} completed (three acknowledged world frames)",
-          m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
+          m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
       m_behaviorPhase = 5;
       appController()->quit();
       return;
@@ -2360,6 +2367,60 @@ void ClientApplication::prepareBehaviorUnicodeFrame() {
   m_renderData.foregroundOverlays.append(std::move(drawable));
 }
 
+void ClientApplication::prepareBehaviorRandomMwcFrame() {
+  if (!m_behaviorReady || BehaviorLab::hasPendingFrame() || m_renderData.isFullbright)
+    return;
+  auto world = m_universeClient->worldClient();
+  if (!world || !world->inWorld())
+    return;
+  if (m_behaviorRandomMwcProof.isNull()) {
+    auto proof = randomMwcBehaviorAssetProof();
+    String backend = "cpp";
+    bool rust = false;
+#ifdef STAR_USE_RUST_RANDOM_MWC
+    backend = "rust";
+    rust = true;
+#endif
+    if (proof.isNull() || proof.getUInt("version") != 1
+        || proof.getString("fixture") != "random-mwc-v1" || proof.getString("backend") != backend
+        || !proof.getBool("complete") || !proof.getBool("sameUserdata"))
+      throw StarException("BehaviorLab: missing or invalid random MWC native proof");
+    auto counts = [rust](unsigned init, unsigned entropy, unsigned next) -> JsonArray {
+      return rust ? JsonArray{init, entropy, next} : JsonArray{0, 0, 0};
+    };
+    JsonArray expected{
+      JsonObject{{"op", "construct"}, {"seed", "31415926"}, {"calls", counts(1, 0, 0)}},
+      JsonObject{{"op", "randu32"}, {"native", "2950892229"}, {"calls", counts(0, 0, 1)}},
+      JsonObject{{"op", "randu64"}, {"native", "6090466678391964828"}, {"calls", counts(0, 0, 2)}},
+      JsonObject{{"op", "randu32"}, {"native", "445970691"}, {"calls", counts(0, 0, 1)}},
+      JsonObject{{"op", "addEntropy"}, {"seed", "27182818"}, {"calls", counts(0, 1, 0)}},
+      JsonObject{{"op", "randu32"}, {"native", "2992900064"}, {"calls", counts(0, 0, 1)}},
+      JsonObject{{"op", "randu64"}, {"native", "15329329036541151364"}, {"calls", counts(0, 0, 2)}},
+      JsonObject{{"op", "randb"}, {"native", true}, {"calls", counts(0, 0, 1)}},
+      JsonObject{{"op", "init"}, {"seed", "31415926"}, {"calls", counts(1, 0, 0)}}};
+    Json reset = JsonObject{{"native", "2950892229"}, {"calls", counts(0, 0, 1)}};
+    Json lua = JsonObject{{"b", "6090466678391964828"}, {"e", "-3117415037168400252"},
+        {"f", true}, {"bInteger", true}, {"eInteger", true}};
+    Json visual = JsonObject{{"rgb", JsonArray{197, 10, 227}}, {"width", 44}, {"height", 16},
+        {"label", "RANDOM"}, {"imagePath", "/behaviorlab/random-result.png"}};
+    if (proof.getArray("events") != expected || proof.get("resetDraw") != reset
+        || proof.get("lua") != lua || proof.get("visual") != visual)
+      throw StarException("BehaviorLab: random MWC values/order/receipts/Lua mismatch");
+    auto image = m_root->assets()->image("/behaviorlab/random-result.png");
+    if (image->size() != Vec2U(44, 16))
+      throw StarException("BehaviorLab: random MWC result size mismatch");
+    for (unsigned y = 0; y != 16; ++y)
+      for (unsigned x = 0; x != 44; ++x)
+        if (image->get(x, y) != Vec4B(197, 10, 227, 255))
+          throw StarException("BehaviorLab: random MWC result pixels mismatch");
+    m_behaviorRandomMwcProof = std::move(proof);
+  }
+  auto drawable = Drawable::makeImage(m_behaviorRandomMwcProof.get("visual").getString("imagePath"),
+      2.0f / TilePixels, true, Vec2F(64, 48));
+  drawable.fullbright = true;
+  m_renderData.foregroundOverlays.append(std::move(drawable));
+}
+
 void ClientApplication::prepareBehaviorAssetPathFrame() {
   if (!m_behaviorReady || BehaviorLab::hasPendingFrame() || m_renderData.isFullbright)
     return;
@@ -2637,7 +2698,7 @@ void ClientApplication::renderBehaviorScenario() {
       {"layout", "row-major-rgb-f32-bits"}, {"bits", std::move(lightmapBits)}};
   Json metadata = JsonObject{
       {"lightingDiagnostics", std::move(lightmapDiagnostic)},
-      {"scenario", m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
+      {"scenario", m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
       {"worldState", JsonObject{
           {"worldId", printWorldId(m_universeClient->clientContext()->playerWorldId())},
           {"worldSize", jsonFromVec2U(world->geometry().size())},
@@ -2713,6 +2774,11 @@ void ClientApplication::renderBehaviorScenario() {
     if (m_behaviorAssetPathProof.isNull())
       throw StarException("BehaviorLab: assetpath frame has no completed proof");
     metadata = metadata.set("assetPathProof", m_behaviorAssetPathProof);
+  }
+  if (m_behaviorRandomMwcRoom) {
+    if (m_behaviorRandomMwcProof.isNull())
+      throw StarException("BehaviorLab: random MWC frame has no completed proof");
+    metadata = metadata.set("randomMwcProof", m_behaviorRandomMwcProof);
   }
   BehaviorLab::queueFrame(m_behaviorCapture, std::move(metadata));
   m_behaviorReady = false;

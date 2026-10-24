@@ -23,6 +23,7 @@
 #include "StarUnicodeLab.hpp"
 #include "StarJsonPathLab.hpp"
 #include "StarAssetPathLab.hpp"
+#include "StarRandomMwcLab.hpp"
 #ifdef STAR_USE_RUST_BYTES
 #include "StarRustBytes.h"
 #endif
@@ -49,6 +50,8 @@
 namespace Star {
 
 namespace {
+std::mutex RandomMwcAssetProofMutex;
+Json RandomMwcAssetProof;
 std::mutex Sha256AssetProofMutex;
 Json Sha256AssetProof;
 std::mutex VlqAssetProofMutex;
@@ -64,6 +67,11 @@ Json JsonPathAssetProof;
 std::mutex AssetPathAssetProofMutex;
 Json AssetPathAssetRows = JsonObject{};
 Json AssetPathAssetProof;
+}
+
+Json randomMwcBehaviorAssetProof() {
+  std::lock_guard<std::mutex> lock(RandomMwcAssetProofMutex);
+  return RandomMwcAssetProof;
 }
 
 Json assetPathBehaviorAssetProof() {
@@ -217,6 +225,8 @@ Json FramesSpecification::toJson() const {
 Assets::Assets(Settings settings, StringList assetSources) {
   bool const captureSha256 = std::getenv("STAR_BEHAVIOR_LAB") != nullptr;
   if (captureSha256) {
+    std::lock_guard<std::mutex> randomLock(RandomMwcAssetProofMutex);
+    RandomMwcAssetProof = Json();
     std::lock_guard<std::mutex> lock(Sha256AssetProofMutex);
     Sha256AssetProof = Json();
     std::lock_guard<std::mutex> vlqLock(VlqAssetProofMutex);
@@ -253,6 +263,13 @@ Assets::Assets(Settings settings, StringList assetSources) {
     // Lab-only, executing-thread receipts: no application dependency or config
     // access here, since these callbacks also run during Root construction.
     if (std::getenv("STAR_BEHAVIOR_LAB")) {
+      callbacks.registerCallback("recordRandomMwcLabProof", [](Json supplied) {
+        std::lock_guard<std::mutex> lock(RandomMwcAssetProofMutex);
+        if (!RandomMwcAssetProof.isNull())
+          throw AssetException("BehaviorLab: repeated random MWC proof");
+        auto proof = LuaBindings::finishRandomMwcLab();
+        RandomMwcAssetProof = proof.set("lua", supplied.get("lua")).set("visual", supplied.get("visual"));
+      });
       callbacks.registerCallback("recordAssetPathLabProof", [](Json visual) {
         std::lock_guard<std::mutex> lock(AssetPathAssetProofMutex);
         if (!AssetPathAssetRows.contains("named") || !AssetPathAssetRows.contains("alias")
@@ -638,6 +655,16 @@ Assets::Assets(Settings settings, StringList assetSources) {
           for (auto& jPath : *scriptGroup) {
             auto path = jPath.toString();
             auto script = source->read(path);
+            // Lua errors are caught below, so disarm on unwinding too.
+            bool randomMwc = std::getenv("STAR_BEHAVIOR_LAB") && groupName == "postLoad"
+                && metadata.value("name", "") == "behavior-random-mwc-fixtures"
+                && path == "/behaviorlab/random-mwc.lua";
+            struct RandomMwcGuard {
+              bool armed;
+              ~RandomMwcGuard() { if (armed) LuaBindings::abortRandomMwcLab(); }
+            } guard{randomMwc};
+            if (randomMwc)
+              LuaBindings::beginRandomMwcLab();
             context.load(script, path);
           }
         } catch (LuaException const& e) {

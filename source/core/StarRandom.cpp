@@ -3,6 +3,10 @@
 #include "StarTime.hpp"
 #include "StarMathCommon.hpp"
 
+#ifdef STAR_USE_RUST_RANDOM_MWC
+#include "StarRustRandomMwc.h"
+#endif
+
 namespace Star {
 
 RandomSource::RandomSource() {
@@ -18,6 +22,10 @@ RandomSource::RandomSource(uint64_t seed) {
 }
 
 void RandomSource::init(uint64_t seed) {
+#ifdef STAR_USE_RUST_RANDOM_MWC
+  if (star_random_mwc_init(m_data, &m_carry, &m_index, seed) != 0)
+    throw StarException("Rust random MWC init failed");
+#else
   /* choose random initial m_carry < 809430660 and */
   /* 256 random 32-bit integers for m_data[]    */
   m_carry = seed % 809430660;
@@ -35,6 +43,7 @@ void RandomSource::init(uint64_t seed) {
   const unsigned RandomInitialSkip = 32;
   for (unsigned i = 0; i < RandomInitialSkip; ++i)
     gen32();
+#endif
 }
 
 void RandomSource::addEntropy() {
@@ -42,6 +51,10 @@ void RandomSource::addEntropy() {
 }
 
 void RandomSource::addEntropy(uint64_t seed) {
+#ifdef STAR_USE_RUST_RANDOM_MWC
+  if (star_random_mwc_add_entropy(m_data, &m_carry, &m_index, seed) != 0)
+    throw StarException("Rust random MWC entropy failed");
+#else
   // to avoid seed aliasing
   seed ^= randu64();
 
@@ -54,6 +67,7 @@ void RandomSource::addEntropy(uint64_t seed) {
 
   for (size_t i = 2; i < 256; ++i)
     m_data[i] ^= 69069 * m_data[i - 2] + 362437;
+#endif
 }
 
 uint32_t RandomSource::randu32() {
@@ -179,6 +193,12 @@ int64_t RandomSource::stochasticRound(double val) {
 }
 
 uint32_t RandomSource::gen32() {
+#ifdef STAR_USE_RUST_RANDOM_MWC
+  uint32_t result;
+  if (star_random_mwc_next(m_data, &m_carry, &m_index, &result) != 0)
+    throw StarException("Rust random MWC next failed");
+  return result;
+#else
   uint64_t a = 809430660;
   uint64_t t = a * m_data[++m_index] + m_carry;
 
@@ -186,6 +206,7 @@ uint32_t RandomSource::gen32() {
   m_data[m_index] = t;
 
   return t;
+#endif
 }
 
 namespace Random {

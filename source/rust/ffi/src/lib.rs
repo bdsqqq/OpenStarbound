@@ -1,5 +1,11 @@
 //! The engine's single Rust static archive owns the unmangled C ABI exports.
 //! Kernels remain rlibs so linking another kernel cannot add another Rust runtime.
+mod random_mwc;
+pub use random_mwc::{
+    star_random_mwc_add_entropy, star_random_mwc_call_count, star_random_mwc_init,
+    star_random_mwc_next,
+};
+
 mod asset_path;
 pub use asset_path::{
     star_asset_path_call_count, star_asset_path_filename_range, star_asset_path_split,

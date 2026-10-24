@@ -30,6 +30,7 @@ import unicode_proof
 import shell_proof
 import jsonpath_proof
 import assetpath_proof
+import random_mwc_proof
 
 ROOT = Path(__file__).resolve().parents[3]
 BUILD = ROOT / "build"
@@ -39,7 +40,7 @@ ASSET_OVERLAYS = {
     "behavior-fixture": ROOT / "source/lab/behavior/assets",
 }
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,95}\Z")
-SCENARIOS = ("lighting-room", "raycast-room", "encoding-room", "sha256-room", "vlq-room", "bytes-room", "unicode-room", "shell-room", "jsonpath-room", "assetpath-room")
+SCENARIOS = ("lighting-room", "raycast-room", "encoding-room", "sha256-room", "vlq-room", "bytes-room", "unicode-room", "shell-room", "jsonpath-room", "assetpath-room", "random-room")
 MAX_PIXELS = 16_777_216
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
 
@@ -195,6 +196,11 @@ def semantic_world_state(receipt: dict) -> dict:
             native["assetPathProof"] = assetpath_proof.validate(receipt)
         except ValueError as error:
             raise LabError(str(error)) from error
+    if receipt.get("scenario") == "random-room":
+        try:
+            native["randomMwcProof"] = random_mwc_proof.validate(receipt)
+        except ValueError as error:
+            raise LabError(str(error)) from error
     # A native declared object supplements, rather than weakens, the frozen
     # flat schema: retain both when the driver supplies both representations.
     return native if state is None else {"declared": state, "native": native}
@@ -280,10 +286,15 @@ def captures(directory: Path) -> dict:
                 assetpath_proof.visible(frame, receipt)
             except ValueError as error:
                 raise LabError(str(error)) from error
+        if receipt["scenario"] == "random-room":
+            try:
+                random_mwc_proof.visible(frame, receipt)
+            except ValueError as error:
+                raise LabError(str(error)) from error
         result[name] = {"receipt": receipt, "png": pngs[name], "dimensions": list(frame.size),
                         "pngSha256": sha(pngs[name]), "receiptSha256": sha(receipts[name]),
                         "pixelsSha256": hashlib.sha256(frame.tobytes()).hexdigest()}
-    if scenarios in ({"lighting-room"}, {"encoding-room"}, {"sha256-room"}, {"vlq-room"}, {"bytes-room"}, {"unicode-room"}, {"shell-room"}, {"jsonpath-room"}, {"assetpath-room"}):
+    if scenarios in ({"lighting-room"}, {"encoding-room"}, {"sha256-room"}, {"vlq-room"}, {"bytes-room"}, {"unicode-room"}, {"shell-room"}, {"jsonpath-room"}, {"assetpath-room"}, {"random-room"}):
         validate_lighting_sequence(result)
         if scenarios == {"encoding-room"}:
             proofs = [encoding_proof.validate(frame["receipt"]) for frame in result.values()]
@@ -317,6 +328,10 @@ def captures(directory: Path) -> dict:
             proofs = [assetpath_proof.validate(frame["receipt"]) for frame in result.values()]
             if any(proof != proofs[0] for proof in proofs[1:]):
                 raise LabError("asset-path actual crop/alias observations changed across stages")
+        if scenarios == {"random-room"}:
+            proofs = [random_mwc_proof.validate(frame["receipt"]) for frame in result.values()]
+            if any(proof != proofs[0] for proof in proofs[1:]):
+                raise LabError("random MWC owned userdata observations changed across stages")
     else:
         validate_raycast_sequence(result)
     return result
@@ -560,7 +575,13 @@ def pair_compare(reference: Path, candidate: Path, output: Path, same_backend=Fa
                     row["errors"].append(f"{field} differs")
             if ref_meta["scenario"] != cand_meta["scenario"]:
                 row["errors"].append("scenario differs")
-            if ref_meta["scenario"] == "assetpath-room":
+            if ref_meta["scenario"] == "random-room":
+                wanted = "cpp" if same_backend else "rust"
+                if ref_meta["randomMwcProof"]["backend"] != "cpp" or cand_meta["randomMwcProof"]["backend"] != wanted:
+                    row["errors"].append("expected C++ reference and correct random MWC backend")
+                if ref_meta["lightingBackend"] != "cpp" or (same_backend and cand_meta["lightingBackend"] != "cpp"):
+                    row["errors"].append("expected C++ reference lighting")
+            elif ref_meta["scenario"] == "assetpath-room":
                 wanted = "cpp" if same_backend else "rust"
                 if (ref_meta["assetPathProof"]["assets"]["backend"] != "cpp" or cand_meta["assetPathProof"]["assets"]["backend"] != wanted):
                     row["errors"].append("expected C++ reference and correct asset-path backend")
@@ -686,6 +707,8 @@ def asset_overlays(scenario="lighting-room") -> dict:
         overlays["jsonpath-fixture"] = ROOT / "source/lab/behavior/jsonpath-assets"
     if scenario == "assetpath-room":
         overlays["assetpath-fixture"] = ROOT / "source/lab/behavior/assetpath-assets"
+    if scenario == "random-room":
+        overlays["random-mwc-fixture"] = ROOT / "source/lab/behavior/random-mwc-assets"
     return overlays
 
 

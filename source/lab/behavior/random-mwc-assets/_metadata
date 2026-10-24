@@ -1,0 +1,6 @@
+{
+  "name": "behavior-random-mwc-fixtures",
+  "friendlyName": "Isolated seeded MWC behavior fixtures",
+  "priority": 1100,
+  "scripts": {"postLoad": ["/behaviorlab/random-mwc.lua"]}
+}

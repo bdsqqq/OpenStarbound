@@ -12,8 +12,107 @@
 #include "StarDataStreamDevices.hpp"
 #include "StarBuffer.hpp"
 #include "StarPathEmbed.hpp"
+#include <array>
+#ifdef STAR_USE_RUST_RANDOM_MWC
+#include "StarRustRandomMwc.h"
+#endif
 
 namespace Star {
+
+namespace {
+struct RandomMwcRecorder {
+  bool active = false;
+  RandomSource* identity = nullptr;
+  unsigned phase = 0;
+  JsonArray events;
+  Json resetDraw;
+};
+thread_local RandomMwcRecorder RandomMwcLab;
+using MwcCounts = std::array<uint64_t, 3>;
+MwcCounts mwcCounts() {
+  MwcCounts counts{};
+#ifdef STAR_USE_RUST_RANDOM_MWC
+  for (unsigned op = 0; op != 3; ++op)
+    counts[op] = star_random_mwc_call_count(op);
+#endif
+  return counts;
+}
+JsonArray mwcDelta(MwcCounts const& before) {
+  auto after = mwcCounts();
+  return JsonArray{after[0] - before[0], after[1] - before[1], after[2] - before[2]};
+}
+void mwcRequire(char const* op, RandomSource* source = nullptr, Maybe<uint64_t> seed = {}) {
+  static char const* const operations[] = {"construct", "randu32", "randu64", "randu32",
+      "addEntropy", "randu32", "randu64", "randb", "init", "randu32"};
+  auto& r = RandomMwcLab;
+  if (r.phase >= 10 || String(op) != operations[r.phase])
+    throw LuaException("BehaviorLab: random MWC operation order mismatch");
+  if (r.phase == 0 || r.phase == 4 || r.phase == 8) {
+    uint64_t expected = r.phase == 4 ? 27182818 : 31415926;
+    if (!seed || *seed != expected)
+      throw LuaException("BehaviorLab: random MWC seed mismatch");
+  }
+  // The constructor's returned value can move/copy into Lua storage. Bind only
+  // the first method's actual userdata, and never dereference this saved pointer.
+  if (source) {
+    if (r.phase == 1)
+      r.identity = source;
+    else if (source != r.identity)
+      throw LuaException("BehaviorLab: random MWC userdata identity mismatch");
+  }
+}
+void mwcRecord(Json row, JsonArray calls) {
+  row = row.set("calls", std::move(calls));
+  RandomMwcLab.events.append(std::move(row));
+  ++RandomMwcLab.phase;
+}
+template <typename F>
+auto mwcDraw(char const* op, RandomSource& source, F draw) -> decltype(draw()) {
+  if (!RandomMwcLab.active)
+    return draw();
+  mwcRequire(op, &source);
+  auto before = mwcCounts();
+  auto value = draw();
+  auto calls = mwcDelta(before);
+  Json native;
+  if constexpr (std::is_same_v<decltype(value), bool>)
+    native = value;
+  else
+    native = strf("{}", value);
+  // Capture receipts before any Json/String allocation can run incidental work.
+  Json row = JsonObject{{"op", op}, {"native", native}, {"calls", calls}};
+  auto& r = RandomMwcLab;
+  if (r.phase == 9)
+    r.resetDraw = JsonObject{{"native", native}, {"calls", calls}};
+  else
+    r.events.append(std::move(row));
+  ++r.phase;
+  return value;
+}
+}
+
+void LuaBindings::beginRandomMwcLab() {
+  if (RandomMwcLab.active)
+    throw LuaException("BehaviorLab: random MWC recorder already armed");
+  RandomMwcLab = RandomMwcRecorder{};
+  RandomMwcLab.active = true;
+}
+void LuaBindings::abortRandomMwcLab() {
+  RandomMwcLab = RandomMwcRecorder{};
+}
+Json LuaBindings::finishRandomMwcLab() {
+  auto& r = RandomMwcLab;
+  if (!r.active || r.phase != 10 || !r.identity)
+    throw LuaException("BehaviorLab: incomplete random MWC native proof");
+  String backend = "cpp";
+#ifdef STAR_USE_RUST_RANDOM_MWC
+  backend = "rust";
+#endif
+  Json proof = JsonObject{{"version", 1}, {"fixture", "random-mwc-v1"}, {"backend", backend},
+      {"complete", true}, {"sameUserdata", true}, {"events", r.events}, {"resetDraw", r.resetDraw}};
+  abortRandomMwcLab();
+  return proof;
+}
 
 template <>
 struct LuaConverter<RandomSource> : LuaUserDataConverter<RandomSource> {};
@@ -24,12 +123,30 @@ struct LuaUserDataMethods<RandomSource> {
     LuaMethods<RandomSource> methods;
 
     methods.registerMethod("init", [](RandomSource& randomSource, Maybe<uint64_t> seed)
-      { seed ? randomSource.init(*seed) : randomSource.init(); });
+      {
+        if (!RandomMwcLab.active) { seed ? randomSource.init(*seed) : randomSource.init(); return; }
+        mwcRequire("init", &randomSource, seed);
+        auto before = mwcCounts();
+        randomSource.init(*seed);
+        auto calls = mwcDelta(before);
+        mwcRecord(JsonObject{{"op", "init"}, {"seed", strf("{}", *seed)}}, std::move(calls));
+      });
     methods.registerMethod("addEntropy", [](RandomSource& randomSource, Maybe<uint64_t> seed)
-      { seed ? randomSource.addEntropy(*seed) : randomSource.addEntropy(); });
+      {
+        if (!RandomMwcLab.active) { seed ? randomSource.addEntropy(*seed) : randomSource.addEntropy(); return; }
+        mwcRequire("addEntropy", &randomSource, seed);
+        auto before = mwcCounts();
+        randomSource.addEntropy(*seed);
+        auto calls = mwcDelta(before);
+        mwcRecord(JsonObject{{"op", "addEntropy"}, {"seed", strf("{}", *seed)}}, std::move(calls));
+      });
 
-    methods.registerMethodWithSignature<uint32_t, RandomSource&>("randu32", mem_fn(&RandomSource::randu32));
-    methods.registerMethodWithSignature<uint64_t, RandomSource&>("randu64", mem_fn(&RandomSource::randu64));
+    methods.registerMethod("randu32", [](RandomSource& r) {
+      return mwcDraw("randu32", r, [&]() { return r.randu32(); });
+    });
+    methods.registerMethod("randu64", [](RandomSource& r) {
+      return mwcDraw("randu64", r, [&]() { return r.randu64(); });
+    });
     methods.registerMethodWithSignature<int32_t, RandomSource&>("randi32", mem_fn(&RandomSource::randi32));
     methods.registerMethodWithSignature<int64_t, RandomSource&>("randi64", mem_fn(&RandomSource::randi64));
 
@@ -38,7 +155,9 @@ struct LuaUserDataMethods<RandomSource> {
     methods.registerMethod("randd", [](RandomSource& randomSource, Maybe<double> arg1, Maybe<double> arg2)
       { return (arg1 && arg2) ? randomSource.randd(*arg1, *arg2) : randomSource.randd(); });
 
-    methods.registerMethodWithSignature<bool, RandomSource&>("randb", mem_fn(&RandomSource::randb));
+    methods.registerMethod("randb", [](RandomSource& r) {
+      return mwcDraw("randb", r, [&]() { return r.randb(); });
+    });
 
     methods.registerMethod("randInt", [](RandomSource& randomSource, int64_t arg1, Maybe<int64_t> arg2)
       { return arg2 ? randomSource.randInt(arg1, *arg2) : randomSource.randInt(arg1); });
@@ -128,7 +247,16 @@ LuaCallbacks LuaBindings::makeUtilityCallbacks() {
   callbacks.registerCallback("jsonMerge", [](Json const& a, Json const& b) { return jsonMerge(a, b); });
   callbacks.registerCallback("jsonEqual", [](Json const& a, Json const& b) { return a == b; });
   callbacks.registerCallback("jsonQuery", [](Json const& json, String const& path, Json const& def) { return json.query(path, def); });
-  callbacks.registerCallback("makeRandomSource", [](Maybe<uint64_t> seed) { return seed ? RandomSource(*seed) : RandomSource(); });
+  callbacks.registerCallback("makeRandomSource", [](Maybe<uint64_t> seed) {
+    if (!RandomMwcLab.active)
+      return seed ? RandomSource(*seed) : RandomSource();
+    mwcRequire("construct", nullptr, seed);
+    auto before = mwcCounts();
+    RandomSource result(*seed);
+    auto calls = mwcDelta(before);
+    mwcRecord(JsonObject{{"op", "construct"}, {"seed", strf("{}", *seed)}}, std::move(calls));
+    return result;
+  });
   callbacks.registerCallback("makePerlinSource", [](Json const& config) { return PerlinF(config); });
 
   callbacks.copyCallback("parseJson", "jsonFromString"); // SE compat

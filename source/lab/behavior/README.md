@@ -1,5 +1,9 @@
 # framebuffer behavior lab
 
+## random-room
+
+Build `scripts/build-behavior-lab.sh random-mwc` (or `random-mwc-combined`), then `run --scenario random-room`. Earlier modes keep MWC OFF; line queries remain OFF. One explicitly seeded normal Lua userdata runs draw/entropy/reset operations; a bounded native recorder verifies identity, exact unsigned values and scoped engine receipts before Lua conversion. Separate Lua integer/string observations cover unsigned-to-signed64 conversion. Actual draw bytes and width generate a44×16 asset rendered176×64 with normal Font `RANDOM`; no global RNG is reseeded. Only three integer engine operations are ported. See `EVIDENCE.md` and `../random-mwc/EVIDENCE.md` for exact state, compiler-policy and mutation gates.
+
 ## assetpath-room
 
 Build `scripts/build-behavior-lab.sh assetpath` (or `assetpath-combined`), then `run --scenario assetpath-room`. Earlier modes keep asset-path OFF; line queries remain OFF. Named and alias paths crop the shipped atlas and apply a nonidentity multiply directive through normal Assets image loading. Native-owned full-pixel/source evidence and per-thread split/range receipts distinguish execution from a matching screenshot. Lua displays the returned image itself. The full-height frame tests horizontal selection, not Y-origin inversion; only two byte kernels are ported. See `EVIDENCE.md` and `../asset-path/EVIDENCE.md`.
