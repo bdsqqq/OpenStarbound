@@ -21202,6 +21202,146 @@
       "rule": "laboratories"
     },
     {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/zstd/StarZSTDCompression.original.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/zstd/StarZSTDCompression.original.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/zstd/StarZSTDCompression.reference.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/zstd/StarZSTDCompression.reference.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/zstd/host_contract.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/zstd/host_contract.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/zstd/host_contract_test.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/zstd/host_run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/zstd/lab.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/zstd/run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/zstd/trace_run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/zstd/trace_shim.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/zstd/trace_shim.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/zstd/verify_receipts.py",
+      "rule": "laboratories"
+    },
+    {
       "cmake_membership": [
         {
           "cmake": "source/mod_uploader/CMakeLists.txt",
@@ -30065,6 +30205,62 @@
       "sha256": "08c8c273cbd8b655c1db96cfd5b399f67c0734b51ee3ce70781f27b8ccfab07c"
     },
     {
+      "path": "source/lab/zstd/StarZSTDCompression.original.cpp",
+      "sha256": "6d0cb066cbc240ccfd380af235663355c5d41b8c2301e4a0dae75e9e285bc8ed"
+    },
+    {
+      "path": "source/lab/zstd/StarZSTDCompression.original.hpp",
+      "sha256": "59dfe5ba0175b1e09efa23c3d7f61af5c430f1baea02f234612f5baa80477c1b"
+    },
+    {
+      "path": "source/lab/zstd/StarZSTDCompression.reference.cpp",
+      "sha256": "432cfebd02c869ef2bbb46caed1f140acf4a1b486bde8e7e1ee13897afa9e2ea"
+    },
+    {
+      "path": "source/lab/zstd/StarZSTDCompression.reference.hpp",
+      "sha256": "494f2cee23866b1fc71b2f99c8ad72d0c7b21cae1aa485261155063a05122a88"
+    },
+    {
+      "path": "source/lab/zstd/host_contract.cpp",
+      "sha256": "2c0651c60bdb87ac88aae696e993ad5fc43be38dc634148ea74eb2118c295151"
+    },
+    {
+      "path": "source/lab/zstd/host_contract.hpp",
+      "sha256": "1bd48e0b1ff2de8c70469ed982846a5dcdce94eaf57564d3aa62b3946110e672"
+    },
+    {
+      "path": "source/lab/zstd/host_contract_test.cpp",
+      "sha256": "2285c66886824efb69426ad08c68d491d761c08f0fe1f212a1b15cd2f1ce8a6a"
+    },
+    {
+      "path": "source/lab/zstd/host_run.py",
+      "sha256": "d336f21d640cf4bc5726ecf58d6342eba1b616b607bec99115172f88e1af419f"
+    },
+    {
+      "path": "source/lab/zstd/lab.cpp",
+      "sha256": "cd30468cb6c95117a5111b34985175306c181bf4178a6766e063faf2fb03b5d6"
+    },
+    {
+      "path": "source/lab/zstd/run.py",
+      "sha256": "1a4dde53e85c920197bc90e6506823139237e143a0267a00b3f6cf06f2c14997"
+    },
+    {
+      "path": "source/lab/zstd/trace_run.py",
+      "sha256": "7862698a11ae33d56bace89311b1565ba681404d4ba05bd02ea07d5216e4c1d6"
+    },
+    {
+      "path": "source/lab/zstd/trace_shim.cpp",
+      "sha256": "43581362a5ce6d43d975c5e53f874b2c808d51c2317e322bd056ec9bc76c98a5"
+    },
+    {
+      "path": "source/lab/zstd/trace_shim.hpp",
+      "sha256": "2e02a76df60800c4d5bc74a4986950d82948d5874c61c0b875a862f4a19849dd"
+    },
+    {
+      "path": "source/lab/zstd/verify_receipts.py",
+      "sha256": "9fe0adf9ac55e5810438e996a193ab042c6a23ab6dc47513d2002dd94c811a01"
+    },
+    {
       "path": "source/mod_uploader/CMakeLists.txt",
       "sha256": "bac36435719340f5cead4c636e1320aa6812ffa86f1e79985f5acbdac390c63a"
     },
@@ -31067,7 +31263,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 128,
+      "oracle/harness": 142,
       "retain-tooling": 20,
       "retained-third-party": 296,
       "rust-candidate": 15,
@@ -31108,14 +31304,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 35,
-      "validation.oracles-harness": 144,
+      "validation.oracles-harness": 158,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1554,
+    "files": 1568,
     "modules": 39,
-    "no_direct_target": 448
+    "no_direct_target": 462
   }
 }
