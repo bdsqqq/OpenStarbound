@@ -1,5 +1,10 @@
 //! The engine's single Rust static archive owns the unmangled C ABI exports.
 //! Kernels remain rlibs so linking another kernel cannot add another Rust runtime.
+mod blocks_along_line;
+pub use blocks_along_line::{
+    star_blocks_along_line_call_count, star_blocks_along_line_f32, star_blocks_along_line_f64,
+};
+
 pub use star_lighting::{
     StarLightingCell, StarLightingParameters, StarLightingPointLight, StarLightingSpreadLight,
 };

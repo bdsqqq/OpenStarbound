@@ -2,6 +2,8 @@
 
 current result: **exact framebuffer/state gate PASSED for the three-stage lighting-room fixture**, on apple clang 21 / aarch64 / fast-math. this is finite scenario evidence, not universal bitwise or whole-game equivalence. the initial failure is retained below.
 
+the subsequent traversal-only and both-Rust raycast matrix, visible result-marker inspection and retained initial visual failure are recorded in [`../traversal/EVIDENCE.md`](../traversal/EVIDENCE.md). the original lighting fixture also passed with both backends enabled, with unchanged C++ pixels.
+
 ## archive aggregation follow-up
 
 VERIFIED — `build/behavior/aggregate-r1/`: one workspace/static FFI archive now owns the three unchanged C exports; lighting is an rlib and the legacy CMake target is an alias. only export ownership, packaging and build boundaries changed, not arithmetic. primary rebuilt both source-bound clients and reran the actual fixture: baseline repeatability, exact candidate state/pixels and restoration all PASS. all nine framebuffer hashes and all reference/candidate CPU upload maps equal the preceding `arm-policy-r1` artifacts, binding the existing inspected scene evidence to these artifacts.

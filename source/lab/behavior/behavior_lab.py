@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Isolated real-client capture and an exact, fail-closed framebuffer oracle.
 
-No crops, masks, golden updates, or adjustable tolerances: a dynamic reference
+No comparison crops, masks, golden updates, or adjustable tolerances: a dynamic reference
 is a blocked experiment, not permission to weaken the candidate gate.
 """
 from __future__ import annotations
@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import re
 import signal
+import struct
 import subprocess
 import sys
 import time
@@ -30,6 +31,7 @@ ASSET_OVERLAYS = {
     "behavior-fixture": ROOT / "source/lab/behavior/assets",
 }
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,95}\Z")
+SCENARIOS = ("lighting-room", "raycast-room")
 MAX_PIXELS = 16_777_216
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
 
@@ -140,6 +142,11 @@ def semantic_world_state(receipt: dict) -> dict:
     if type(settled) is not int or settled < 90:
         raise LabError("native scene has not settled for 90 updates")
     native = {field: receipt[field] for field in SCENE_FIELDS}
+    if receipt.get("scenario") == "raycast-room":
+        ray = validate_raycast_state(receipt)
+        native["raycastState"] = {key: value for key, value in ray.items() if key not in ("client", "server")}
+        for side in ("client", "server"):
+            native["raycastState"][side] = ray_observation(ray[side])
     # A native declared object supplements, rather than weakens, the frozen
     # flat schema: retain both when the driver supplies both representations.
     return native if state is None else {"declared": state, "native": native}
@@ -152,6 +159,7 @@ def captures(directory: Path) -> dict:
     if pngs.keys() != receipts.keys() or len(pngs) < 3:
         raise LabError(f"need >=3 paired named PNG/JSON frames: {directory}")
     result = {}
+    scenarios = set()
     for name in sorted(pngs):
         if not NAME.fullmatch(name):
             raise LabError(f"unsafe capture name: {name}")
@@ -164,8 +172,11 @@ def captures(directory: Path) -> dict:
         receipt = envelope.get("metadata")
         if not isinstance(receipt, dict):
             raise LabError(f"receipt metadata must be object: {name}")
-        if receipt.get("scenario") != "lighting-room":
+        if receipt.get("scenario") not in SCENARIOS:
             raise LabError(f"wrong scenario: {name}")
+        scenarios.add(receipt["scenario"])
+        if len(scenarios) != 1:
+            raise LabError("mixed capture scenarios")
         if receipt.get("inWorld") is not True:
             raise LabError(f"capture is not in-world: {name}")
         if not isinstance(receipt.get("stage"), str) or not receipt["stage"]:
@@ -184,10 +195,15 @@ def captures(directory: Path) -> dict:
         frame = image(pngs[name])
         if [envelope.get("width"), envelope.get("height")] != list(frame.size):
             raise LabError(f"receipt/PNG dimensions disagree: {name}")
+        if receipt["scenario"] == "raycast-room":
+            validate_raycast_ink(frame, receipt)
         result[name] = {"receipt": receipt, "png": pngs[name], "dimensions": list(frame.size),
                         "pngSha256": sha(pngs[name]), "receiptSha256": sha(receipts[name]),
                         "pixelsSha256": hashlib.sha256(frame.tobytes()).hexdigest()}
-    validate_lighting_sequence(result)
+    if scenarios == {"lighting-room"}:
+        validate_lighting_sequence(result)
+    else:
+        validate_raycast_sequence(result)
     return result
 
 
@@ -216,6 +232,161 @@ def validate_lighting_sequence(frames: dict) -> None:
         raise LabError("native lighting restoration did not restore scene state")
     if before.get("worldState", {}).get("declared") != after.get("worldState", {}).get("declared"):
         raise LabError("native lighting restoration did not restore declared scene state")
+
+
+RAY_QUERIES = ("collision", "point", "tiles", "limitedTiles", "zeroLimitTiles")
+RAY_STAGES = ("ray-clear", "ray-blocked", "ray-restored")
+
+
+def numeric_vector(value, length, integer=False) -> bool:
+    return (isinstance(value, list) and len(value) == length
+            and all(type(item) is int if integer else
+                    type(item) in (int, float) and abs(item) <= 1e308 and math.isfinite(item)
+                    for item in value))
+
+
+def ray_observation(side: dict) -> dict:
+    return {key: value for key, value in side.items() if key not in ("backend", "rustCalls")}
+
+
+def validate_raycast_state(receipt: dict) -> dict:
+    """Validate expectations without normalizing raw cross-backend observations."""
+    ray = receipt.get("raycastState")
+    if not isinstance(ray, dict) or set(ray) != {"start", "end", "occluderColumns", "markerEnd", "client", "server"}:
+        raise LabError("invalid raycastState schema")
+    if (not numeric_vector(ray["start"], 2) or not numeric_vector(ray["end"], 2)
+            or not numeric_vector(ray["occluderColumns"], 2, integer=True)
+            or ray["start"] != [54.5, 48.5] or ray["end"] != [74.5, 48.5] or ray["occluderColumns"] != [62, 70]):
+        raise LabError("invalid raycast geometry")
+    blocked = receipt.get("stageIndex") == 1
+    for side in ("client", "server"):
+        result = ray[side]
+        if not isinstance(result, dict) or set(result) != {*RAY_QUERIES, "normal", "backend", "rustCalls"}:
+            raise LabError(f"invalid raycast {side} schema")
+        calls = result["rustCalls"]
+        backend = result["backend"]
+        if backend not in ("cpp", "rust") or not isinstance(calls, dict) or set(calls) != set(RAY_QUERIES):
+            raise LabError(f"invalid raycast {side} backend receipt")
+        for query in RAY_QUERIES:
+            count = calls[query]
+            if type(count) is not int or (count <= 0 if backend == "rust" else count != 0):
+                raise LabError(f"invalid raycast {side} {query} call receipt")
+        if result["collision"] is not blocked:
+            raise LabError(f"wrong raycast {side} collision")
+        for field, expected in (("tiles", [[62, 48], [70, 48]] if blocked else []),
+                                ("limitedTiles", [[62, 48]] if blocked else []), ("zeroLimitTiles", []),
+                                ("normal", [1, 0] if blocked else None)):
+            value = result[field]
+            if field == "normal":
+                typed = value is None if not blocked else numeric_vector(value, 2, integer=True)
+            else:
+                typed = isinstance(value, list) and all(numeric_vector(tile, 2, integer=True) for tile in value)
+            if not typed or value != expected:
+                raise LabError(f"wrong raycast {side} {field}")
+        point = result["point"]
+        if blocked:
+            # C++ JSON printers may shorten a float's decimal spelling. Only
+            # the fixed expectation rounds to f32; semantic equality stays raw.
+            expected_x = struct.unpack("f", struct.pack("f", 62 - 0.0001))[0]
+            if (not isinstance(point, list) or len(point) != 2
+                    or any(type(value) not in (int, float) or not math.isfinite(value) for value in point)
+                    or abs(point[0]) > 1e6
+                    or struct.unpack("f", struct.pack("f", point[0]))[0] != expected_x or point[1] != 48.5):
+                raise LabError(f"wrong raycast {side} point")
+        elif point is not None:
+            raise LabError(f"wrong raycast {side} clear point")
+    if ray_observation(ray["client"]) != ray_observation(ray["server"]):
+        raise LabError("raycast client/server observations disagree")
+    if not numeric_vector(ray["markerEnd"], 2) or ray["markerEnd"] != (ray["client"]["point"] if blocked else ray["end"]):
+        raise LabError("raycast markerEnd does not follow actual client result")
+    return ray
+
+
+def validate_raycast_ink(frame: Image.Image, receipt: dict) -> None:
+    """Require result-local ink, independently of exact full-frame equality.
+
+    Equal images can both omit the overlay. These bounded assertion ROIs are
+    never used to crop/mask the framebuffer comparison or its pixel hashes.
+    """
+    ray = validate_raycast_state(receipt)
+    camera, ratio = receipt["cameraPosition"], receipt["cameraPixelRatio"]
+    if (not numeric_vector(camera, 2) or camera != [64, 48]
+            or type(ratio) not in (int, float) or ratio != 2):
+        raise LabError("invalid raycast marker camera geometry")
+    # Native TilePixels=8; camera ratio maps logical pixels to framebuffer pixels.
+    scale = 8 * ratio
+    def project(point):
+        return (frame.width / 2 + (point[0] - camera[0]) * scale,
+                frame.height / 2 - (point[1] - camera[1]) * scale)
+    start, end = project(ray["start"]), project(ray["markerEnd"])
+    if any(not (0 <= x < frame.width and 0 <= y < frame.height) for x, y in (start, end)):
+        raise LabError("raycast marker segment outside viewport")
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    length_squared = dx * dx + dy * dy
+    if length_squared <= 0:
+        raise LabError("zero-length raycast marker segment")
+
+    def pixels_around(a, b, radius):
+        left = max(0, math.floor(min(a[0], b[0]) - radius))
+        top = max(0, math.floor(min(a[1], b[1]) - radius))
+        right = min(frame.width, math.ceil(max(a[0], b[0]) + radius) + 1)
+        bottom = min(frame.height, math.ceil(max(a[1], b[1]) + radius) + 1)
+        roi = frame.crop((left, top, right, bottom))
+        for y in range(roi.height):
+            for x in range(roi.width):
+                yield left + x + 0.5, top + y + 0.5, roi.getpixel((x, y))
+
+    cyan = False
+    for x, y, (r, g, b, a) in pixels_around(start, end, 3):
+        t = ((x - start[0]) * dx + (y - start[1]) * dy) / length_squared
+        if (0 <= t <= 1 and (x - start[0] - t * dx) ** 2 + (y - start[1] - t * dy) ** 2 <= 9
+                and a > 0 and r <= 64 and g >= 128 and b >= 128):
+            cyan = True
+            break
+    if not cyan:
+        raise LabError("raycast marker missing cyan ink on result segment")
+    if not any(abs(x - end[0]) <= 8 and abs(y - end[1]) <= 8
+               and a > 0 and r >= 128 and g >= 128 and b <= 128
+               for x, y, (r, g, b, a) in pixels_around(end, end, 8)):
+        raise LabError("raycast marker missing yellow ink around actual markerEnd")
+
+
+def validate_raycast_sequence(frames: dict) -> None:
+    if set(frames) != set(RAY_STAGES):
+        raise LabError("native raycast scenario requires exactly its three named stages")
+    actions = ("room-populated", "foreground-occluder-added", "foreground-occluder-removed")
+    for index, (name, action) in enumerate(zip(RAY_STAGES, actions)):
+        receipt = frames[name]["receipt"]
+        if (receipt["stage"] != name or type(receipt["stageIndex"]) is not int
+                or receipt["stageIndex"] != index or receipt["action"] != action
+                or receipt["occluderPresent"] is not (index == 1)):
+            raise LabError(f"native raycast action/state mismatch: {name}")
+        if (receipt["changedTileMin"] != [62, 33] or receipt["changedTileMax"] != [70, 59]
+                or receipt["worldSize"] != [128, 96]
+                or receipt["playerPosition"] != [12, 4]
+                or receipt["cameraPosition"] != [64, 48]
+                or receipt["cameraPixelRatio"] != 2
+                or receipt["lightPosition"] != [52.5, 33.5]
+                or receipt["stabilization"] != {"sky": "barren-black", "stars": False, "debris": False,
+                    "spawning": False, "lightFlicker": False, "objectAnimation": False}
+                or receipt["material"] != "smoothmetal"
+                or receipt["lightObject"] != "behaviorlabconstantlight"
+                or receipt["lightType"] != "PointAsSpread"):
+            raise LabError(f"native raycast room geometry mismatch: {name}")
+        if ((receipt["observedOccluderMaterial"] == receipt["materialId"]) != (index == 1)):
+            raise LabError(f"native raycast observed material mismatch: {name}")
+    initial, blocked, restored = (frames[name] for name in RAY_STAGES)
+    if initial["pixelsSha256"] != restored["pixelsSha256"]:
+        raise LabError("native raycast restoration did not restore initial pixels")
+    if initial["pixelsSha256"] == blocked["pixelsSha256"]:
+        raise LabError("native raycast occluder did not change pixels")
+    stable = set(SCENE_FIELDS) - {"stageIndex", "action", "occluderPresent"}
+    before, after = initial["receipt"], restored["receipt"]
+    if (any(before[field] != after[field] for field in stable)
+            or before["worldState"].get("declared") != after["worldState"].get("declared")
+            or before["worldState"].get("raycastState") != after["worldState"].get("raycastState")
+            or before["worldState"].get("native", {}).get("raycastState") != after["worldState"].get("native", {}).get("raycastState")):
+        raise LabError("native raycast restoration did not restore scene state")
 
 
 def inventory(frames: dict) -> dict:
@@ -272,9 +443,20 @@ def pair_compare(reference: Path, candidate: Path, output: Path, same_backend=Fa
             for field in ("inWorld", "stage", "worldState"):
                 if ref_meta[field] != cand_meta[field]:
                     row["errors"].append(f"{field} differs")
-            wanted = ref_meta["lightingBackend"] if same_backend else "rust"
-            if ref_meta["lightingBackend"] != "cpp" or cand_meta["lightingBackend"] != wanted:
-                row["errors"].append("expected C++ reference and correct comparison backend")
+            if ref_meta["scenario"] != cand_meta["scenario"]:
+                row["errors"].append("scenario differs")
+            if ref_meta["scenario"] == "raycast-room":
+                wanted = "cpp" if same_backend else "rust"
+                for side in ("client", "server"):
+                    if (ref_meta["raycastState"][side]["backend"] != "cpp"
+                            or cand_meta["raycastState"][side]["backend"] != wanted):
+                        row["errors"].append("expected C++ reference and correct raycast comparison backend")
+                if ref_meta["lightingBackend"] != "cpp" or (same_backend and cand_meta["lightingBackend"] != "cpp"):
+                    row["errors"].append("expected C++ reference lighting")
+            else:
+                wanted = ref_meta["lightingBackend"] if same_backend else "rust"
+                if ref_meta["lightingBackend"] != "cpp" or cand_meta["lightingBackend"] != wanted:
+                    row["errors"].append("expected C++ reference and correct comparison backend")
             a, b = image(ref["png"]), image(cand["png"])
             a.save(output / f"{name}-expected.png")
             b.save(output / f"{name}-candidate.png")
@@ -340,7 +522,9 @@ def verified_build(executable: Path) -> dict:
         raise LabError(f"capture requires a current source-bound build: {error}") from error
 
 
-def capture(executable: Path, assets: Path, directory: Path, timeout: float) -> Path:
+def capture(executable: Path, assets: Path, directory: Path, timeout: float, scenario="lighting-room") -> Path:
+    if scenario not in SCENARIOS:
+        raise LabError("unknown scenario")
     binary_id, asset_id = identity(executable), identity(assets)
     if not os.access(binary_id["path"], os.X_OK):
         raise LabError("capture executable is not executable")
@@ -355,7 +539,7 @@ def capture(executable: Path, assets: Path, directory: Path, timeout: float) -> 
     configuration = directory / "scenario.json"
     bootconfig = directory / "sbinit.config"
     dump(configuration, {"outputDirectory": str(frames), "storageDirectory": str(storage),
-                         "scenario": "lighting-room", "maxFrames": 1800, "platformWrites": False})
+                         "scenario": scenario, "maxFrames": 1800, "platformWrites": False})
     dump(bootconfig, {"assetDirectories": [], "assetSources": [asset_id["path"],
                           *(str(canonical(path)) for path in ASSET_OVERLAYS.values())],
                       "storageDirectory": str(storage), "logDirectory": str(storage), "includeUGC": False,
@@ -406,6 +590,8 @@ def capture(executable: Path, assets: Path, directory: Path, timeout: float) -> 
     if overlay != overlay_after:
         raise LabError("asset overlay changed while client ran")
     captured = captures(frames)
+    if any(frame["receipt"]["scenario"] != scenario for frame in captured.values()):
+        raise LabError("captured scenario differs from requested scenario")
     semantic_bootconfig = load(bootconfig)
     for field in ("storageDirectory", "logDirectory"):
         semantic_bootconfig[field] = "<isolated-storage>"
@@ -433,6 +619,7 @@ def main(argv=None) -> int:
         cmd.add_argument("--assets", type=Path, required=True, help="explicit packed.pak file")
         cmd.add_argument("--output", type=Path, default=None, help="NEW directory strictly under repository build/")
         cmd.add_argument("--timeout", type=float, default=180)
+        cmd.add_argument("--scenario", choices=SCENARIOS, default="lighting-room")
         if name == "run":
             cmd.add_argument("--reference", type=Path, required=True)
             cmd.add_argument("--candidate", type=Path, required=True)
@@ -456,19 +643,19 @@ def main(argv=None) -> int:
             return 0 if unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful() else 1
         output = args.output or default_output()
         if args.command == "capture":
-            print(capture(args.capture, args.assets, output, args.timeout))
+            print(capture(args.capture, args.assets, output, args.timeout, scenario=args.scenario))
             return 0
         output = create_owned(output)
         if args.command == "run":
-            reference = capture(args.reference, args.assets, output / "reference", args.timeout)
-            repeat = capture(args.reference, args.assets, output / "reference-repeat", args.timeout)
+            reference = capture(args.reference, args.assets, output / "reference", args.timeout, scenario=args.scenario)
+            repeat = capture(args.reference, args.assets, output / "reference-repeat", args.timeout, scenario=args.scenario)
             baseline = pair_compare(reference, repeat, output / "repeatability", same_backend=True)
             if not baseline["passed"]:
                 dump(output / "report.json", {"passed": False, "parityCertified": False,
                                              "reason": "reference nondeterminism blocks candidate launch",
                                              "repeatability": baseline})
                 return 1
-            candidate = capture(args.candidate, args.assets, output / "candidate", args.timeout)
+            candidate = capture(args.candidate, args.assets, output / "candidate", args.timeout, scenario=args.scenario)
         else:
             reference, candidate, repeat = args.reference, args.candidate, args.repeat
             if args.same_backend:

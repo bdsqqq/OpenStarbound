@@ -96,12 +96,16 @@ private:
   // never mutate the scene while the SDL host still owns its pending frame.
   void updateBehaviorScenario();
   void renderBehaviorScenario();
+  void prepareBehaviorRaycastFrame();
   void validateBehaviorStorage();
   unsigned m_behaviorFrames = 0;
   unsigned m_behaviorSettledFrames = 0;
   unsigned m_behaviorStage = 0;
   unsigned m_behaviorPhase = 0;
   bool m_behaviorReady = false;
+  bool m_behaviorRaycastRoom = false;
+  // Replaced before every paint; the post-paint receipt never re-queries the world.
+  Json m_behaviorRaycastState;
   bool m_behaviorLightingCompleted = false;
   String m_behaviorCapture;
   String m_behaviorLightObject;

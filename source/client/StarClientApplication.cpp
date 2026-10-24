@@ -11,6 +11,9 @@
 #ifdef STAR_USE_RUST_LIGHTING
 #include "StarRustLighting.h"
 #endif
+#ifdef STAR_USE_RUST_BLOCKS_ALONG_LINE
+#include "StarRustTraversal.h"
+#endif
 #include "StarConfiguration.hpp"
 #include "StarJsonExtra.hpp"
 #include "StarFile.hpp"
@@ -500,6 +503,9 @@ void ClientApplication::render() {
       auto clientStart = totalStart;
       worldClient->render(m_renderData, TilePainter::BorderTileSize);
       LogMap::set("client_render_world_client", strf(u8"{:05d}\u00b5s", Time::monotonicMicroseconds() - clientStart));
+
+      if (BehaviorLab::enabled() && m_behaviorRaycastRoom)
+        prepareBehaviorRaycastFrame();
 
       auto paintStart = Time::monotonicMicroseconds();
       m_worldPainter->render(m_renderData, [&]() -> bool {
@@ -1403,8 +1409,10 @@ bool ClientApplication::isActionTakenEdge(InterfaceAction action) const {
 
 void ClientApplication::validateBehaviorStorage() {
   auto const& config = BehaviorLab::configuration();
-  if (config.getString("scenario", "lighting-room") != "lighting-room")
+  auto scenario = config.getString("scenario", "lighting-room");
+  if (scenario != "lighting-room" && scenario != "raycast-room")
     throw StarException("BehaviorLab: unsupported scenario");
+  m_behaviorRaycastRoom = scenario == "raycast-room";
   if (config.getUInt("maxFrames", 1800) == 0 || config.getUInt("maxFrames", 1800) > 18000)
     throw StarException("BehaviorLab: maxFrames must be in [1, 18000]");
 
@@ -1429,7 +1437,7 @@ void ClientApplication::updateBehaviorScenario() {
     return;
   world->setAsyncLighting(false);
   world->setFullBright(false);
-  CustomWorldId fixtureId("behavior-lighting-room");
+  CustomWorldId fixtureId(m_behaviorRaycastRoom ? "behavior-raycast-room" : "behavior-lighting-room");
   if (m_behaviorPhase == 0) {
     // The blank-world constructor normally chooses a random seed. Round-trip
     // its ordinary persisted template to freeze that input.
@@ -1479,8 +1487,12 @@ void ClientApplication::updateBehaviorScenario() {
       for (int x = 8; x <= 18; ++x)
         writer.setForegroundMaterial(Vec2I(x, 0), m_behaviorMaterial, 0, DefaultMaterialColorVariant);
       // A small platform makes the lighting scene include horizontal geometry.
-      for (int x = 68; x <= 80; ++x)
+      for (int x = 68; x <= 80; ++x) {
+        // Both ray columns start empty, including where the platform crosses 70.
+        if (m_behaviorRaycastRoom && x == 70)
+          continue;
         writer.setForegroundMaterial(Vec2I(x, 40), m_behaviorMaterial, 0, DefaultMaterialColorVariant);
+      }
       server->setSpawningEnabled(false);
 
       auto objects = m_root->objectDatabase();
@@ -1520,7 +1532,8 @@ void ClientApplication::updateBehaviorScenario() {
     if (!BehaviorLab::frameCaptured(m_behaviorCapture))
       return;
     if (m_behaviorStage == 2) {
-      Logger::info("BehaviorLab: lighting-room completed (three acknowledged world frames)");
+      Logger::info("BehaviorLab: {} completed (three acknowledged world frames)",
+          m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
       m_behaviorPhase = 5;
       appController()->quit();
       return;
@@ -1532,8 +1545,12 @@ void ClientApplication::updateBehaviorScenario() {
       if (server->worldId() != printWorldId(fixtureId))
         return;
       DungeonGeneratorWorld writer(server, false);
-      for (int y = 33; y <= 59; ++y)
-        writer.setForegroundMaterial(Vec2I(62, y), material, 0, DefaultMaterialColorVariant);
+      for (int x : {62, 70}) {
+        if (x == 70 && !m_behaviorRaycastRoom)
+          continue;
+        for (int y = 33; y <= 59; ++y)
+          writer.setForegroundMaterial(Vec2I(x, y), material, 0, DefaultMaterialColorVariant);
+      }
       changed = true;
     });
     if (!changed)
@@ -1547,8 +1564,12 @@ void ClientApplication::updateBehaviorScenario() {
         && world->material(Vec2I(64, 48), TileLayer::Background) == m_behaviorMaterial
         && world->entity(m_behaviorLightId);
     auto expected = m_behaviorStage == 1 ? m_behaviorMaterial : EmptyMaterialId;
-    for (int y = 33; y <= 59; ++y)
-      replicated = replicated && world->material(Vec2I(62, y), TileLayer::Foreground) == expected;
+    for (int x : {62, 70}) {
+      if (x == 70 && !m_behaviorRaycastRoom)
+        continue;
+      for (int y = 33; y <= 59; ++y)
+        replicated = replicated && world->material(Vec2I(x, y), TileLayer::Foreground) == expected;
+    }
     if (!replicated) {
       m_behaviorSettledFrames = 0;
       return;
@@ -1558,6 +1579,90 @@ void ClientApplication::updateBehaviorScenario() {
     if (++m_behaviorSettledFrames >= 90)
       m_behaviorReady = true;
   }
+}
+
+void ClientApplication::prepareBehaviorRaycastFrame() {
+  m_behaviorRaycastState = Json();
+  if (!m_behaviorReady || BehaviorLab::hasPendingFrame() || m_renderData.isFullbright)
+    return;
+  auto world = m_universeClient->worldClient();
+  if (!world || !world->inWorld())
+    return;
+
+  Vec2F const start(54.5f, 48.5f);
+  Vec2F const end(74.5f, 48.5f);
+  Vec2F markerEnd = end;
+  auto observe = [&](auto const& queryWorld, Vec2F* endpoint) -> Json {
+    JsonObject calls;
+    auto count = []() -> uint64_t {
+#ifdef STAR_USE_RUST_BLOCKS_ALONG_LINE
+      return star_blocks_along_line_call_count();
+#else
+      return 0;
+#endif
+    };
+    auto measured = [&](String const& name, auto&& query) {
+      // Receipts are TLS: read immediately around each public query on the
+      // executing thread, including inside the locked server action below.
+      auto before = count();
+      auto result = query();
+      calls[name] = count() - before;
+      return result;
+    };
+    auto collision = measured("collision", [&] { return queryWorld->lineTileCollision(start, end); });
+    auto point = measured("point", [&] { return queryWorld->lineTileCollisionPoint(start, end); });
+    auto tiles = measured("tiles", [&] { return queryWorld->collidingTilesAlongLine(start, end); });
+    auto limited = measured("limitedTiles", [&] {
+      return queryWorld->collidingTilesAlongLine(start, end, DefaultCollisionSet, 1, true);
+    });
+    auto zero = measured("zeroLimitTiles", [&] {
+      return queryWorld->collidingTilesAlongLine(start, end, DefaultCollisionSet, 0, true);
+    });
+    auto tileJson = [](List<Vec2I> const& list) {
+      JsonArray result;
+      for (auto const& tile : list)
+        result.append(jsonFromVec2I(tile));
+      return result;
+    };
+    if (endpoint)
+      *endpoint = point ? point->first : end;
+    String backend = "cpp";
+#ifdef STAR_USE_RUST_BLOCKS_ALONG_LINE
+    backend = "rust";
+#endif
+    // Preserve the public API's positive directional normal and border offset;
+    // neither the collision point nor the rendered endpoint is reconstructed.
+    return JsonObject{{"collision", collision},
+        {"point", point ? jsonFromVec2F(point->first) : Json()},
+        {"normal", point ? jsonFromVec2I(point->second) : Json()},
+        {"tiles", tileJson(tiles)}, {"limitedTiles", tileJson(limited)},
+        {"zeroLimitTiles", tileJson(zero)}, {"backend", backend}, {"rustCalls", std::move(calls)}};
+  };
+  auto client = observe(world, &markerEnd);
+  Json serverState;
+  // executeForClient synchronously executes under the world's lock. Do not
+  // measure its TLS receipts outside this action or reuse the client's count.
+  m_universeServer->executeForClient(world->connection(), [&](WorldServer* server, PlayerPtr) {
+    if (server->worldId() == printWorldId(CustomWorldId("behavior-raycast-room")))
+      serverState = observe(server, nullptr);
+  });
+  if (serverState.isNull())
+    throw StarException("BehaviorLab: lost authoritative fixture world during raycast");
+
+  m_behaviorRaycastState = JsonObject{{"start", jsonFromVec2F(start)}, {"end", jsonFromVec2F(end)},
+      {"occluderColumns", JsonArray{62, 70}}, {"markerEnd", jsonFromVec2F(markerEnd)},
+      {"client", std::move(client)}, {"server", std::move(serverState)}};
+  // WorldClient::render clears/repopulates overlays each frame. Append only
+  // after that call, before WorldPainter, and publish these same observations.
+  auto appendLine = [&](Vec2F const& a, Vec2F const& b, Color const& color) {
+    // Line widths are logical pixels, unlike endpoints in world tile units.
+    auto drawable = Drawable::makeLine(Line2F(a, b), 2.0f, color);
+    drawable.fullbright = true;
+    m_renderData.foregroundOverlays.append(std::move(drawable));
+  };
+  appendLine(start, markerEnd, Color::Cyan);
+  appendLine(markerEnd - Vec2F(0.3f, 0), markerEnd + Vec2F(0.3f, 0), Color::Yellow);
+  appendLine(markerEnd - Vec2F(0, 0.3f), markerEnd + Vec2F(0, 0.3f), Color::Yellow);
 }
 
 void ClientApplication::renderBehaviorScenario() {
@@ -1573,7 +1678,11 @@ void ClientApplication::renderBehaviorScenario() {
   bool playerOutsideView = !m_worldPainter->camera().worldTileRect().padded(4).contains(Vec2I::floor(m_player->position()));
   if (!playerOutsideView)
     throw StarException("BehaviorLab: drawable viewport unexpectedly includes animated player");
-  m_behaviorCapture = StringList{"lit-room", "occluder-added", "occluder-restored"}.at(m_behaviorStage);
+  if (m_behaviorRaycastRoom && m_behaviorRaycastState.isNull())
+    return;
+  m_behaviorCapture = m_behaviorRaycastRoom
+      ? StringList{"ray-clear", "ray-blocked", "ray-restored"}.at(m_behaviorStage)
+      : StringList{"lit-room", "occluder-added", "occluder-restored"}.at(m_behaviorStage);
   uint64_t calls = 0;
   String backend = "cpp";
 #ifdef STAR_USE_RUST_LIGHTING
@@ -1592,9 +1701,9 @@ void ClientApplication::renderBehaviorScenario() {
   Json lightmapDiagnostic = JsonObject{{"size", jsonFromVec2U(lightmap.size())},
       {"minPosition", jsonFromVec2I(m_renderData.lightMinPosition)},
       {"layout", "row-major-rgb-f32-bits"}, {"bits", std::move(lightmapBits)}};
-  BehaviorLab::queueFrame(m_behaviorCapture, JsonObject{
+  Json metadata = JsonObject{
       {"lightingDiagnostics", std::move(lightmapDiagnostic)},
-      {"scenario", "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
+      {"scenario", m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
       {"worldState", JsonObject{
           {"worldId", printWorldId(m_universeClient->clientContext()->playerWorldId())},
           {"worldSize", jsonFromVec2U(world->geometry().size())},
@@ -1622,13 +1731,16 @@ void ClientApplication::renderBehaviorScenario() {
       {"lightPosition", jsonFromVec2F(light.position)}, {"lightColor", jsonFromVec3F(light.color)},
       {"lightType", LightTypeNames.getRight(light.type)},
       {"lightEntityReplicated", (bool)world->entity(m_behaviorLightId)},
-      {"changedTileMin", JsonArray{62, 33}}, {"changedTileMax", JsonArray{62, 59}},
+      {"changedTileMin", JsonArray{62, 33}}, {"changedTileMax", JsonArray{m_behaviorRaycastRoom ? 70 : 62, 59}},
       {"occluderPresent", m_behaviorStage == 1},
       {"observedOccluderMaterial", world->material(Vec2I(62, 48), TileLayer::Foreground)},
       {"action", m_behaviorStage == 0 ? "room-populated" : m_behaviorStage == 1 ? "foreground-occluder-added" : "foreground-occluder-removed"},
       {"replicatedSettledUpdates", m_behaviorSettledFrames}, {"updateIndex", m_behaviorFrames},
       {"seed", BehaviorLab::configuration().getUInt("seed", 42)}
-  });
+  };
+  if (m_behaviorRaycastRoom)
+    metadata = metadata.set("raycastState", m_behaviorRaycastState);
+  BehaviorLab::queueFrame(m_behaviorCapture, std::move(metadata));
   m_behaviorReady = false;
   m_behaviorPhase = 4;
 }

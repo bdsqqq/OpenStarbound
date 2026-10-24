@@ -145,6 +145,7 @@ option(STAR_USE_RPMALLOC "Use rpmalloc allocators" OFF)
 
 # Opt in while the native Rust backend is validated on additional platforms.
 option(STAR_USE_RUST_LIGHTING "Use the Rust cellular-lighting implementation" OFF)
+option(STAR_USE_RUST_BLOCKS_ALONG_LINE "Use the Rust grid-traversal implementation" OFF)
 option(STAR_BUILD_LIGHTING_LAB "Build the differential cellular-lighting laboratory" OFF)
 
 # Report all the discovered system / environment settings and all options.
@@ -592,6 +593,16 @@ foreach(OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
   string(TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG)
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG} "${STAR_RUNTIME_OUTPUT_DIRECTORY}")
 endforeach(OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES)
+
+if(STAR_USE_RUST_LIGHTING OR STAR_USE_RUST_BLOCKS_ALONG_LINE)
+  include(Rust)
+endif()
+if(STAR_USE_RUST_BLOCKS_ALONG_LINE)
+  add_compile_definitions(STAR_USE_RUST_BLOCKS_ALONG_LINE)
+  message(STATUS "Blocks-along-line backend: Rust")
+else()
+  message(STATUS "Blocks-along-line backend: C++")
+endif()
 
 if(STAR_USE_RUST_LIGHTING)
   include(RustLighting)

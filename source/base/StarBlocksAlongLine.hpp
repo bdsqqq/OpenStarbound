@@ -1,6 +1,12 @@
 #pragma once
 
 #include "StarVector.hpp"
+#ifdef STAR_USE_RUST_BLOCKS_ALONG_LINE
+#include "StarRustTraversal.h"
+#include <exception>
+#include <stdexcept>
+#include <type_traits>
+#endif
 
 namespace Star {
 
@@ -9,6 +15,46 @@ namespace Star {
 // returns true after iterating through every cell otherwise.
 template <typename Scalar>
 bool forBlocksAlongLine(Vector<Scalar, 2> origin, Vector<Scalar, 2> const& dxdy, function<bool(int, int)> callback) {
+#ifdef STAR_USE_RUST_BLOCKS_ALONG_LINE
+  if constexpr (std::is_same_v<Scalar, float> || std::is_same_v<Scalar, double>) {
+    struct Context {
+      function<bool(int, int)>& callback;
+      std::exception_ptr exception;
+    } context{callback, {}};
+    // Never unwind through Rust. Rethrowing the saved pointer after return
+    // preserves even non-standard exception object identity.
+    auto visitor = +[](void* opaque, int32_t x, int32_t y) noexcept -> int32_t {
+      auto& c = *static_cast<Context*>(opaque);
+      try { return c.callback(x, y) ? 1 : 0; }
+      catch (...) { c.exception = std::current_exception(); return 0; }
+    };
+    uint32_t policy = 0;
+#if defined(STAR_RUST_TRAVERSAL_FP_PRECISE)
+    // Pair with -ffp-contract=off for explicitly uncontracted callers.
+    policy = 0;
+#elif defined(__APPLE__) && defined(__aarch64__) && defined(__clang__) && __clang_major__ == 21
+#ifdef __FAST_MATH__
+    policy = 1;
+#else
+    policy = 2;
+#endif
+#elif defined(__FAST_MATH__)
+#error Rust traversal fast-math policy is only calibrated for Apple clang 21 ARM
+#endif
+    int32_t status;
+    if constexpr (std::is_same_v<Scalar, float>)
+      status = star_blocks_along_line_f32(origin[0], origin[1], dxdy[0], dxdy[1], policy, visitor, &context);
+    else
+      status = star_blocks_along_line_f64(origin[0], origin[1], dxdy[0], dxdy[1], policy, visitor, &context);
+    if (context.exception)
+      std::rethrow_exception(context.exception);
+    if (status == 2)
+      throw std::invalid_argument("invalid Rust blocks-along-line input");
+    if (status != 0 && status != 1)
+      throw std::runtime_error("Rust blocks-along-line panic");
+    return status == 0;
+  }
+#endif
   Vector<Scalar, 2> remote = origin + dxdy;
 
   double dx = dxdy[0];

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Standalone, offline traversal calibration; never configures/builds the project."""
+import argparse
 import hashlib
 import json
 from pathlib import Path
@@ -36,6 +37,13 @@ def run(cmd, name, expected_success=True):
 
 
 def main():
+    global OUT
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--rust-archive', type=Path)
+    parser.add_argument('--output-dir', type=Path, default=OUT)
+    args = parser.parse_args()
+    OUT = args.output_dir.resolve()
+    archive = args.rust_archive.resolve() if args.rust_archive else None
     OUT.mkdir(parents=True, exist_ok=True)
     raw = (HERE / 'StarBlocksAlongLine.frozen.hpp').read_bytes()
     adapted = raw.replace(b'namespace Star {', b'namespace TraversalReference {\nusing namespace Star;', 1)
@@ -81,13 +89,15 @@ def main():
     base = [recorded[0], *flags, '-I' + str(OUT),
             '-fsanitize=undefined,float-cast-overflow', '-fno-sanitize-recover=all', str(HERE / 'lab.cpp')]
     results = {}
-    for policy, fp in [('precise', ['-fno-fast-math', '-ffp-contract=off']),
+    for policy, fp in [('precise', ['-fno-fast-math', '-ffp-contract=off', '-DSTAR_RUST_TRAVERSAL_FP_PRECISE']),
+                       ('default-contract', ['-fno-fast-math']),
                        ('production-fast', ['-ffast-math'])]:
         for mutation in ('normal', 'tie', 'abort', 'exception'):
             name = policy + '-' + mutation
             binary = OUT / name
             define = [] if mutation == 'normal' else ['-D' + {'tie':'TIE_MUTANT','abort':'ABORT_MUTANT','exception':'EXCEPTION_MUTANT'}[mutation]]
-            run([*base, *fp, *define, '-o', str(binary)], name + '-compile')
+            rust = ['-DSTAR_USE_RUST_BLOCKS_ALONG_LINE', str(archive)] if archive else []
+            run([*base, *fp, *define, *rust, '-o', str(binary)], name + '-compile')
             result = run([str(binary)], name, mutation == 'normal')
             if mutation == 'normal':
                 results[policy] = json.loads(result.stdout)
@@ -121,7 +131,8 @@ def main():
             {'example': 'f64 origin=(2147483646,2147483646), delta=(1,1), callback always true',
              'reason': 'post-last-cell nonaxis tie step overflow'},
         ],
-        'scope': 'finite sampled C++ calibration, not a Rust port or universal equivalence proof',
+        'rust_archive': {'path': str(archive), 'sha256': sha(archive.read_bytes())} if archive else None,
+        'scope': 'sampled adapter differential test' if archive else 'finite sampled C++ calibration, not a Rust port or universal equivalence proof',
     }
     (OUT / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report, indent=2))

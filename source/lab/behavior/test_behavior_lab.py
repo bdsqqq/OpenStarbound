@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from PIL import Image
+from PIL import Image, ImageDraw
 import behavior_lab as lab
 
 
@@ -50,6 +50,250 @@ class BehaviorLabTests(unittest.TestCase):
                      "lightingBackend": backend, "rustLightingCalls": 15 if backend == "rust" else 0}})
         self.seal(directory)
         return directory
+
+    def ray_fixture(self, label, backend="cpp", lighting="cpp"):
+        directory = self.fixture(label, lighting)
+        for index, old in enumerate(("lit-room", "occluder-added", "occluder-restored")):
+            name = lab.RAY_STAGES[index]
+            path = directory / f"{old}.json"
+            envelope = lab.load(path)
+            path.unlink()
+            (directory / f"{old}.png").rename(directory / f"{name}.png")
+            envelope.update(name=name, file=name + ".png", width=400, height=200)
+            metadata = envelope["metadata"]
+            metadata.pop("worldState")
+            metadata.update(scenario="raycast-room", stage=name, worldSize=[128, 96],
+                            playerPosition=[12, 4], cameraPosition=[64, 48], cameraPixelRatio=2,
+                            lightPosition=[52.5, 33.5], changedTileMax=[70, 59])
+            point = [61.999900817871094, 48.5] if index == 1 else None
+            side = dict(collision=index == 1, point=point, normal=[1, 0] if index == 1 else None,
+                        tiles=[[62, 48], [70, 48]] if index == 1 else [],
+                        limitedTiles=[[62, 48]] if index == 1 else [], zeroLimitTiles=[],
+                        backend=backend, rustCalls={key: 1 if backend == "rust" else 0 for key in lab.RAY_QUERIES})
+            metadata["raycastState"] = dict(start=[54.5, 48.5], end=[74.5, 48.5], occluderColumns=[62, 70],
+                                            markerEnd=point or [74.5, 48.5], client=side,
+                                            server=json.loads(json.dumps(side)))
+            # Synthetic verifier-sensitivity ink, NOT native rendering evidence.
+            frame = Image.new("RGBA", (400, 200), (22, 0, 0, 255))
+            draw = ImageDraw.Draw(frame)
+            marker_x = 200 + ((point or [74.5, 48.5])[0] - 64) * 16
+            draw.line((48, 92, marker_x, 92), fill=(0, 255, 255, 255), width=4)
+            draw.line((marker_x, 86, marker_x, 98), fill=(255, 255, 0, 255), width=4)
+            frame.save(directory / f"{name}.png")
+            lab.dump(directory / f"{name}.json", envelope)
+        self.seal(directory)
+        return directory
+
+    def mutate_ray(self, directory, change, stages=("ray-blocked",)):
+        for name in stages:
+            path = directory / f"{name}.json"
+            envelope = lab.load(path)
+            change(envelope["metadata"])
+            path.write_text(json.dumps(envelope))
+
+    def test_ray_public_exact_compare_and_both_lighting_backends(self):
+        reference = self.ray_fixture("ref")
+        for lighting in ("cpp", "rust"):
+            candidate = self.ray_fixture("candidate-" + lighting, "rust", lighting)
+            report = self.compare(reference, candidate, "compare-" + lighting)
+            self.assertTrue(report["passed"], report)
+        repeat = self.ray_fixture("repeat")
+        self.assertTrue(self.compare(reference, repeat, "repeat-check", same=True)["passed"])
+        wrong = self.ray_fixture("wrong")
+        self.assertFalse(self.compare(reference, wrong, "wrong-check")["passed"])
+
+    def test_ray_public_marker_ink_negatives(self):
+        reference = self.ray_fixture("ref")
+        for fault in ("missing-yellow", "misplaced-yellow", "wrong-yellow", "transparent-yellow",
+                      "missing-cyan", "misplaced-cyan", "wrong-cyan", "clear-end-on-blocked"):
+            with self.subTest(fault=fault):
+                candidate = self.ray_fixture(fault, "rust")
+                # Leave the old manifest: public comparison must reject the ink
+                # contract BEFORE merely reporting a stale inventory hash.
+                for index, stage in enumerate(lab.RAY_STAGES):
+                    frame = Image.new("RGBA", (400, 200), (22, 0, 0, 255))
+                    draw = ImageDraw.Draw(frame)
+                    endpoint = 200 + ((61.999900817871094 if index == 1 else 74.5) - 64) * 16
+                    if fault != "missing-cyan":
+                        y = 30 if fault == "misplaced-cyan" else 92
+                        color = (255, 0, 255, 255) if fault == "wrong-cyan" else (0, 255, 255, 255)
+                        draw.line((48, y, endpoint, y), fill=color, width=4)
+                    if fault != "missing-yellow":
+                        x, y = (30, 30) if fault == "misplaced-yellow" else (endpoint, 92)
+                        if fault == "clear-end-on-blocked" and index == 1:
+                            x = 368
+                        color = ((255, 0, 255, 255) if fault == "wrong-yellow" else
+                                 (255, 255, 0, 0) if fault == "transparent-yellow" else (255, 255, 0, 255))
+                        draw.line((x, y - 6, x, y + 6), fill=color, width=4)
+                    frame.save(candidate / f"{stage}.png")
+                with self.assertRaisesRegex(lab.LabError, "raycast marker missing"):
+                    lab.captures(candidate)
+                report = self.compare(reference, candidate, "compare-" + fault)
+                self.assertFalse(report["passed"])
+                self.assertIn("raycast marker missing", report["errors"][0])
+                self.assertNotIn("changed since manifest", report["errors"][0])
+
+    def test_ray_marker_projection_rejects_invalid_camera_and_small_viewport(self):
+        for label, camera, ratio in (("string", ["64", 48], 2), ("bool", [64, 48], True),
+                                     ("huge", [10**1000, 48], 2), ("nan", [64, 48], float("nan"))):
+            candidate = self.ray_fixture(label, "rust")
+            self.mutate_ray(candidate, lambda m: m.update(cameraPosition=camera, cameraPixelRatio=ratio))
+            with self.subTest(label=label), self.assertRaises(lab.LabError):
+                lab.captures(candidate)
+        candidate = self.ray_fixture("small", "rust")
+        for stage in lab.RAY_STAGES:
+            Image.new("RGBA", (24, 16)).save(candidate / f"{stage}.png")
+            path = candidate / f"{stage}.json"
+            envelope = lab.load(path)
+            envelope.update(width=24, height=16)
+            path.write_text(json.dumps(envelope))
+        with self.assertRaisesRegex(lab.LabError, "outside viewport"):
+            lab.captures(candidate)
+
+    def test_ray_public_adversarial_query_schema(self):
+        reference = self.ray_fixture("ref")
+        faults = {
+            "missing-state": lambda m: m.pop("raycastState"),
+            "missing-native": lambda m: m.pop("lightColor"),
+            "declared-only": lambda m: (m.update(worldState={"declared": True}), [m.pop(field) for field in lab.SCENE_FIELDS]),
+            "unknown-scenario": lambda m: m.update(scenario="generic-room"),
+            "fullbright": lambda m: m.update(fullbright=True),
+            "unsettled": lambda m: m.update(replicatedSettledUpdates=89),
+            "mixed-scenario": lambda m: m.update(scenario="lighting-room"),
+            "wrong-collision": lambda m: m["raycastState"]["client"].update(collision=False),
+            "wrong-point": lambda m: m["raycastState"]["client"].update(point=[62, 48.5]),
+            "wrong-normal": lambda m: m["raycastState"]["client"].update(normal=[-1, 0]),
+            "wrong-tile": lambda m: m["raycastState"]["client"].update(tiles=[[63, 48], [70, 48]]),
+            "wrong-order": lambda m: m["raycastState"]["client"]["tiles"].reverse(),
+            "wrong-cap": lambda m: m["raycastState"]["client"].update(limitedTiles=[[62, 48], [70, 48]]),
+            "zero-cap": lambda m: m["raycastState"]["client"].update(zeroLimitTiles=[[62, 48]]),
+            "server-result": lambda m: m["raycastState"]["server"].update(point=[62, 48.5]),
+            "server-raw-disagreement": lambda m: m["raycastState"]["server"].update(point=[61.9999, 48.5]),
+            "missing-counter": lambda m: m["raycastState"]["client"]["rustCalls"].pop("point"),
+            "extra-counter": lambda m: m["raycastState"]["client"]["rustCalls"].update(extra=5),
+            "marker": lambda m: m["raycastState"].update(markerEnd=[74.5, 48.5]),
+            "unknown-backend": lambda m: m["raycastState"]["client"].update(backend="fake"),
+            "forged-cpp": lambda m: m["raycastState"]["client"].update(backend="cpp"),
+            "extra-field": lambda m: m["raycastState"]["client"].update(extra=True),
+            "missing-query": lambda m: m["raycastState"]["client"].pop("limitedTiles"),
+            "geometry": lambda m: m.update(changedTileMax=[62, 59]),
+            "material": lambda m: m.update(observedOccluderMaterial=0),
+            "action": lambda m: m.update(action="room-populated"),
+        }
+        for label, change in faults.items():
+            with self.subTest(fault=label):
+                candidate = self.ray_fixture(label, "rust")
+                self.mutate_ray(candidate, change)
+                with self.assertRaises(lab.LabError):
+                    lab.captures(candidate)
+                self.assertFalse(self.compare(reference, candidate, "compare-" + label)["passed"])
+
+    def test_ray_each_query_receipt_is_independently_required(self):
+        for side in ("client", "server"):
+            for query in lab.RAY_QUERIES:
+                for count in (0, -1, True, 1.0, None):
+                    label = f"{side}-{query}-{count}"
+                    candidate = self.ray_fixture(label, "rust")
+                    self.mutate_ray(candidate, lambda m: m["raycastState"][side]["rustCalls"].update({query: count}))
+                    with self.subTest(side=side, query=query, count=count), self.assertRaises(lab.LabError):
+                        lab.captures(candidate)
+
+    def test_ray_raw_cross_backend_points_are_not_tolerance_masked(self):
+        reference, candidate = self.ray_fixture("ref"), self.ray_fixture("cand", "rust")
+        def shorten(m):
+            for side in ("client", "server"):
+                m["raycastState"][side]["point"][0] = 61.9999
+            m["raycastState"]["markerEnd"][0] = 61.9999
+        self.mutate_ray(candidate, shorten)
+        self.seal(candidate)  # Fixed f32 assertion passes; raw semantic comparison MUST fail.
+        report = self.compare(reference, candidate)
+        self.assertFalse(report["passed"])
+        self.assertIn("worldState differs", report["frames"]["ray-blocked"]["errors"])
+
+    def test_ray_missing_generic_stages_and_nonrestoration_rejected(self):
+        for fault in ("missing", "generic", "state", "pixels", "static"):
+            candidate = self.ray_fixture(fault, "rust")
+            if fault == "missing":
+                (candidate / "ray-blocked.png").unlink()
+            elif fault == "generic":
+                for index, name in enumerate(lab.RAY_STAGES):
+                    path = candidate / f"{name}.json"
+                    envelope = lab.load(path)
+                    generic = f"frame-{index}"
+                    envelope.update(name=generic, file=generic + ".png")
+                    envelope["metadata"]["stage"] = generic
+                    path.rename(candidate / f"{generic}.json")
+                    (candidate / f"{generic}.json").write_text(json.dumps(envelope))
+                    (candidate / f"{name}.png").rename(candidate / f"{generic}.png")
+            elif fault == "state":
+                self.mutate_ray(candidate, lambda m: m.update(lightColor=[0, 0, 0]), ("ray-restored",))
+            else:
+                lab.image(candidate / "ray-blocked.png").save(candidate / "ray-restored.png" if fault == "pixels" else candidate / "ray-clear.png")
+                if fault == "static":
+                    lab.image(candidate / "ray-blocked.png").save(candidate / "ray-restored.png")
+            with self.subTest(fault=fault), self.assertRaises(lab.LabError):
+                lab.captures(candidate)
+
+    def test_ray_tiny_pixel_corruption_reaches_pixel_gate(self):
+        reference, candidate = self.ray_fixture("ref"), self.ray_fixture("cand", "rust")
+        frame = lab.image(candidate / "ray-clear.png")
+        frame.putpixel((0, 0), (23, 0, 0, 255))
+        for stage in ("ray-clear", "ray-restored"):
+            frame.save(candidate / f"{stage}.png")
+        self.seal(candidate)  # Valid restoration, so exercise the actual pixel gate.
+        report = self.compare(reference, candidate)
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["frames"]["ray-clear"]["changedPixels"], 1)
+
+    def test_ray_capture_runner_seals_requested_scenario(self):
+        source = self.ray_fixture("source")
+        executable = self.root / "fake-client"
+        executable.write_text(
+            "#!" + os.sys.executable + "\n"
+            "import json, os, pathlib, shutil\n"
+            "config = json.loads(pathlib.Path(os.environ['STAR_BEHAVIOR_LAB']).read_text())\n"
+            "assert config['scenario'] in ('raycast-room', 'lighting-room')\n"
+            "out = pathlib.Path(config['outputDirectory'])\n"
+            f"source = pathlib.Path({str(source)!r})\n"
+            "for p in source.iterdir():\n"
+            "    if p.suffix == '.png' or (p.suffix == '.json' and p.name != 'manifest.json'):\n"
+            "        shutil.copyfile(p, out / p.name)\n")
+        executable.chmod(0o755)
+        assets = self.root / "packed.pak"
+        assets.write_bytes(b"synthetic assets only")
+        lab.build_provenance.seal(executable, lab.build_provenance.begin())
+        frames = lab.capture(executable, assets, self.root / "capture", 10, scenario="raycast-room")
+        captured, manifest = lab.validated(frames)
+        self.assertEqual(set(captured), set(lab.RAY_STAGES))
+        self.assertEqual(manifest["semanticConfiguration"]["scenario"], "raycast-room")
+        self.assertEqual(manifest["semanticConfiguration"]["storageDirectory"], "<isolated-storage>")
+        with self.assertRaisesRegex(lab.LabError, "captured scenario differs"):
+            lab.capture(executable, assets, self.root / "mismatch", 10)  # Ray receipts cannot seal as a lighting run.
+
+    def test_ray_run_success_requires_three_independent_captures(self):
+        reference, repeat, candidate = (self.ray_fixture("ref"), self.ray_fixture("repeat"),
+                                        self.ray_fixture("cand", "rust"))
+        with mock.patch.object(lab, "capture", side_effect=[reference, repeat, candidate]) as capture:
+            code = lab.main(["run", "--scenario", "raycast-room", "--reference", "/unused/ref",
+                             "--candidate", "/unused/cand", "--assets", "/unused/pak", "--output", str(self.root / "run")])
+        self.assertEqual(code, 0)
+        self.assertEqual(capture.call_count, 3)
+        self.assertTrue(lab.load(self.root / "run/report.json")["passed"])
+        self.assertTrue(all(call.kwargs == {"scenario": "raycast-room"} for call in capture.call_args_list))
+
+    def test_ray_run_propagates_scenario_and_blocks_unstable_baseline(self):
+        reference, repeat = self.ray_fixture("ref"), self.ray_fixture("repeat")
+        frame = lab.image(repeat / "ray-clear.png")
+        frame.putpixel((0, 0), (23, 0, 0, 255))
+        for stage in ("ray-clear", "ray-restored"):
+            frame.save(repeat / f"{stage}.png")
+        self.seal(repeat)
+        with mock.patch.object(lab, "capture", side_effect=[reference, repeat]) as capture:
+            code = lab.main(["run", "--scenario", "raycast-room", "--reference", "/unused/ref",
+                             "--candidate", "/unused/cand", "--assets", "/unused/pak", "--output", str(self.root / "run")])
+        self.assertEqual(code, 1)
+        self.assertEqual(capture.call_count, 2)
+        self.assertTrue(all(call.kwargs == {"scenario": "raycast-room"} for call in capture.call_args_list))
 
     def seal(self, directory):
         # Fixtures deliberately use fake identities: never presented as native evidence.

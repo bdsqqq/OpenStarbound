@@ -62,6 +62,8 @@
     {"id":"extern-imgui-adapter","module":"services.scripting","disposition":"migrate-adapter","pattern":"source/extern/imgui_(?:lua_bindings\\.(?:hpp|cpp)|iterator\\.inl)"},
     {"id":"assets","module":"services.assets","disposition":"migrate","pattern":"source/base/Star(?:Assets|AssetSource|DirectoryAssetSource|MemoryAssetSource|PackedAssetSource)\\.(?:hpp|cpp)"},
     {"id":"base-config","module":"services.config-root","disposition":"migrate","pattern":"source/base/Star(?:Configuration|RootBase|VersionOptionParser)\\.(?:hpp|cpp)"},
+    {"id":"rust-traversal-abi","module":"base.geometry","disposition":"ffi-adapter","pattern":"source/base/StarRustTraversal\\.h"},
+    {"id":"rust-traversal","module":"base.geometry","disposition":"rust-candidate","pattern":"source/rust/ffi/src/blocks_along_line\\.rs"},
     {"id":"base-geometry","module":"base.geometry","disposition":"migrate","pattern":"source/base/Star(?:BlocksAlongLine|CellularLiquid|WorldGeometry)\\.(?:hpp|cpp)"},
     {"id":"lighting","module":"base.lighting","disposition":"migrate","pattern":"source/base/Star(?:CellularLightArray|CellularLighting|RustLighting)\\.(?:hpp|cpp|h)"},
     {"id":"rust-ffi-runtime","module":"foundation.runtime","disposition":"ffi-adapter","pattern":"source/rust/ffi/src/lib\\.rs"},
