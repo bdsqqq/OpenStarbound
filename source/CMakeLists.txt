@@ -148,6 +148,7 @@ option(STAR_USE_RUST_LIGHTING "Use the Rust cellular-lighting implementation" OF
 option(STAR_USE_RUST_BLOCKS_ALONG_LINE "Use the Rust grid-traversal implementation" OFF)
 option(STAR_USE_RUST_LINE_QUERY "Experimental Rust line queries (fast-math unsupported)" OFF)
 option(STAR_USE_RUST_ENCODE "Use the Rust byte-encoding implementation" OFF)
+option(STAR_USE_RUST_SHA256 "Use the Rust legacy SHA256 implementation" OFF)
 option(STAR_BUILD_LIGHTING_LAB "Build the differential cellular-lighting laboratory" OFF)
 
 # Report all the discovered system / environment settings and all options.
@@ -596,8 +597,14 @@ foreach(OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG} "${STAR_RUNTIME_OUTPUT_DIRECTORY}")
 endforeach(OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES)
 
-if(STAR_USE_RUST_LIGHTING OR STAR_USE_RUST_BLOCKS_ALONG_LINE OR STAR_USE_RUST_LINE_QUERY OR STAR_USE_RUST_ENCODE)
+if(STAR_USE_RUST_LIGHTING OR STAR_USE_RUST_BLOCKS_ALONG_LINE OR STAR_USE_RUST_LINE_QUERY OR STAR_USE_RUST_ENCODE OR STAR_USE_RUST_SHA256)
   include(Rust)
+endif()
+if(STAR_USE_RUST_SHA256)
+  add_compile_definitions(STAR_USE_RUST_SHA256)
+  message(STATUS "SHA256 backend: Rust")
+else()
+  message(STATUS "SHA256 backend: C++")
 endif()
 if(STAR_USE_RUST_ENCODE)
   add_compile_definitions(STAR_USE_RUST_ENCODE)

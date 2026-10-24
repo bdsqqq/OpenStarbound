@@ -23,6 +23,7 @@ import uuid
 from PIL import Image, ImageChops
 import build_provenance
 import encoding_proof
+import sha256_proof
 
 ROOT = Path(__file__).resolve().parents[3]
 BUILD = ROOT / "build"
@@ -32,7 +33,7 @@ ASSET_OVERLAYS = {
     "behavior-fixture": ROOT / "source/lab/behavior/assets",
 }
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,95}\Z")
-SCENARIOS = ("lighting-room", "raycast-room", "encoding-room")
+SCENARIOS = ("lighting-room", "raycast-room", "encoding-room", "sha256-room")
 MAX_PIXELS = 16_777_216
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
 
@@ -153,6 +154,11 @@ def semantic_world_state(receipt: dict) -> dict:
             native["encodingProof"] = encoding_proof.validate(receipt)
         except ValueError as error:
             raise LabError(str(error)) from error
+    if receipt.get("scenario") == "sha256-room":
+        try:
+            native["sha256Proof"] = sha256_proof.validate(receipt)
+        except ValueError as error:
+            raise LabError(str(error)) from error
     # A native declared object supplements, rather than weakens, the frozen
     # flat schema: retain both when the driver supplies both representations.
     return native if state is None else {"declared": state, "native": native}
@@ -211,12 +217,16 @@ def captures(directory: Path) -> dict:
         result[name] = {"receipt": receipt, "png": pngs[name], "dimensions": list(frame.size),
                         "pngSha256": sha(pngs[name]), "receiptSha256": sha(receipts[name]),
                         "pixelsSha256": hashlib.sha256(frame.tobytes()).hexdigest()}
-    if scenarios in ({"lighting-room"}, {"encoding-room"}):
+    if scenarios in ({"lighting-room"}, {"encoding-room"}, {"sha256-room"}):
         validate_lighting_sequence(result)
         if scenarios == {"encoding-room"}:
             proofs = [encoding_proof.validate(frame["receipt"]) for frame in result.values()]
             if any(proof != proofs[0] for proof in proofs[1:]):
                 raise LabError("encoding bytes changed across scene stages")
+        if scenarios == {"sha256-room"}:
+            proofs = [sha256_proof.validate(frame["receipt"]) for frame in result.values()]
+            if any(proof != proofs[0] for proof in proofs[1:]):
+                raise LabError("SHA input/database evidence changed across scene stages")
     else:
         validate_raycast_sequence(result)
     return result
@@ -460,7 +470,14 @@ def pair_compare(reference: Path, candidate: Path, output: Path, same_backend=Fa
                     row["errors"].append(f"{field} differs")
             if ref_meta["scenario"] != cand_meta["scenario"]:
                 row["errors"].append("scenario differs")
-            if ref_meta["scenario"] == "encoding-room":
+            if ref_meta["scenario"] == "sha256-room":
+                wanted = "cpp" if same_backend else "rust"
+                if (ref_meta["sha256Proof"]["assets"]["backend"] != "cpp"
+                        or cand_meta["sha256Proof"]["assets"]["backend"] != wanted):
+                    row["errors"].append("expected C++ reference and correct SHA backend")
+                if ref_meta["lightingBackend"] != "cpp" or (same_backend and cand_meta["lightingBackend"] != "cpp"):
+                    row["errors"].append("expected C++ reference lighting")
+            elif ref_meta["scenario"] == "encoding-room":
                 wanted = "cpp" if same_backend else "rust"
                 if (ref_meta["encodingProof"]["backend"] != "cpp"
                         or cand_meta["encodingProof"]["backend"] != wanted):

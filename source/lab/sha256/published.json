@@ -1,0 +1,15 @@
+{
+  "url": "https://www.rfc-editor.org/rfc/rfc6234.txt",
+  "download_sha256": "8f39f02a57bfd1da15634706724a585766e6223f77ecdaf243cad16cd3a1aa1b",
+  "section": "8.5 The Test Driver, TEST1 and TEST2_1 definitions (page 92); SHA256 test rows 1 and 2 (page 97)",
+  "vectors": {
+    "3": {
+      "message": "abc",
+      "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    },
+    "56": {
+      "message": "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq",
+      "sha256": "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"
+    }
+  }
+}

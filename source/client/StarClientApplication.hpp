@@ -98,6 +98,7 @@ private:
   void renderBehaviorScenario();
   void prepareBehaviorRaycastFrame();
   void prepareBehaviorEncodingFrame();
+  void prepareBehaviorSha256Frame();
   void validateBehaviorStorage();
   unsigned m_behaviorFrames = 0;
   unsigned m_behaviorSettledFrames = 0;
@@ -106,6 +107,8 @@ private:
   bool m_behaviorReady = false;
   bool m_behaviorRaycastRoom = false;
   bool m_behaviorEncodingRoom = false;
+  bool m_behaviorSha256Room = false;
+  Json m_behaviorSha256Proof;
   Json m_behaviorEncodingProof;
   String m_behaviorEncodingImage;
   // Replaced before every paint; the post-paint receipt never re-queries the world.

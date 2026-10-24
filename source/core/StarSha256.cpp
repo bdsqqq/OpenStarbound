@@ -2,6 +2,13 @@
 #include "StarFormat.hpp"
 #include "StarEncode.hpp"
 
+#ifdef STAR_USE_RUST_SHA256
+#include "StarRustSha256.h"
+#include <climits>
+#include <cstring>
+#include <stdexcept>
+#endif
+
 namespace Star {
 
 // An implementation of the SHA-256 hash function, this is endian neutral
@@ -192,18 +199,83 @@ static void sha_done(sha_state* md, uint8_t* hash) {
     hash[i] = (md->state[i >> 2] >> (((3 - i) & 3) << 3)) & 255;
 }
 
+#ifdef STAR_USE_RUST_SHA256
+static_assert(sizeof(sha_state) == sizeof(StarSha256State), "SHA256 state size");
+static_assert(alignof(sha_state) == alignof(StarSha256State), "SHA256 state alignment");
+static_assert(offsetof(sha_state, state) == offsetof(StarSha256State, state)
+    && offsetof(sha_state, length) == offsetof(StarSha256State, length)
+    && offsetof(sha_state, curlen) == offsetof(StarSha256State, curlen)
+    && offsetof(sha_state, buf) == offsetof(StarSha256State, buf), "SHA256 state fields");
+
+static void sha_check(int32_t status) {
+  if (status != 0)
+    throw std::runtime_error("Rust SHA256 ABI failure");
+}
+
+static bool sha_overlaps(void const* a, size_t an, void const* b, size_t bn) {
+  auto x = reinterpret_cast<uintptr_t>(a);
+  auto y = reinterpret_cast<uintptr_t>(b);
+  // subtraction avoids end-address overflow; empty input never overlaps.
+  return an && bn && (x <= y ? y - x < an : x - y < bn);
+}
+#endif
+
+static void sha_backend_init(sha_state* md, bool preserveBuffer = false) {
+#ifdef STAR_USE_RUST_SHA256
+  StarSha256State local;
+  sha_check(star_sha256_init(&local));
+  // separate ABI objects avoid C++ strict-aliasing assumptions. Constructors
+  // initialize inactive tails; resets retain already-initialized bytes because
+  // a following push may intentionally alias the previous state buffer.
+  if (preserveBuffer)
+    std::memcpy(local.buf, md->buf, sizeof(local.buf));
+  std::memcpy(md, &local, sizeof(local));
+#else
+  (void)preserveBuffer;
+  sha_init(md);
+#endif
+}
+
+static void sha_backend_process(sha_state* md, uint8_t* input, size_t length) {
+#ifdef STAR_USE_RUST_SHA256
+  // preserve old int narrowing and sequential aliases outside the foreign domain.
+  // foreign failures throw: never retry a partially executed operation.
+  if (length <= INT_MAX && !sha_overlaps(md, sizeof(*md), input, length)) {
+    StarSha256State local;
+    std::memcpy(&local, md, sizeof(local));
+    sha_check(star_sha256_update(&local, input, length));
+    std::memcpy(md, &local, sizeof(local));
+    return;
+  }
+#endif
+  sha_process(md, input, length);
+}
+
+static void sha_backend_done(sha_state* md, uint8_t* output) {
+#ifdef STAR_USE_RUST_SHA256
+  if (!sha_overlaps(md, sizeof(*md), output, 32)) {
+    StarSha256State local;
+    std::memcpy(&local, md, sizeof(local));
+    sha_check(star_sha256_finalize(&local, output, 32));
+    std::memcpy(md, &local, sizeof(local));
+    return;
+  }
+#endif
+  sha_done(md, output);
+}
+
 Sha256Hasher::Sha256Hasher() {
   m_finished = false;
-  sha_init(&m_state);
+  sha_backend_init(&m_state);
 }
 
 void Sha256Hasher::push(char const* data, size_t length) {
   if (m_finished) {
-    sha_init(&m_state);
+    sha_backend_init(&m_state, true);
     m_finished = false;
   }
 
-  sha_process(&m_state, (uint8_t*)data, length);
+  sha_backend_process(&m_state, (uint8_t*)data, length);
 }
 
 void Sha256Hasher::push(String const& data) {
@@ -216,17 +288,24 @@ void Sha256Hasher::push(ByteArray const& data) {
 
 ByteArray Sha256Hasher::compute() {
   ByteArray dest(32, 0);
-  sha_done(&m_state, (uint8_t*)dest.ptr());
+  sha_backend_done(&m_state, (uint8_t*)dest.ptr());
   m_finished = true;
   return dest;
 }
 
 void Sha256Hasher::compute(char* hashDestination) {
-  sha_done(&m_state, (uint8_t*)hashDestination);
+  sha_backend_done(&m_state, (uint8_t*)hashDestination);
   m_finished = true;
 }
 
 void sha256(char const* source, size_t length, char* hashDestination) {
+#ifdef STAR_USE_RUST_SHA256
+  if (length <= INT_MAX) {
+    sha_check(star_sha256_oneshot(reinterpret_cast<uint8_t const*>(source), length,
+        reinterpret_cast<uint8_t*>(hashDestination), 32));
+    return;
+  }
+#endif
   sha_state state;
   sha_init(&state);
   sha_process(&state, (uint8_t*)source, length);

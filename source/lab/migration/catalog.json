@@ -3064,6 +3064,16 @@
       "rule": "rust-traversal-abi"
     },
     {
+      "cmake_membership": [],
+      "disposition": "harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/base/StarSha256Lab.hpp",
+      "rule": "sha256-lab-contract"
+    },
+    {
       "cmake_membership": [
         {
           "cmake": "source/base/CMakeLists.txt",
@@ -6044,6 +6054,16 @@
       "module": "foundation.math-geometry",
       "path": "source/core/StarRustLine.h",
       "rule": "rust-line-query-abi"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "ffi-adapter",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "foundation.compression-crypto",
+      "path": "source/core/StarRustSha256.h",
+      "rule": "rust-sha256-abi"
     },
     {
       "cmake_membership": [
@@ -19672,6 +19692,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/sha256_proof.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/behavior/test_behavior_lab.py",
       "rule": "laboratories"
     },
@@ -19693,6 +19723,16 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/behavior/test_encoding_proof.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/test_sha256_proof.py",
       "rule": "laboratories"
     },
     {
@@ -19919,6 +19959,56 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/line-query/run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/sha256/StarSha256.original.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/sha256/StarSha256.original.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/sha256/independent.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/sha256/lab.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/sha256/run.py",
       "rule": "laboratories"
     },
     {
@@ -20436,6 +20526,16 @@
       "module": "foundation.math-geometry",
       "path": "source/rust/ffi/src/line_query.rs",
       "rule": "rust-line-query"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "rust-candidate",
+      "language": "rust",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "foundation.compression-crypto",
+      "path": "source/rust/ffi/src/sha256.rs",
+      "rule": "rust-sha256"
     },
     {
       "cmake_membership": [],
@@ -24008,7 +24108,7 @@
     },
     {
       "path": "source/CMakeLists.txt",
-      "sha256": "aaf7c20333b9ed1cbfbcd4e33df3c964efacd155f4ff2f8bb4ff410dc9d71c3e"
+      "sha256": "3bbed228cc311d8fb359386f75a5d63beee397ffb50e760a7adb618fdd685661"
     },
     {
       "path": "source/application/CMakeLists.txt",
@@ -24244,7 +24344,7 @@
     },
     {
       "path": "source/base/StarAssets.cpp",
-      "sha256": "ebff9f0ae0daf78c321527375d263451439a464ce0e47101be4458cb915656ac"
+      "sha256": "1e7124d3f41745828b8307e1c3c925d5fabd1ee71abea9836b9884daa108652b"
     },
     {
       "path": "source/base/StarAssets.hpp",
@@ -24331,6 +24431,10 @@
       "sha256": "9613474fdf89262513a98d5ea586e411c28630d75b82e97276d7f8184acd56d8"
     },
     {
+      "path": "source/base/StarSha256Lab.hpp",
+      "sha256": "557974aa9f6aa0989048a885773b560ac6c386eff019104d93dee80ed290b3cf"
+    },
+    {
       "path": "source/base/StarVersionOptionParser.cpp",
       "sha256": "5efdc9cfc592f026f50e667cde55b3ca98f9698aba1e6ed3cd81adaff1b778b4"
     },
@@ -24360,11 +24464,11 @@
     },
     {
       "path": "source/client/StarClientApplication.cpp",
-      "sha256": "f9042779d863611ad45f0ba6ad759e77134bdb0a25ccdad6c635d586e7fe0774"
+      "sha256": "29b383aa5edd75c15eb3c847d8c48fd26bca058a5352d209d769965e43509c20"
     },
     {
       "path": "source/client/StarClientApplication.hpp",
-      "sha256": "efe2937abd01302997edf7db791283fe1efa17d0afb6d884edf3ad6e811d2e75"
+      "sha256": "c8c9e929a1a784a33ffd85aba07c2c3dd4a92f17b42fd0579edfc31004b50d6b"
     },
     {
       "path": "source/client/StarRenderingLuaBindings.cpp",
@@ -25003,6 +25107,10 @@
       "sha256": "ee3deae3b745ae7037849a9accf82b88083819dd4f92451a00c7d05938172e0c"
     },
     {
+      "path": "source/core/StarRustSha256.h",
+      "sha256": "ea27544aca492a4f7df679bfdee8049d884acd06fbece012aa29492145beeb85"
+    },
+    {
       "path": "source/core/StarSectorArray2D.hpp",
       "sha256": "dba3cde2e8f434b87ba1e73a0ab97ebd3ef4e8c693a8ab5cfcc9c2d9bd4911f1"
     },
@@ -25024,7 +25132,7 @@
     },
     {
       "path": "source/core/StarSha256.cpp",
-      "sha256": "8a4d67bbbd7e6bcc54356dbc59429cf16076064a6b8c4b5427363df79beb5b3b"
+      "sha256": "a1b8c41670ad34f1912a40c4fd0dbbd2a8fc815170dd151856966585e8c60d1b"
     },
     {
       "path": "source/core/StarSha256.hpp",
@@ -28100,7 +28208,7 @@
     },
     {
       "path": "source/lab/behavior/behavior_lab.py",
-      "sha256": "94a232d3daed7b8c8d088bd5e714ca42470f7fe92033eb4a9f3bef9bc71891e5"
+      "sha256": "181c2ae27c581a7e668b9c9acdcfceb95d87ed29fbb486f46ec212a64e3f3c23"
     },
     {
       "path": "source/lab/behavior/build_provenance.py",
@@ -28109,6 +28217,10 @@
     {
       "path": "source/lab/behavior/encoding_proof.py",
       "sha256": "5bce653d3a3911a97dec1bf4c3a9f55e40a04126edf0d09547a303242deb26e9"
+    },
+    {
+      "path": "source/lab/behavior/sha256_proof.py",
+      "sha256": "185984bea76c8ffce7f82ddc088488520fe3310dbbd7d9c18c627c684190f553"
     },
     {
       "path": "source/lab/behavior/test_behavior_lab.py",
@@ -28121,6 +28233,10 @@
     {
       "path": "source/lab/behavior/test_encoding_proof.py",
       "sha256": "3ab0d9c38998d0cb910b8563f083ca4c6491e0d2ec2bc61f4ac7a4185c74f798"
+    },
+    {
+      "path": "source/lab/behavior/test_sha256_proof.py",
+      "sha256": "ca3270f2c979d35fe2a376eb4ef725cd524a0a465b702d387e819c086c45ee0e"
     },
     {
       "path": "source/lab/encode/StarEncode.original.cpp",
@@ -28200,7 +28316,27 @@
     },
     {
       "path": "source/lab/migration/modules.json",
-      "sha256": "a62c1715b80a72312f47c4d2288586dbf4e98a73f19a9bc176d6ac45e3db9dd5"
+      "sha256": "f5c3eb3f4802e2d1881a68888cce356e5635b9e377c21e814dbd80a47e41ec0d"
+    },
+    {
+      "path": "source/lab/sha256/StarSha256.original.cpp",
+      "sha256": "8a4d67bbbd7e6bcc54356dbc59429cf16076064a6b8c4b5427363df79beb5b3b"
+    },
+    {
+      "path": "source/lab/sha256/StarSha256.original.hpp",
+      "sha256": "2f8d6ec062ad777a099ce669a60a313e7d0ffdc865496589b7810033974fec5b"
+    },
+    {
+      "path": "source/lab/sha256/independent.py",
+      "sha256": "8db1e6392b1f0518896bf8b66c9b5f5d80b911f01d68b01969c3fee290e7eafb"
+    },
+    {
+      "path": "source/lab/sha256/lab.cpp",
+      "sha256": "dafbb77c1fd60cf12f75afca0d735b903905fc58fed4cf95133059492d4703c7"
+    },
+    {
+      "path": "source/lab/sha256/run.py",
+      "sha256": "6829f80d2d5eae36b1a544df44e351f7cef35a52124c5353f1ec7d24f6beb69e"
     },
     {
       "path": "source/lab/traversal/StarBlocksAlongLine.frozen.hpp",
@@ -28344,11 +28480,15 @@
     },
     {
       "path": "source/rust/ffi/src/lib.rs",
-      "sha256": "c376ea5bde0ae00b9a215239a5ee6b96bef7163e0d237d0e6b9e4fdb28cfbf1a"
+      "sha256": "7efc75a3eaba5aded13ec248df054c48896f277251235c7ef4e931471ce58261"
     },
     {
       "path": "source/rust/ffi/src/line_query.rs",
       "sha256": "ffa692e6555e01c2b53be6f199910d7dd03d8aebdf69d31394784a4395d4ed0a"
+    },
+    {
+      "path": "source/rust/ffi/src/sha256.rs",
+      "sha256": "f5128a3d20030350ecd1b8beafd980312659af161a77bd11d123c8cfdc1d31cb"
     },
     {
       "path": "source/rust/lighting/src/lib.rs",
@@ -29172,15 +29312,15 @@
   },
   "summary": {
     "by_disposition": {
-      "ffi-adapter": 4,
-      "harness": 6,
+      "ffi-adapter": 5,
+      "harness": 7,
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 27,
+      "oracle/harness": 34,
       "retain-tooling": 20,
       "retained-third-party": 296,
-      "rust-candidate": 4,
+      "rust-candidate": 5,
       "test": 57
     },
     "by_module": {
@@ -29188,7 +29328,7 @@
       "base.geometry": 6,
       "base.lighting": 6,
       "foundation.collections": 28,
-      "foundation.compression-crypto": 10,
+      "foundation.compression-crypto": 12,
       "foundation.math-geometry": 16,
       "foundation.media": 14,
       "foundation.random": 10,
@@ -29218,14 +29358,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 35,
-      "validation.oracles-harness": 33,
+      "validation.oracles-harness": 41,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1419,
+    "files": 1429,
     "modules": 39,
-    "no_direct_target": 313
+    "no_direct_target": 323
   }
 }

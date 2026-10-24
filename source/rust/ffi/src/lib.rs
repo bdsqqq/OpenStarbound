@@ -1,5 +1,11 @@
 //! The engine's single Rust static archive owns the unmangled C ABI exports.
 //! Kernels remain rlibs so linking another kernel cannot add another Rust runtime.
+mod sha256;
+pub use sha256::{
+    star_sha256_call_count, star_sha256_finalize, star_sha256_init, star_sha256_oneshot,
+    star_sha256_update, StarSha256State,
+};
+
 mod encode;
 pub use encode::{star_encode, star_encode_call_count};
 

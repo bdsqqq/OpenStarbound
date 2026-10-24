@@ -17,6 +17,8 @@
 #include "StarCasting.hpp"
 #include "StarLexicalCast.hpp"
 #include "StarSha256.hpp"
+#include "StarSha256Lab.hpp"
+#include "StarEncode.hpp"
 #include "StarDataStreamDevices.hpp"
 #include "StarLua.hpp"
 #include "StarImageLuaBindings.hpp"
@@ -25,11 +27,25 @@
 #include "StarPathEmbed.hpp"
 #include "StarRootBase.hpp"
 #include <cstdlib>
+#include <mutex>
+#ifdef STAR_USE_RUST_SHA256
+#include "StarRustSha256.h"
+#endif
 #ifdef STAR_USE_RUST_ENCODE
 #include "StarRustEncode.h"
 #endif
 
 namespace Star {
+
+namespace {
+std::mutex Sha256AssetProofMutex;
+Json Sha256AssetProof;
+}
+
+Json sha256BehaviorAssetProof() {
+  std::lock_guard<std::mutex> lock(Sha256AssetProofMutex);
+  return Sha256AssetProof;
+}
 
 // if a ptr is returned, can be optionally used to format an error
 static const char* validateBasePath(std::string_view const& basePath) {
@@ -150,6 +166,11 @@ Json FramesSpecification::toJson() const {
 }
 
 Assets::Assets(Settings settings, StringList assetSources) {
+  bool const captureSha256 = std::getenv("STAR_BEHAVIOR_LAB") != nullptr;
+  if (captureSha256) {
+    std::lock_guard<std::mutex> lock(Sha256AssetProofMutex);
+    Sha256AssetProof = Json();
+  }
   const char* AssetsPatchSuffix = ".patch";
   const char* AssetsPatchListSuffix = ".patchlist";
   const char* AssetsLuaPatchSuffix = ".patch.lua";
@@ -442,7 +463,34 @@ Assets::Assets(Settings settings, StringList assetSources) {
   for (auto& pair : sources)
     runLoadScripts("postLoad", pair.first, pair.second);
 
+  // Capture the very same pushes used for the normal root digest, never an
+  // extra hashing probe or a synthetic asset (which would change this input).
+  struct DigestTrace {
+    ByteArray bytes;
+    JsonArray chunks;
+    uint64_t before[4] = {};
+  };
+  unique_ptr<DigestTrace> trace;
+  if (captureSha256) {
+    trace = make_unique<DigestTrace>();
+#ifdef STAR_USE_RUST_SHA256
+    for (uint32_t op = 0; op != 4; ++op)
+      trace->before[op] = star_sha256_call_count(op);
+#endif
+  }
   Sha256Hasher digest;
+  auto pushDigest = [&](char const* data, size_t size) {
+    if (trace) {
+      constexpr size_t MaxTranscript = 32 * 1024 * 1024;
+      if (size > MaxTranscript - trace->bytes.size())
+        throw AssetException("BehaviorLab: SHA256 asset transcript exceeds 32 MiB");
+    }
+    digest.push(data, size);
+    if (trace) {
+      trace->bytes.append(data, size);
+      trace->chunks.append(size);
+    }
+  };
 
   for (auto const& assetPath : m_files.keys().transformed([](String const& s) {
         return s.toLower();
@@ -458,14 +506,34 @@ Assets::Assets(Settings settings, StringList assetSources) {
     auto const& descriptor = m_files.get(assetPath);
 
     if (digestFile) {
-      digest.push(assetPath);
-      digest.push(DataStreamBuffer::serialize(descriptor.source->open(descriptor.sourceName)->size()));
-      for (auto const& pair : descriptor.patchSources)
-        digest.push(DataStreamBuffer::serialize(pair.second->open(AssetPath::removeSubPath(pair.first))->size()));
+      pushDigest(assetPath.utf8Ptr(), assetPath.utf8Size());
+      auto sizeBytes = DataStreamBuffer::serialize(descriptor.source->open(descriptor.sourceName)->size());
+      pushDigest(sizeBytes.ptr(), sizeBytes.size());
+      for (auto const& pair : descriptor.patchSources) {
+        auto patchSizeBytes = DataStreamBuffer::serialize(pair.second->open(AssetPath::removeSubPath(pair.first))->size());
+        pushDigest(patchSizeBytes.ptr(), patchSizeBytes.size());
+      }
     }
   }
 
   m_digest = digest.compute();
+  Json completedSha256Proof;
+  if (trace) {
+    JsonArray calls;
+    String backend = "cpp";
+    for (uint32_t op = 0; op != 4; ++op) {
+#ifdef STAR_USE_RUST_SHA256
+      backend = "rust";
+      calls.append(star_sha256_call_count(op) - trace->before[op]);
+#else
+      calls.append(0);
+#endif
+    }
+    // Diagnostic encoding is deliberately outside the measured SHA scope.
+    completedSha256Proof = JsonObject{{"backend", backend}, {"digestHex", hexEncode(m_digest)},
+        {"transcriptBase64", base64Encode(trace->bytes)}, {"chunkSizes", std::move(trace->chunks)},
+        {"rustCalls", std::move(calls)}};
+  }
 
   int workerPoolSize = m_settings.workerPoolSize;
   for (int i = 0; i < workerPoolSize; i++)
@@ -483,6 +551,10 @@ Assets::Assets(Settings settings, StringList assetSources) {
     auto asset = getAsset(AssetId{type, std::move(components)});
     // make this asset never unload
     asset->forcePersist = true;
+  }
+  if (captureSha256) {
+    std::lock_guard<std::mutex> lock(Sha256AssetProofMutex);
+    Sha256AssetProof = std::move(completedSha256Proof);
   }
 }
 

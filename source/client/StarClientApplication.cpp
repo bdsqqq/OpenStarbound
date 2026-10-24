@@ -1,5 +1,11 @@
 #include "StarClientApplication.hpp"
 #include "StarBehaviorLab.hpp"
+#include "StarSha256Lab.hpp"
+#include "StarBTreeDatabase.hpp"
+#include "StarBuffer.hpp"
+#ifdef STAR_USE_RUST_SHA256
+#include "StarRustSha256.h"
+#endif
 #include "StarObjectDatabase.hpp"
 #include "StarObject.hpp"
 #include "StarMaterialDatabase.hpp"
@@ -512,6 +518,8 @@ void ClientApplication::render() {
         prepareBehaviorRaycastFrame();
       if (BehaviorLab::enabled() && m_behaviorEncodingRoom)
         prepareBehaviorEncodingFrame();
+      if (BehaviorLab::enabled() && m_behaviorSha256Room)
+        prepareBehaviorSha256Frame();
 
       auto paintStart = Time::monotonicMicroseconds();
       m_worldPainter->render(m_renderData, [&]() -> bool {
@@ -1416,10 +1424,12 @@ bool ClientApplication::isActionTakenEdge(InterfaceAction action) const {
 void ClientApplication::validateBehaviorStorage() {
   auto const& config = BehaviorLab::configuration();
   auto scenario = config.getString("scenario", "lighting-room");
-  if (scenario != "lighting-room" && scenario != "raycast-room" && scenario != "encoding-room")
+  if (scenario != "lighting-room" && scenario != "raycast-room" && scenario != "encoding-room"
+      && scenario != "sha256-room")
     throw StarException("BehaviorLab: unsupported scenario");
   m_behaviorRaycastRoom = scenario == "raycast-room";
   m_behaviorEncodingRoom = scenario == "encoding-room";
+  m_behaviorSha256Room = scenario == "sha256-room";
   if (config.getUInt("maxFrames", 1800) == 0 || config.getUInt("maxFrames", 1800) > 18000)
     throw StarException("BehaviorLab: maxFrames must be in [1, 18000]");
 
@@ -1540,7 +1550,7 @@ void ClientApplication::updateBehaviorScenario() {
       return;
     if (m_behaviorStage == 2) {
       Logger::info("BehaviorLab: {} completed (three acknowledged world frames)",
-          m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
+          m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
       m_behaviorPhase = 5;
       appController()->quit();
       return;
@@ -1723,6 +1733,91 @@ void ClientApplication::prepareBehaviorEncodingFrame() {
   m_renderData.foregroundOverlays.append(std::move(drawable));
 }
 
+void ClientApplication::prepareBehaviorSha256Frame() {
+  if (!m_behaviorReady || BehaviorLab::hasPendingFrame() || m_renderData.isFullbright
+      || !m_behaviorSha256Proof.isNull())
+    return;
+
+  auto assets = sha256BehaviorAssetProof();
+  if (assets.isNull())
+    throw StarException("BehaviorLab: SHA256 root asset proof is missing");
+
+  auto count = [](uint32_t op) -> uint64_t {
+#ifdef STAR_USE_RUST_SHA256
+    return star_sha256_call_count(op);
+#else
+    return 0;
+#endif
+  };
+  uint64_t before[4];
+  for (uint32_t op = 0; op != 4; ++op)
+    before[op] = count(op);
+
+  // Real persistent BTree pages, but only in RAM. A fresh database object must
+  // reopen the same Buffer; do not substitute a map or touch player storage.
+  auto buffer = make_shared<Buffer>();
+  String const key = "behaviorlab-sha256-key";
+  ByteArray const initial("alpha\0one", 9);
+  ByteArray const updated("beta\0two", 8);
+  BTreeSha256Database database("behavior_sha256");
+  database.setIODevice(buffer);
+  database.setBlockSize(512);
+  if (!database.open())
+    throw StarException("BehaviorLab: SHA256 RAM database was not newly created");
+  bool insertedOverExisting = database.insert(key, initial);
+  auto foundBefore = database.find(key);
+  bool updatedExisting = database.insert(key, updated);
+  auto foundUpdated = database.find(key);
+  database.commit();
+  database.close(); // default false preserves the device, including its bytes.
+
+  BTreeSha256Database reopened("behavior_sha256");
+  reopened.setIODevice(buffer);
+  reopened.setBlockSize(512);
+  if (reopened.open())
+    throw StarException("BehaviorLab: SHA256 RAM database did not reopen existing pages");
+  auto foundReopened = reopened.find(key);
+  bool removed = reopened.remove(key);
+  bool containsAfterRemove = reopened.contains(key);
+  auto recordCountAfterRemove = reopened.recordCount();
+  reopened.close();
+
+  JsonArray calls;
+  for (uint32_t op = 0; op != 4; ++op)
+    calls.append(count(op) - before[op]);
+  if (insertedOverExisting || !updatedExisting || !foundBefore || *foundBefore != initial
+      || !foundUpdated || *foundUpdated != updated || !foundReopened || *foundReopened != updated
+      || !removed || containsAfterRemove || recordCountAfterRemove != 0)
+    throw StarException("BehaviorLab: SHA256 RAM database persistence/key checks failed");
+
+  String backend = "cpp";
+  JsonArray expectedCalls{0, 0, 0, 0};
+#ifdef STAR_USE_RUST_SHA256
+  backend = "rust";
+  expectedCalls = JsonArray{0, 0, 0, 7};
+#endif
+  if (calls != expectedCalls)
+    throw StarException::format("BehaviorLab: unexpected SHA256 database calls: {}", Json(calls));
+  auto const assetChunks = assets.getArray("chunkSizes").size();
+  JsonArray expectedAssetCalls{0, 0, 0, 0};
+#ifdef STAR_USE_RUST_SHA256
+  expectedAssetCalls = JsonArray{1, assetChunks, 1, 0};
+#else
+  (void)assetChunks;
+#endif
+  if (assets.getString("backend") != backend || assets.getArray("rustCalls") != expectedAssetCalls)
+    throw StarException("BehaviorLab: unexpected SHA256 asset backend/calls");
+
+  // Encode actual observed values only after the measured database operations.
+  Json databaseProof = JsonObject{{"backend", backend}, {"key", key},
+      {"foundBeforeHex", hexEncode(*foundBefore)}, {"foundUpdatedHex", hexEncode(*foundUpdated)},
+      {"foundReopenedHex", hexEncode(*foundReopened)}, {"removed", removed},
+      {"containsAfterRemove", containsAfterRemove}, {"recordCountAfterRemove", recordCountAfterRemove},
+      {"rustCalls", std::move(calls)}};
+  m_behaviorSha256Proof = JsonObject{{"version", 1}, {"assets", std::move(assets)},
+      {"database", std::move(databaseProof)}};
+}
+
 void ClientApplication::renderBehaviorScenario() {
   if (!m_behaviorReady || BehaviorLab::hasPendingFrame())
     return;
@@ -1761,7 +1856,7 @@ void ClientApplication::renderBehaviorScenario() {
       {"layout", "row-major-rgb-f32-bits"}, {"bits", std::move(lightmapBits)}};
   Json metadata = JsonObject{
       {"lightingDiagnostics", std::move(lightmapDiagnostic)},
-      {"scenario", m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
+      {"scenario", m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
       {"worldState", JsonObject{
           {"worldId", printWorldId(m_universeClient->clientContext()->playerWorldId())},
           {"worldSize", jsonFromVec2U(world->geometry().size())},
@@ -1802,6 +1897,11 @@ void ClientApplication::renderBehaviorScenario() {
     if (m_behaviorEncodingProof.isNull())
       throw StarException("BehaviorLab: encoding frame has no asset/draw proof");
     metadata = metadata.set("encodingProof", m_behaviorEncodingProof);
+  }
+  if (m_behaviorSha256Room) {
+    if (m_behaviorSha256Proof.isNull())
+      throw StarException("BehaviorLab: SHA256 frame has no completed asset/database proof");
+    metadata = metadata.set("sha256Proof", m_behaviorSha256Proof);
   }
   BehaviorLab::queueFrame(m_behaviorCapture, std::move(metadata));
   m_behaviorReady = false;
