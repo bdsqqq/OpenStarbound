@@ -1,5 +1,8 @@
 //! The engine's single Rust static archive owns the unmangled C ABI exports.
 //! Kernels remain rlibs so linking another kernel cannot add another Rust runtime.
+mod json_path;
+pub use json_path::{star_json_path_call_count, star_json_path_parse, StarJsonPathHost};
+
 mod shell;
 pub use shell::{star_shell_call_count, star_shell_tokenize, StarShellClassify, StarShellEmit};
 

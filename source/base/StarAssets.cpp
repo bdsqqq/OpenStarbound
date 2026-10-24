@@ -21,6 +21,7 @@
 #include "StarVlqLab.hpp"
 #include "StarBytesLab.hpp"
 #include "StarUnicodeLab.hpp"
+#include "StarJsonPathLab.hpp"
 #ifdef STAR_USE_RUST_BYTES
 #include "StarRustBytes.h"
 #endif
@@ -56,6 +57,14 @@ Json BytesAssetProof;
 std::mutex UnicodeAssetProofMutex;
 Json UnicodeAssetProof;
 Json UnicodeParsedAssetProof;
+std::mutex JsonPathAssetProofMutex;
+Json JsonPathAssetRows = JsonObject{};
+Json JsonPathAssetProof;
+}
+
+Json jsonPathBehaviorAssetProof() {
+  std::lock_guard<std::mutex> lock(JsonPathAssetProofMutex);
+  return JsonPathAssetProof;
 }
 
 Json unicodeBehaviorAssetProof() {
@@ -208,6 +217,9 @@ Assets::Assets(Settings settings, StringList assetSources) {
     std::lock_guard<std::mutex> unicodeLock(UnicodeAssetProofMutex);
     UnicodeAssetProof = Json();
     UnicodeParsedAssetProof = Json();
+    std::lock_guard<std::mutex> jsonPathLock(JsonPathAssetProofMutex);
+    JsonPathAssetRows = JsonObject{};
+    JsonPathAssetProof = Json();
   }
   const char* AssetsPatchSuffix = ".patch";
   const char* AssetsPatchListSuffix = ".patchlist";
@@ -232,6 +244,18 @@ Assets::Assets(Settings settings, StringList assetSources) {
     // Lab-only, executing-thread receipts: no application dependency or config
     // access here, since these callbacks also run during Root construction.
     if (std::getenv("STAR_BEHAVIOR_LAB")) {
+      callbacks.registerCallback("jsonPathLabCounts", []() -> Json {
+        return jsonPathLabJson(jsonPathLabSnapshot());
+      });
+      callbacks.registerCallback("recordJsonPathLabProof", [](Json proof) {
+        std::lock_guard<std::mutex> lock(JsonPathAssetProofMutex);
+        if (!JsonPathAssetRows.contains("rgb") || !JsonPathAssetRows.contains("scale")
+            || !JsonPathAssetRows.contains("label") || !JsonPathAssetProof.isNull())
+          throw AssetException("BehaviorLab: incomplete or repeated jsonpath proof");
+        // Lua cannot supply or override the native asset rows/backend/source.
+        JsonPathAssetProof = JsonObject{{"version", 1}, {"assets", JsonPathAssetRows},
+            {"script", proof.get("script")}, {"visual", proof.get("visual")}};
+      });
       callbacks.registerCallback("recordUnicodeLabProof", [](Json proof) {
         std::lock_guard<std::mutex> lock(UnicodeAssetProofMutex);
         if (UnicodeParsedAssetProof.isNull())
@@ -296,6 +320,29 @@ Assets::Assets(Settings settings, StringList assetSources) {
     }
     callbacks.registerCallbackWithSignature<StringSet, String>("byExtension", bind(&Assets::scanExtension, this, _1));
     callbacks.registerCallback("json", [this](String const& path) -> Json {
+      if (std::getenv("STAR_BEHAVIOR_LAB") && (path == "/behaviorlab/jsonpath-input.json:visual.rgb"
+          || path == "/behaviorlab/jsonpath-input.json:visual.scale"
+          || path == "/behaviorlab/jsonpath-input.json:visual.label")) {
+        auto before = jsonPathLabSnapshot();
+        auto result = json(path);
+        auto calls = jsonPathLabDelta(before);
+        // Read indexed source bytes OUTSIDE the real Assets::json scope.
+        auto source = read("/behaviorlab/jsonpath-input.json");
+        auto patch = read("/behaviorlab/jsonpath-ops.json");
+        String backend = "cpp";
+#ifdef STAR_USE_RUST_JSON_PATH
+        backend = "rust";
+#endif
+        String key = path == "/behaviorlab/jsonpath-input.json:visual.rgb" ? "rgb"
+            : path == "/behaviorlab/jsonpath-input.json:visual.scale" ? "scale" : "label";
+        Json row = JsonObject{{"path", path}, {"value", result}, {"rustCalls", jsonPathLabJson(calls)}};
+        std::lock_guard<std::mutex> lock(JsonPathAssetProofMutex);
+        if (JsonPathAssetRows.contains(key))
+          throw AssetException("BehaviorLab: repeated jsonpath asset query");
+        JsonPathAssetRows = JsonPathAssetRows.set("backend", backend)
+            .set("sourceHex", hexEncode(source)).set("patchHex", hexEncode(patch)).set(key, row);
+        return result;
+      }
       if (!std::getenv("STAR_BEHAVIOR_LAB") || path != "/behaviorlab/unicode-input.json")
         return json(path);
       // First uncached normal JSON load: conversion to Lua happens AFTER the

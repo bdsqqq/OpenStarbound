@@ -103,6 +103,7 @@ private:
   void prepareBehaviorBytesFrame();
   void prepareBehaviorUnicodeFrame();
   void prepareBehaviorShellFrame();
+  void prepareBehaviorJsonPathFrame();
   void validateBehaviorStorage();
   unsigned m_behaviorFrames = 0;
   unsigned m_behaviorSettledFrames = 0;
@@ -114,6 +115,8 @@ private:
   bool m_behaviorSha256Room = false;
   bool m_behaviorVlqRoom = false;
   bool m_behaviorBytesRoom = false;
+  bool m_behaviorJsonPathRoom = false;
+  Json m_behaviorJsonPathProof;
   bool m_behaviorShellRoom = false;
   Json m_behaviorShellProof;
   bool m_behaviorUnicodeRoom = false;

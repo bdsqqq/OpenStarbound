@@ -1,5 +1,9 @@
 # framebuffer behavior lab
 
+## jsonpath-room
+
+Build `scripts/build-behavior-lab.sh jsonpath` (or `jsonpath-combined`), then `run --scenario jsonpath-room`. Earlier modes explicitly keep JSON-path OFF; line queries remain OFF. Shipped JSON and RFC6902 operations flow through actual Assets patch loading, query subpaths and Lua helpers. Native scoped receipts distinguish pointer and query execution; independent literal bytes/results drive normal image/Font output. The base JSON and patch must already be indexed: newly `assets.add`ed files are not generally indexed until postLoad ends. See `EVIDENCE.md` and `../json-path/EVIDENCE.md` for exact inputs, verifier controls and limits.
+
 ## shell-room
 
 Build `scripts/build-behavior-lab.sh shell` (or `shell-combined`), then `run --scenario shell-room`. Earlier modes explicitly keep shell OFF; line queries stay OFF.

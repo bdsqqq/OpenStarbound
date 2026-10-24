@@ -4,8 +4,8 @@
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mode="${1:-lighting}"
-if [[ $# -gt 1 || ! "$mode" =~ ^(lighting|traversal|combined|encode|encode-combined|sha256|sha256-combined|vlq|vlq-combined|bytes|bytes-combined|unicode|unicode-combined|shell|shell-combined)$ ]]; then
-  printf '%s\n' 'usage: build-behavior-lab.sh [lighting|traversal|combined|encode|encode-combined|sha256|sha256-combined|vlq|vlq-combined|bytes|bytes-combined|unicode|unicode-combined|shell|shell-combined]'  >&2
+if [[ $# -gt 1 || ! "$mode" =~ ^(lighting|traversal|combined|encode|encode-combined|sha256|sha256-combined|vlq|vlq-combined|bytes|bytes-combined|unicode|unicode-combined|shell|shell-combined|jsonpath|jsonpath-combined)$ ]]; then
+  printf '%s\n' 'usage: build-behavior-lab.sh [lighting|traversal|combined|encode|encode-combined|sha256|sha256-combined|vlq|vlq-combined|bytes|bytes-combined|unicode|unicode-combined|shell|shell-combined|jsonpath|jsonpath-combined]'  >&2
   exit 2
 fi
 if [[ "$(uname -s)" != Darwin || "$(uname -m)" != arm64 ]]; then
@@ -34,6 +34,7 @@ for backend in reference candidate; do
   bytes=OFF
   unicode=OFF
   shell=OFF
+  jsonpath=OFF
   # All modes share the identical all-C++ reference; candidates stay isolated.
   base="$root/build/behavior"
   if [[ "$backend" == candidate ]]; then
@@ -53,6 +54,8 @@ for backend in reference candidate; do
       unicode-combined) rust=ON; blocks=ON; encode=ON; sha256=ON; vlq=ON; bytes=ON; unicode=ON ;;
       shell) shell=ON ;;
       shell-combined) rust=ON; blocks=ON; encode=ON; sha256=ON; vlq=ON; bytes=ON; unicode=ON; shell=ON ;;
+      jsonpath) jsonpath=ON ;;
+      jsonpath-combined) rust=ON; blocks=ON; encode=ON; sha256=ON; vlq=ON; bytes=ON; unicode=ON; shell=ON; jsonpath=ON ;;
     esac
     if [[ "$mode" != lighting ]]; then base="$base/$mode"; fi
   fi
@@ -74,7 +77,7 @@ for backend in reference candidate; do
     -DSTAR_BUILD_LIGHTING_LAB=OFF "-DSTAR_USE_RUST_LIGHTING=$rust" \
     "-DSTAR_USE_RUST_BLOCKS_ALONG_LINE=$blocks" \
     "-DSTAR_USE_RUST_LINE_QUERY=OFF" "-DSTAR_USE_RUST_ENCODE=$encode" \
-    "-DSTAR_USE_RUST_SHA256=$sha256" "-DSTAR_USE_RUST_VLQ=$vlq" "-DSTAR_USE_RUST_BYTES=$bytes" "-DSTAR_USE_RUST_UNICODE=$unicode" "-DSTAR_USE_RUST_SHELL=$shell" \
+    "-DSTAR_USE_RUST_SHA256=$sha256" "-DSTAR_USE_RUST_VLQ=$vlq" "-DSTAR_USE_RUST_BYTES=$bytes" "-DSTAR_USE_RUST_UNICODE=$unicode" "-DSTAR_USE_RUST_SHELL=$shell" "-DSTAR_USE_RUST_JSON_PATH=$jsonpath" \
     "-DSTAR_RUNTIME_OUTPUT_DIRECTORY=$base/$backend/bin" "${extra[@]}"
   cmake --build "$build" --target starbound --parallel "${CMAKE_BUILD_PARALLEL_LEVEL:-8}"
   python3 "$provenance" seal --source-root "$root" --snapshot "$snapshot" \

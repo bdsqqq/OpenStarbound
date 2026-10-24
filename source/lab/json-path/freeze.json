@@ -1,0 +1,13 @@
+{
+  "revision": "356eeb9bc92cc0c20259b06918aade0c43326d67",
+  "files": {
+    "cpp": {
+      "raw_sha256": "5683e878d887dbf3bc68dc7b8b944b109a02ef58aa7f95f67a9331e3028fba7a",
+      "adapted_sha256": "3d224bbb533743e01517e12b19789e7261afdac9f5e4deee1bf4d5ae95f65949"
+    },
+    "hpp": {
+      "raw_sha256": "cd5238213bbeed2a8b3372cf81adc1fffa5d6a6f50270e44f2c0613a58c93237",
+      "adapted_sha256": "c23f4f8495ce33e910cfa8a61e3e4847983cc8772bae27592c5029ea93ffc102"
+    }
+  }
+}

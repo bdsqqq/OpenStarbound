@@ -1,0 +1,7 @@
+{
+  "name": "behavior-jsonpath-fixtures",
+  "friendlyName": "Isolated JSON path behavior fixtures",
+  "description": "Indexed JSON patch/query fixtures and normal image/font rendering; requires behavior-lab-fixtures.",
+  "priority": 1100,
+  "scripts": {"postLoad": ["/behaviorlab/jsonpath.lua"]}
+}
