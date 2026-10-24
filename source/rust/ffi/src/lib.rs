@@ -1,5 +1,11 @@
 //! The engine's single Rust static archive owns the unmangled C ABI exports.
 //! Kernels remain rlibs so linking another kernel cannot add another Rust runtime.
+mod asset_path;
+pub use asset_path::{
+    star_asset_path_call_count, star_asset_path_filename_range, star_asset_path_split,
+    StarAssetPathRange, StarAssetPathSplit,
+};
+
 mod json_path;
 pub use json_path::{star_json_path_call_count, star_json_path_parse, StarJsonPathHost};
 

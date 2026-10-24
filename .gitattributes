@@ -2,3 +2,5 @@ source/extern/** linguist-vendored=true
 lib/** linguist-vendored=true
 # Preserve the frozen oracle's original whitespace; run.py gates exact bytes.
 source/lab/encode/StarEncode.original.cpp -whitespace
+source/lab/asset-path/StarAssetPath.original.hpp -whitespace
+source/lab/asset-path/StarAssetPath.reference.hpp -whitespace

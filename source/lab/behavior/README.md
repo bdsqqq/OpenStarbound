@@ -1,5 +1,9 @@
 # framebuffer behavior lab
 
+## assetpath-room
+
+Build `scripts/build-behavior-lab.sh assetpath` (or `assetpath-combined`), then `run --scenario assetpath-room`. Earlier modes keep asset-path OFF; line queries remain OFF. Named and alias paths crop the shipped atlas and apply a nonidentity multiply directive through normal Assets image loading. Native-owned full-pixel/source evidence and per-thread split/range receipts distinguish execution from a matching screenshot. Lua displays the returned image itself. The full-height frame tests horizontal selection, not Y-origin inversion; only two byte kernels are ported. See `EVIDENCE.md` and `../asset-path/EVIDENCE.md`.
+
 ## jsonpath-room
 
 Build `scripts/build-behavior-lab.sh jsonpath` (or `jsonpath-combined`), then `run --scenario jsonpath-room`. Earlier modes explicitly keep JSON-path OFF; line queries remain OFF. Shipped JSON and RFC6902 operations flow through actual Assets patch loading, query subpaths and Lua helpers. Native scoped receipts distinguish pointer and query execution; independent literal bytes/results drive normal image/Font output. The base JSON and patch must already be indexed: newly `assets.add`ed files are not generally indexed until postLoad ends. See `EVIDENCE.md` and `../json-path/EVIDENCE.md` for exact inputs, verifier controls and limits.

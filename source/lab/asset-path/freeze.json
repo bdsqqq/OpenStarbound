@@ -1,0 +1,10 @@
+{
+  "revision": "be016305",
+  "scope": "only split and findFilenameRange byte kernels; full class dependency regression oracle",
+  "sha256": {
+    "StarAssetPath.original.cpp": "fa20f09e50e59ed4c8ec7bd072a8d7bc891008db830335f013542aeafda98ebc",
+    "StarAssetPath.original.hpp": "a68ad551b9db61faeba8f746910b571f02654f81ff13ddde1c7dcb5021f31b51",
+    "StarAssetPath.reference.cpp": "a21a36f2184f76a243271dcdc6c90153226b85f33e80ddff8f3520e07e2b3c53",
+    "StarAssetPath.reference.hpp": "354781c87a0415f66e3e13ed5816aafc455a4cace362b0162035fe7ff2c7debb"
+  }
+}

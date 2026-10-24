@@ -22,6 +22,7 @@
 #include "StarBytesLab.hpp"
 #include "StarUnicodeLab.hpp"
 #include "StarJsonPathLab.hpp"
+#include "StarAssetPathLab.hpp"
 #ifdef STAR_USE_RUST_BYTES
 #include "StarRustBytes.h"
 #endif
@@ -60,6 +61,14 @@ Json UnicodeParsedAssetProof;
 std::mutex JsonPathAssetProofMutex;
 Json JsonPathAssetRows = JsonObject{};
 Json JsonPathAssetProof;
+std::mutex AssetPathAssetProofMutex;
+Json AssetPathAssetRows = JsonObject{};
+Json AssetPathAssetProof;
+}
+
+Json assetPathBehaviorAssetProof() {
+  std::lock_guard<std::mutex> lock(AssetPathAssetProofMutex);
+  return AssetPathAssetProof;
 }
 
 Json jsonPathBehaviorAssetProof() {
@@ -244,6 +253,17 @@ Assets::Assets(Settings settings, StringList assetSources) {
     // Lab-only, executing-thread receipts: no application dependency or config
     // access here, since these callbacks also run during Root construction.
     if (std::getenv("STAR_BEHAVIOR_LAB")) {
+      callbacks.registerCallback("recordAssetPathLabProof", [](Json visual) {
+        std::lock_guard<std::mutex> lock(AssetPathAssetProofMutex);
+        if (!AssetPathAssetRows.contains("named") || !AssetPathAssetRows.contains("alias")
+            || !AssetPathAssetProof.isNull())
+          throw AssetException("BehaviorLab: incomplete or repeated assetpath proof");
+        // Only visual fields cross from Lua; asset rows and backend are native.
+        Json acceptedVisual = JsonObject{{"imagePath", visual.get("imagePath")},
+            {"color", visual.get("color")}, {"size", visual.get("size")}, {"label", visual.get("label")}};
+        AssetPathAssetProof = JsonObject{{"version", 1}, {"assets", AssetPathAssetRows},
+            {"visual", acceptedVisual}};
+      });
       callbacks.registerCallback("jsonPathLabCounts", []() -> Json {
         return jsonPathLabJson(jsonPathLabSnapshot());
       });
@@ -427,7 +447,40 @@ Assets::Assets(Settings settings, StringList assetSources) {
     });
 
     callbacks.registerCallback("image", [this](String const& path) -> Image {
+      bool const capture = std::getenv("STAR_BEHAVIOR_LAB")
+          && (path == "/behaviorlab/assetpath-atlas.png:right?multiply=80ff80"
+              || path == "/behaviorlab/assetpath-atlas.png:alias?multiply=80ff80");
+      // Snapshot BEFORE implicit String -> AssetPath; delta BEFORE any image
+      // inspection, copy, source read, or Lua conversion can perturb receipts.
+      auto before = capture ? assetPathLabSnapshot() : AssetPathLabCounts{};
       auto assetImage = image(path);
+      auto calls = capture ? assetPathLabDelta(before) : AssetPathLabCounts{};
+      if (capture) {
+        ByteArray rgba;
+        for (unsigned y = 0; y != assetImage->height(); ++y)
+          for (unsigned x = 0; x != assetImage->width(); ++x) {
+            auto pixel = assetImage->get(x, y);
+            for (unsigned channel = 0; channel != 4; ++channel)
+              rgba.appendByte(static_cast<char>(pixel[channel]));
+          }
+        auto atlas = read("/behaviorlab/assetpath-atlas.png");
+        auto frames = read("/behaviorlab/assetpath-atlas.frames");
+        String backend = "cpp";
+#ifdef STAR_USE_RUST_ASSET_PATH
+        backend = "rust";
+#endif
+        String key = path == "/behaviorlab/assetpath-atlas.png:right?multiply=80ff80" ? "named" : "alias";
+        Json row = JsonObject{{"path", path},
+            {"size", JsonArray{assetImage->width(), assetImage->height()}},
+            {"rgbaHex", hexEncode(rgba)}, {"rustCalls", assetPathLabJson(calls)}};
+        std::lock_guard<std::mutex> lock(AssetPathAssetProofMutex);
+        if (AssetPathAssetRows.contains(key)
+            || (key == "named" && AssetPathAssetRows.contains("alias"))
+            || (key == "alias" && !AssetPathAssetRows.contains("named")))
+          throw AssetException("BehaviorLab: repeated or out-of-order assetpath image");
+        AssetPathAssetRows = AssetPathAssetRows.set("backend", backend)
+            .set("atlasHex", hexEncode(atlas)).set("framesHex", hexEncode(frames)).set(key, row);
+      }
       if (assetImage->bytesPerPixel() == 3)
         return assetImage->convert(PixelFormat::RGBA32);
       else

@@ -1,0 +1,7 @@
+{
+  "name": "behavior-assetpath-fixtures",
+  "friendlyName": "Isolated asset path behavior fixtures",
+  "description": "Named frame, alias, and multiply through normal Assets image loading; requires behavior-lab-fixtures.",
+  "priority": 1100,
+  "scripts": {"postLoad": ["/behaviorlab/assetpath.lua"]}
+}

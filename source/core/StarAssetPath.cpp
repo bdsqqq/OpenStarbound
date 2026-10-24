@@ -1,11 +1,23 @@
 #include "StarAssetPath.hpp"
 #include "StarLexicalCast.hpp"
 
+#ifdef STAR_USE_RUST_ASSET_PATH
+#include "StarRustAssetPath.h"
+#endif
+
 namespace Star {
 
 // The filename is everything after the last slash (excluding directives) and
 // up to the first directive marker.
 static Maybe<pair<size_t, size_t>> findFilenameRange(std::string const& pathUtf8) {
+#ifdef STAR_USE_RUST_ASSET_PATH
+  StarAssetPathRange range;
+  if (star_asset_path_filename_range(reinterpret_cast<uint8_t const*>(pathUtf8.data()), pathUtf8.size(), &range) != 0)
+    throw StarException("Rust asset filename range failed");
+  if (range.start == NPos)
+    return {};
+  return {{range.start, range.end}};
+#else
   size_t firstDirectiveOrSubPath = pathUtf8.find_first_of(":?");
   size_t filenameStart = 0;
   while (true) {
@@ -22,6 +34,7 @@ static Maybe<pair<size_t, size_t>> findFilenameRange(std::string const& pathUtf8
   } else {
     return {{filenameStart, firstDirectiveOrSubPath}};
   }
+#endif
 }
 
 AssetPath AssetPath::split(String const& path) {
@@ -29,6 +42,19 @@ AssetPath AssetPath::split(String const& path) {
 
   std::string const& str = path.utf8();
 
+#ifdef STAR_USE_RUST_ASSET_PATH
+  StarAssetPathSplit metadata;
+  if (star_asset_path_split(reinterpret_cast<uint8_t const*>(str.data()), str.size(), &metadata) != 0)
+    throw StarException("Rust asset path split failed");
+  // Keep C++ materialization and allocation order; counts retain std::substr's
+  // original NPos/wrapping semantics rather than clamped byte lengths.
+  components.basePath = str.substr(0, metadata.base_len);
+  if (metadata.sub_start != NPos)
+    components.subPath.emplace(str.substr(metadata.sub_start, metadata.sub_count));
+  if (metadata.directive_start != NPos)
+    components.directives = String(str.substr(metadata.directive_start));
+  return components;
+#else
   //base paths cannot have any ':' or '?' characters, stop at the first one.
   size_t end = str.find_first_of(":?");
   components.basePath = str.substr(0, end);
@@ -58,6 +84,7 @@ AssetPath AssetPath::split(String const& path) {
     components.directives = String(str.substr(end));
 
   return components;
+#endif
 }
 
 String AssetPath::join(AssetPath const& components) {

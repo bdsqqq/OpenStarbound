@@ -10,6 +10,7 @@
 #include "StarBytesLab.hpp"
 #include "StarUnicodeLab.hpp"
 #include "StarJsonPathLab.hpp"
+#include "StarAssetPathLab.hpp"
 #ifdef STAR_USE_RUST_BYTES
 #include "StarRustBytes.h"
 #endif
@@ -547,6 +548,8 @@ void ClientApplication::render() {
         prepareBehaviorShellFrame();
       if (BehaviorLab::enabled() && m_behaviorJsonPathRoom)
         prepareBehaviorJsonPathFrame();
+      if (BehaviorLab::enabled() && m_behaviorAssetPathRoom)
+        prepareBehaviorAssetPathFrame();
 
       auto paintStart = Time::monotonicMicroseconds();
       m_worldPainter->render(m_renderData, [&]() -> bool {
@@ -578,7 +581,8 @@ void ClientApplication::render() {
     } else {
       if ((m_behaviorUnicodeRoom && !m_behaviorUnicodeProof.isNull())
           || (m_behaviorShellRoom && !m_behaviorShellProof.isNull())
-          || (m_behaviorJsonPathRoom && !m_behaviorJsonPathProof.isNull())) {
+          || (m_behaviorJsonPathRoom && !m_behaviorJsonPathProof.isNull())
+          || (m_behaviorAssetPathRoom && !m_behaviorAssetPathProof.isNull())) {
         // Normal Font -> TextPainter -> GPU glyph path; only ASCII coverage is
         // claimed. Screen-space coordinates avoid the 64px world-image area.
         m_guiContext->clearTextStyle();
@@ -587,7 +591,8 @@ void ClientApplication::render() {
         m_guiContext->setFontColor(Vec4B(255, 255, 255, 255));
         m_guiContext->setFontMode(FontMode::Normal);
         m_guiContext->setFontProcessingDirectives("");
-        m_guiContext->renderText(m_behaviorJsonPathRoom ? m_behaviorJsonPathProof.get("visual").getString("label")
+        m_guiContext->renderText(m_behaviorAssetPathRoom ? m_behaviorAssetPathProof.get("visual").getString("label")
+            : m_behaviorJsonPathRoom ? m_behaviorJsonPathProof.get("visual").getString("label")
             : m_behaviorShellRoom ? m_behaviorShellProof.get("visual").getString("label")
             : m_behaviorUnicodeProof.get("assets").getString("label"),
             TextPositioning(Vec2F(m_guiContext->windowSize()) * 0.5f + Vec2F(m_behaviorShellRoom ? -25 : -35, 70)));
@@ -1470,7 +1475,7 @@ void ClientApplication::validateBehaviorStorage() {
   auto scenario = config.getString("scenario", "lighting-room");
   if (scenario != "lighting-room" && scenario != "raycast-room" && scenario != "encoding-room"
       && scenario != "sha256-room" && scenario != "vlq-room" && scenario != "bytes-room"
-      && scenario != "unicode-room" && scenario != "shell-room" && scenario != "jsonpath-room")
+      && scenario != "unicode-room" && scenario != "shell-room" && scenario != "jsonpath-room" && scenario != "assetpath-room")
     throw StarException("BehaviorLab: unsupported scenario");
   m_behaviorRaycastRoom = scenario == "raycast-room";
   m_behaviorEncodingRoom = scenario == "encoding-room";
@@ -1480,6 +1485,7 @@ void ClientApplication::validateBehaviorStorage() {
   m_behaviorUnicodeRoom = scenario == "unicode-room";
   m_behaviorShellRoom = scenario == "shell-room";
   m_behaviorJsonPathRoom = scenario == "jsonpath-room";
+  m_behaviorAssetPathRoom = scenario == "assetpath-room";
   if (config.getUInt("maxFrames", 1800) == 0 || config.getUInt("maxFrames", 1800) > 18000)
     throw StarException("BehaviorLab: maxFrames must be in [1, 18000]");
 
@@ -1600,7 +1606,7 @@ void ClientApplication::updateBehaviorScenario() {
       return;
     if (m_behaviorStage == 2) {
       Logger::info("BehaviorLab: {} completed (three acknowledged world frames)",
-          m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
+          m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
       m_behaviorPhase = 5;
       appController()->quit();
       return;
@@ -2354,6 +2360,78 @@ void ClientApplication::prepareBehaviorUnicodeFrame() {
   m_renderData.foregroundOverlays.append(std::move(drawable));
 }
 
+void ClientApplication::prepareBehaviorAssetPathFrame() {
+  if (!m_behaviorReady || BehaviorLab::hasPendingFrame() || m_renderData.isFullbright)
+    return;
+  auto world = m_universeClient->worldClient();
+  if (!world || !world->inWorld())
+    return;
+  if (m_behaviorAssetPathProof.isNull()) {
+    auto proof = assetPathBehaviorAssetProof();
+    if (proof.isNull() || proof.getUInt("version") != 1)
+      throw StarException("BehaviorLab: missing assetpath postLoad proof");
+    auto rows = proof.get("assets");
+    auto visual = proof.get("visual");
+    String backend = "cpp";
+    JsonArray namedCalls{0, 0}, aliasCalls{0, 0};
+#ifdef STAR_USE_RUST_ASSET_PATH
+    backend = "rust";
+    namedCalls = JsonArray{1, 2};
+    aliasCalls = JsonArray{1, 0};
+#endif
+    auto assets = m_root->assets();
+    String frames = "{\"frameList\":{\"left\":[0,0,16,16],\"right\":[16,0,32,16]},\"aliases\":{\"alias\":\"right\"}}\n";
+    auto atlasBytes = assets->bytes("/behaviorlab/assetpath-atlas.png");
+    auto framesBytes = assets->bytes("/behaviorlab/assetpath-atlas.frames");
+    if (rows.getString("backend") != backend
+        || rows.getString("atlasHex") != hexEncode(*atlasBytes)
+        || rows.getString("framesHex") != hexEncode(*framesBytes)
+        || *framesBytes != frames.utf8Bytes())
+      throw StarException("BehaviorLab: assetpath source/backend mismatch");
+    // Decode the actual indexed PNG, not a replacement image. The literal
+    // half-atlas oracle discriminates wrong frame selection/cropping.
+    auto atlas = assets->image("/behaviorlab/assetpath-atlas.png");
+    if (atlas->size() != Vec2U(32, 16))
+      throw StarException("BehaviorLab: assetpath atlas must be 32x16");
+    for (unsigned y = 0; y != 16; ++y)
+      for (unsigned x = 0; x != 32; ++x)
+        if (atlas->get(x, y) != (x < 16 ? Vec4B(255, 0, 0, 255) : Vec4B(64, 128, 192, 255)))
+          throw StarException("BehaviorLab: assetpath atlas pixels mismatch");
+    ByteArray expectedRgba;
+    for (unsigned i = 0; i != 256; ++i) {
+      expectedRgba.appendByte(32);
+      expectedRgba.appendByte(static_cast<char>(128));
+      expectedRgba.appendByte(96);
+      expectedRgba.appendByte(static_cast<char>(255));
+    }
+    auto requireRow = [&](String const& key, String const& path, JsonArray const& calls) {
+      auto row = rows.get(key);
+      if (row.getString("path") != path || row.getArray("size") != JsonArray{16, 16}
+          || row.getString("rgbaHex") != hexEncode(expectedRgba) || row.getArray("rustCalls") != calls)
+        throw StarException("BehaviorLab: assetpath native image/receipt mismatch");
+    };
+    requireRow("named", "/behaviorlab/assetpath-atlas.png:right?multiply=80ff80", namedCalls);
+    requireRow("alias", "/behaviorlab/assetpath-atlas.png:alias?multiply=80ff80", aliasCalls);
+    String imagePath = "/behaviorlab/assetpath-result.png";
+    if (visual.getString("imagePath") != imagePath || visual.getString("label") != "ASSETPATH"
+        || visual.getArray("color") != JsonArray{32, 128, 96, 255}
+        || visual.getArray("size") != JsonArray{16, 16} || !assets->assetExists(imagePath))
+      throw StarException("BehaviorLab: assetpath visual metadata mismatch");
+    auto image = assets->image(imagePath);
+    if (image->size() != Vec2U(16, 16))
+      throw StarException("BehaviorLab: assetpath result must be 16x16");
+    for (unsigned y = 0; y != 16; ++y)
+      for (unsigned x = 0; x != 16; ++x)
+        if (image->get(x, y) != Vec4B(32, 128, 96, 255))
+          throw StarException("BehaviorLab: assetpath processed result pixels mismatch");
+    m_behaviorAssetPathProof = std::move(proof);
+  }
+  auto drawable = Drawable::makeImage("/behaviorlab/assetpath-result.png",
+      2.0f / TilePixels, true, Vec2F(64, 48));
+  drawable.fullbright = true;
+  m_renderData.foregroundOverlays.append(std::move(drawable));
+}
+
 void ClientApplication::prepareBehaviorJsonPathFrame() {
   auto world = m_universeClient->worldClient();
   if (!world || !world->inWorld())
@@ -2559,7 +2637,7 @@ void ClientApplication::renderBehaviorScenario() {
       {"layout", "row-major-rgb-f32-bits"}, {"bits", std::move(lightmapBits)}};
   Json metadata = JsonObject{
       {"lightingDiagnostics", std::move(lightmapDiagnostic)},
-      {"scenario", m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
+      {"scenario", m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
       {"worldState", JsonObject{
           {"worldId", printWorldId(m_universeClient->clientContext()->playerWorldId())},
           {"worldSize", jsonFromVec2U(world->geometry().size())},
@@ -2630,6 +2708,11 @@ void ClientApplication::renderBehaviorScenario() {
     if (m_behaviorJsonPathProof.isNull())
       throw StarException("BehaviorLab: jsonpath proof missing");
     metadata = metadata.set("jsonPathProof", m_behaviorJsonPathProof);
+  }
+  if (m_behaviorAssetPathRoom) {
+    if (m_behaviorAssetPathProof.isNull())
+      throw StarException("BehaviorLab: assetpath frame has no completed proof");
+    metadata = metadata.set("assetPathProof", m_behaviorAssetPathProof);
   }
   BehaviorLab::queueFrame(m_behaviorCapture, std::move(metadata));
   m_behaviorReady = false;
