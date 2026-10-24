@@ -1,0 +1,1 @@
+[{"op":"replace","path":"/visual/label","value":"BAD"},{"op":"test","path":"/visual/scale","value":-1}]

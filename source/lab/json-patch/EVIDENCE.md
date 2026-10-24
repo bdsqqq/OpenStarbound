@@ -1,5 +1,7 @@
 # json-patch cpp calibration — 2026-10-24
 
+historical phase1 record below. current Rust selector, independent replay and actual Assets/game acceptance are in [CANDIDATE_EVIDENCE.md](CANDIDATE_EVIDENCE.md).
+
 VERIFIED: calibration only. no rust backend, production edit, native rebuild, game run, screenshot, commit, or port-completion claim.
 
 ## replay

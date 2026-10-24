@@ -10,6 +10,7 @@
 #include "StarBytesLab.hpp"
 #include "StarUnicodeLab.hpp"
 #include "StarJsonPathLab.hpp"
+#include "StarJsonPatchLab.hpp"
 #include "StarAssetPathLab.hpp"
 #include "StarRandomMwcLab.hpp"
 #ifdef STAR_USE_RUST_BYTES
@@ -547,6 +548,8 @@ void ClientApplication::render() {
         prepareBehaviorUnicodeFrame();
       if (BehaviorLab::enabled() && m_behaviorShellRoom)
         prepareBehaviorShellFrame();
+      if (BehaviorLab::enabled() && m_behaviorJsonPatchRoom)
+        prepareBehaviorJsonPatchFrame();
       if (BehaviorLab::enabled() && m_behaviorJsonPathRoom)
         prepareBehaviorJsonPathFrame();
       if (BehaviorLab::enabled() && m_behaviorAssetPathRoom)
@@ -584,6 +587,7 @@ void ClientApplication::render() {
     } else {
       if ((m_behaviorUnicodeRoom && !m_behaviorUnicodeProof.isNull())
           || (m_behaviorShellRoom && !m_behaviorShellProof.isNull())
+          || (m_behaviorJsonPatchRoom && !m_behaviorJsonPatchProof.isNull())
           || (m_behaviorJsonPathRoom && !m_behaviorJsonPathProof.isNull())
           || (m_behaviorAssetPathRoom && !m_behaviorAssetPathProof.isNull())
           || (m_behaviorRandomMwcRoom && !m_behaviorRandomMwcProof.isNull())) {
@@ -595,7 +599,8 @@ void ClientApplication::render() {
         m_guiContext->setFontColor(Vec4B(255, 255, 255, 255));
         m_guiContext->setFontMode(FontMode::Normal);
         m_guiContext->setFontProcessingDirectives("");
-        m_guiContext->renderText(m_behaviorRandomMwcRoom ? m_behaviorRandomMwcProof.get("visual").getString("label")
+        m_guiContext->renderText(m_behaviorJsonPatchRoom ? m_behaviorJsonPatchProof.get("visual").getString("label")
+            : m_behaviorRandomMwcRoom ? m_behaviorRandomMwcProof.get("visual").getString("label")
             : m_behaviorAssetPathRoom ? m_behaviorAssetPathProof.get("visual").getString("label")
             : m_behaviorJsonPathRoom ? m_behaviorJsonPathProof.get("visual").getString("label")
             : m_behaviorShellRoom ? m_behaviorShellProof.get("visual").getString("label")
@@ -1481,7 +1486,7 @@ void ClientApplication::validateBehaviorStorage() {
   if (scenario != "lighting-room" && scenario != "raycast-room" && scenario != "encoding-room"
       && scenario != "sha256-room" && scenario != "vlq-room" && scenario != "bytes-room"
       && scenario != "unicode-room" && scenario != "shell-room" && scenario != "jsonpath-room" && scenario != "assetpath-room"
-      && scenario != "random-room")
+      && scenario != "random-room" && scenario != "jsonpatch-room")
     throw StarException("BehaviorLab: unsupported scenario");
   m_behaviorRaycastRoom = scenario == "raycast-room";
   m_behaviorEncodingRoom = scenario == "encoding-room";
@@ -1491,6 +1496,7 @@ void ClientApplication::validateBehaviorStorage() {
   m_behaviorUnicodeRoom = scenario == "unicode-room";
   m_behaviorShellRoom = scenario == "shell-room";
   m_behaviorJsonPathRoom = scenario == "jsonpath-room";
+  m_behaviorJsonPatchRoom = scenario == "jsonpatch-room";
   m_behaviorAssetPathRoom = scenario == "assetpath-room";
   m_behaviorRandomMwcRoom = scenario == "random-room";
   if (config.getUInt("maxFrames", 1800) == 0 || config.getUInt("maxFrames", 1800) > 18000)
@@ -1613,7 +1619,7 @@ void ClientApplication::updateBehaviorScenario() {
       return;
     if (m_behaviorStage == 2) {
       Logger::info("BehaviorLab: {} completed (three acknowledged world frames)",
-          m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
+          m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
       m_behaviorPhase = 5;
       appController()->quit();
       return;
@@ -2493,6 +2499,67 @@ void ClientApplication::prepareBehaviorAssetPathFrame() {
   m_renderData.foregroundOverlays.append(std::move(drawable));
 }
 
+void ClientApplication::prepareBehaviorJsonPatchFrame() {
+  if (!m_behaviorReady || BehaviorLab::hasPendingFrame() || m_renderData.isFullbright)
+    return;
+  auto world = m_universeClient->worldClient();
+  if (!world || !world->inWorld())
+    return;
+  if (m_behaviorJsonPatchProof.isNull()) {
+    auto proof = jsonPatchBehaviorAssetProof();
+    if (proof.isNull() || proof.getUInt("version") != 1)
+      throw StarException("BehaviorLab: missing jsonpatch proof");
+    auto assetsProof = proof.get("assets");
+    String backend = "cpp";
+#ifdef STAR_USE_RUST_JSON_PATCH
+    backend = "rust";
+#endif
+    String const source = R"JP({"a/b":{"~é":[64,128]},"items":[{"id":"a","n":1},{"id":"b","n":2}],"visual":{"rgb":[],"scale":1,"label":"BEFORE"},"trash":7}
+)JP";
+    String const patch1 = R"JP([{"op":"test","path":"/a~1b/~0é/0","value":64},{"op":"copy","from":"/a~1b/~0é/0","path":"/visual/rgb/-"},{"op":"add","path":"/visual/rgb/-","value":128},{"op":"replace","path":"/visual/scale","value":4},{"op":"move","from":"/trash","path":"/moved"},{"op":"remove","path":"/moved"},{"op":"merge","path":"/visual","value":{"rgb":[64,128,192],"label":"PATCH","scale":null}},{"op":"test","path":"/items","search":{"id":"a"}},{"op":"add","path":"/items","search":{"id":"b"},"value":{"id":"x","n":9}},{"op":"replace","path":"/items","search":{"id":"x"},"value":{"id":"x","n":10}},{"op":"merge","path":"/items","search":{"id":"x"},"value":{"extra":true,"n":null}},{"op":"copy","from":"/items","path":"/selected","search":{"id":"x"}},{"op":"move","from":"/items","path":"/picked","search":{"id":"b"}},{"op":"remove","path":"/items","search":{"id":"a"}},{"op":"test","path":"/absent","inverse":true},[{"op":"add","path":"/visual/scale","value":99},{"op":"test","path":"/visual/scale","value":-1}],{"op":"add","path":"/after","value":true}]
+)JP";
+    String const patch2 = R"JP([{"op":"replace","path":"/visual/label","value":"BAD"},{"op":"test","path":"/visual/scale","value":-1}]
+)JP";
+    auto expected = Json::parse(R"JP({"a/b":{"~é":[64,128]},"items":[{"id":"x","n":10,"extra":true}],"visual":{"rgb":[64,128,192],"scale":4,"label":"PATCH"},"selected":{"id":"x","n":10,"extra":true},"picked":{"id":"b","n":2},"after":true})JP");
+    if (assetsProof.getString("backend") != backend
+        || assetsProof.getString("sourceHex") != hexEncode(source.utf8Bytes())
+        || assetsProof.getArray("patchesHex") != JsonArray{hexEncode(patch1.utf8Bytes()), hexEncode(patch2.utf8Bytes())}
+        || assetsProof.get("value") != expected)
+      throw StarException("BehaviorLab: jsonpatch backend/source/full native value mismatch");
+    // Assets invokes APPLY, not public PATCH. Internal FIND and handlers are counted.
+    JsonPatchLabCounts predictions{};
+    if (backend == "rust") {
+      predictions[0] = {{0, 20, 7, 5, 2, 4, 3, 2, 2, 2}};
+      predictions[1] = {{0, 18, 7, 3, 2, 4, 3, 2, 2, 2}};
+      predictions[2] = {{0, 2, 0, 2, 0, 0, 0, 0, 0, 0}};
+    }
+    if (assetsProof.get("calls") != jsonPatchLabJson(predictions))
+      throw StarException("BehaviorLab: jsonpatch semantic receipt mismatch");
+    auto visual = proof.get("visual");
+    auto observed = assetsProof.get("value").get("visual");
+    String const imagePath = "/behaviorlab/jsonpatch-result.png";
+    auto assets = m_root->assets();
+    if (visual.getString("imagePath") != imagePath
+        || visual.getArray("color") != JsonArray{64, 128, 192, 255}
+        || visual.get("scale") != observed.get("scale")
+        || visual.get("label") != observed.get("label") || !assets->assetExists(imagePath))
+      throw StarException("BehaviorLab: jsonpatch visual metadata mismatch");
+    auto image = assets->image(imagePath);
+    if (image->size() != Vec2U(16, 16))
+      throw StarException("BehaviorLab: jsonpatch image must be 16x16");
+    for (unsigned y = 0; y != 16; ++y)
+      for (unsigned x = 0; x != 16; ++x)
+        if (image->get(x, y) != Vec4B(64, 128, 192, 255))
+          throw StarException("BehaviorLab: jsonpatch pixels differ from native RGB");
+    m_behaviorJsonPatchProof = std::move(proof);
+  }
+  auto observedScale = m_behaviorJsonPatchProof.get("visual").getFloat("scale");
+  auto drawable = Drawable::makeImage("/behaviorlab/jsonpatch-result.png",
+      observedScale * 0.5f / TilePixels, true, Vec2F(64, 48));
+  drawable.fullbright = true;
+  m_renderData.foregroundOverlays.append(std::move(drawable));
+}
+
 void ClientApplication::prepareBehaviorJsonPathFrame() {
   auto world = m_universeClient->worldClient();
   if (!world || !world->inWorld())
@@ -2698,7 +2765,7 @@ void ClientApplication::renderBehaviorScenario() {
       {"layout", "row-major-rgb-f32-bits"}, {"bits", std::move(lightmapBits)}};
   Json metadata = JsonObject{
       {"lightingDiagnostics", std::move(lightmapDiagnostic)},
-      {"scenario", m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
+      {"scenario", m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
       {"worldState", JsonObject{
           {"worldId", printWorldId(m_universeClient->clientContext()->playerWorldId())},
           {"worldSize", jsonFromVec2U(world->geometry().size())},
@@ -2764,6 +2831,11 @@ void ClientApplication::renderBehaviorScenario() {
     if (m_behaviorUnicodeProof.isNull())
       throw StarException("BehaviorLab: unicode frame has no completed proof");
     metadata = metadata.set("unicodeProof", m_behaviorUnicodeProof);
+  }
+  if (m_behaviorJsonPatchRoom) {
+    if (m_behaviorJsonPatchProof.isNull())
+      throw StarException("BehaviorLab: jsonpatch frame has no completed proof");
+    metadata = metadata.set("jsonPatchProof", m_behaviorJsonPatchProof);
   }
   if (m_behaviorJsonPathRoom) {
     if (m_behaviorJsonPathProof.isNull())

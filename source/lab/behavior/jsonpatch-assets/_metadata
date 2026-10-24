@@ -1,0 +1,7 @@
+{
+  "name": "behavior-jsonpatch-fixtures",
+  "friendlyName": "Isolated JSON patch behavior fixtures",
+  "description": "Indexed patches, rollback and normal image/font rendering; requires behavior-lab-fixtures.",
+  "priority": 1100,
+  "scripts": {"postLoad": ["/behaviorlab/jsonpatch.lua"]}
+}

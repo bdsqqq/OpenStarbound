@@ -194,3 +194,10 @@ b5d1010cc8511bc8d9c3ca916ad01d4cf4c0ddb69976bded6fb5fb6567143771  dist/lighting_
 ```
 
 other platforms, moving-gameplay replay, save/network/audio parity and performance remain unverified. no pushes, publishing, Steam-install changes or user-save writes were performed. the full migration remains open.
+
+
+## JSON patch control flow
+
+`jsonpatch-room` loads two literal operation files through normal `assets.patch` and the first uncached `assets.json`. all seven handlers, seven searches, inverse traversal, nested rollback and whole-patch rollback produce the full independently checked JSON. native attempt/success/exception vectors distinguish20dispatch attempts/18successes/two caught test failures; the public whole-PATCH entry is not called by Assets. observed RGB64/128/192, scale4 and labelPATCH drive a normal64×64image and Font label.
+
+parent isolated/combined fixtures and all eleven prior combined scenarios pass exact native frames/state/receipts; historical pixels remain unchanged. evidence, commands, source-bound oracle reports, invalid-metadata/known-failure controls and limitations: [JSON patch candidate](../json-patch/CANDIDATE_EVIDENCE.md). script modes `jsonpatch`/`jsonpatch-combined`; selector defaults OFF. no universal/performance/OOM/save/network/playback claim.

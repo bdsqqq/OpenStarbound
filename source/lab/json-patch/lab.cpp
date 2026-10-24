@@ -4,6 +4,9 @@
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
+#ifdef STAR_USE_RUST_JSON_PATCH
+#include "StarRustJsonPatch.h"
+#endif
 using namespace Star;
 namespace Star { size_t findJsonMatch(Json const&,Json const&,JsonPath::Pointer&); }
 namespace JsonPatchReference { size_t findJsonMatch(Json const&,Json const&,JsonPath::Pointer&); }
@@ -20,7 +23,15 @@ switch(entry){case 0:v=ref?JsonPatchReference::jsonPatch(b,o.toArray()):jsonPatc
 r.value=typed(v);
 }catch(std::exception const&e){r.error=printException(e,false);if(dynamic_cast<JsonPatchTestFail const*>(&e)||dynamic_cast<JsonPatchReference::JsonPatchTestFail const*>(&e))r.category=1;else if(dynamic_cast<JsonPatchException const*>(&e)||dynamic_cast<JsonPatchReference::JsonPatchException const*>(&e))r.category=2;else if(dynamic_cast<JsonException const*>(&e))r.category=3;else if(dynamic_cast<JsonPath::TraversalException const*>(&e))r.category=4;else r.category=5;}
 return r;}
-static Result test(int entry,Json const&b,Json const&o){++cases;auto before=typed(b);auto a=execute(false,entry,b,o),r=execute(true,entry,b,o);check(a==r,"typed value/full final error/category");check(typed(b)==before,"immutable base including failure");obs(std::to_string(entry));obs(before);obs(typed(o));obs(a.value);obs(a.error);obs(std::to_string(a.category));return a;}
+static Result test(int entry,Json const&b,Json const&o){++cases;auto before=typed(b);auto opBefore=typed(o);
+#ifdef STAR_USE_RUST_JSON_PATCH
+ unsigned semantic=entry==9?2:(entry>=2?entry+1:entry);uint64_t counters[3];for(unsigned i=0;i<3;++i)counters[i]=star_json_patch_call_count(semantic,i);
+#endif
+ auto a=execute(false,entry,b,o),r=execute(true,entry,b,o);check(a==r,"typed value/full final error/category");check(typed(b)==before,"immutable base including failure");check(typed(o)==opBefore,"immutable operation including failure");
+#ifdef STAR_USE_RUST_JSON_PATCH
+ check(star_json_patch_call_count(semantic,0)==counters[0]+1,"semantic attempt count");check(star_json_patch_call_count(semantic,1)==counters[1]+uint64_t(a.category==0),"semantic success count");check(star_json_patch_call_count(semantic,2)==counters[2]+uint64_t(a.category!=0),"semantic native exception count");
+#endif
+obs(std::to_string(entry));obs(before);obs(typed(o));obs(a.value);obs(a.error);obs(std::to_string(a.category));return a;}
 static void anchor(char const*b,char const*o,char const*v,int entry=1){auto r=test(entry,Json::parse(b),Json::parse(o));check(r.category==0&&r.value==typed(Json::parse(v)),"independent literal expected value and numeric types");}
 int main(){auto p=std::getenv("LAB_OBSERVATIONS");check(p!=nullptr,"observation path");stream.open(p,std::ios::binary);check(bool(stream),"stream open");
 // RFC 6902 appendix A, anchored independently rather than derived from clone.

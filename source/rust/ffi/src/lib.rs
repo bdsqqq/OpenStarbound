@@ -15,6 +15,9 @@ pub use asset_path::{
 mod json_path;
 pub use json_path::{star_json_path_call_count, star_json_path_parse, StarJsonPathHost};
 
+mod json_patch;
+pub use json_patch::{star_json_patch_call_count, star_json_patch_run, StarJsonPatchHost};
+
 mod shell;
 pub use shell::{star_shell_call_count, star_shell_tokenize, StarShellClassify, StarShellEmit};
 

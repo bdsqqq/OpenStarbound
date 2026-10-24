@@ -2,6 +2,63 @@
 #include "StarJsonPath.hpp"
 #include "StarLexicalCast.hpp"
 
+#ifdef STAR_USE_RUST_JSON_PATCH
+#include "StarJsonPatchHost.hpp"
+
+namespace Star {
+
+Json jsonPatch(Json const& base, JsonArray const& patch) {
+  // Preserve the public copy before entering the patch controller's catch scope.
+  auto res = base;
+  JsonPatchHostDetail::Context c;
+  c.B = std::move(res);
+  c.Patch = &patch;
+  JsonPatchHostDetail::invoke(JP_PATCH, c);
+  if (!c.Result)
+    throw StarException("Rust Json patch controller omitted its result", false);
+  return std::move(*c.Result);
+}
+
+size_t findJsonMatch(Json const& searchable, Json const& value, JsonPath::Pointer& pointer) {
+  JsonPatchHostDetail::Context c;
+  c.Searchable = searchable;
+  c.SearchValue = value;
+  c.ExternalFindPointer = &pointer;
+  auto found = JsonPatchHostDetail::invoke(JP_FIND, c);
+  if (found > std::numeric_limits<size_t>::max()
+      || (found && (!searchable.isType(Json::Type::Array) || found > searchable.size())))
+    throw StarException("Rust Json patch controller returned an invalid index", false);
+  return static_cast<size_t>(found);
+}
+
+namespace JsonPatching {
+Json applyOperation(Json const& base, Json const& op, Maybe<Json> const&) {
+  return JsonPatchHostDetail::operation(JP_APPLY, base, op);
+}
+Json applyTestOperation(Json const& base, Json const& op) {
+  return JsonPatchHostDetail::operation(JP_TEST, base, op);
+}
+Json applyRemoveOperation(Json const& base, Json const& op) {
+  return JsonPatchHostDetail::operation(JP_REMOVE, base, op);
+}
+Json applyAddOperation(Json const& base, Json const& op) {
+  return JsonPatchHostDetail::operation(JP_ADD, base, op);
+}
+Json applyReplaceOperation(Json const& base, Json const& op) {
+  return JsonPatchHostDetail::operation(JP_REPLACE, base, op);
+}
+Json applyMoveOperation(Json const& base, Json const& op) {
+  return JsonPatchHostDetail::operation(JP_MOVE, base, op);
+}
+Json applyCopyOperation(Json const& base, Json const& op) {
+  return JsonPatchHostDetail::operation(JP_COPY, base, op);
+}
+Json applyMergeOperation(Json const& base, Json const& op) {
+  return JsonPatchHostDetail::operation(JP_MERGE, base, op);
+}
+}
+}
+#else
 namespace Star {
 
 Json jsonPatch(Json const& base, JsonArray const& patch) {
@@ -197,3 +254,4 @@ namespace JsonPatching {
 }
 
 }
+#endif

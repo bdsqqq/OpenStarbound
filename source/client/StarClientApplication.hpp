@@ -104,6 +104,7 @@ private:
   void prepareBehaviorUnicodeFrame();
   void prepareBehaviorShellFrame();
   void prepareBehaviorJsonPathFrame();
+  void prepareBehaviorJsonPatchFrame();
   void prepareBehaviorAssetPathFrame();
   void prepareBehaviorRandomMwcFrame();
   void validateBehaviorStorage();
@@ -117,6 +118,8 @@ private:
   bool m_behaviorSha256Room = false;
   bool m_behaviorVlqRoom = false;
   bool m_behaviorBytesRoom = false;
+  bool m_behaviorJsonPatchRoom = false;
+  Json m_behaviorJsonPatchProof;
   bool m_behaviorJsonPathRoom = false;
   Json m_behaviorJsonPathProof;
   bool m_behaviorRandomMwcRoom = false;

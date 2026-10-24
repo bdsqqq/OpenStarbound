@@ -22,6 +22,7 @@
 #include "StarBytesLab.hpp"
 #include "StarUnicodeLab.hpp"
 #include "StarJsonPathLab.hpp"
+#include "StarJsonPatchLab.hpp"
 #include "StarAssetPathLab.hpp"
 #include "StarRandomMwcLab.hpp"
 #ifdef STAR_USE_RUST_BYTES
@@ -61,6 +62,9 @@ Json BytesAssetProof;
 std::mutex UnicodeAssetProofMutex;
 Json UnicodeAssetProof;
 Json UnicodeParsedAssetProof;
+std::mutex JsonPatchAssetProofMutex;
+Json JsonPatchAssetRow;
+Json JsonPatchAssetProof;
 std::mutex JsonPathAssetProofMutex;
 Json JsonPathAssetRows = JsonObject{};
 Json JsonPathAssetProof;
@@ -77,6 +81,11 @@ Json randomMwcBehaviorAssetProof() {
 Json assetPathBehaviorAssetProof() {
   std::lock_guard<std::mutex> lock(AssetPathAssetProofMutex);
   return AssetPathAssetProof;
+}
+
+Json jsonPatchBehaviorAssetProof() {
+  std::lock_guard<std::mutex> lock(JsonPatchAssetProofMutex);
+  return JsonPatchAssetProof;
 }
 
 Json jsonPathBehaviorAssetProof() {
@@ -236,6 +245,9 @@ Assets::Assets(Settings settings, StringList assetSources) {
     std::lock_guard<std::mutex> unicodeLock(UnicodeAssetProofMutex);
     UnicodeAssetProof = Json();
     UnicodeParsedAssetProof = Json();
+    std::lock_guard<std::mutex> jsonPatchLock(JsonPatchAssetProofMutex);
+    JsonPatchAssetRow = Json();
+    JsonPatchAssetProof = Json();
     std::lock_guard<std::mutex> jsonPathLock(JsonPathAssetProofMutex);
     JsonPathAssetRows = JsonObject{};
     JsonPathAssetProof = Json();
@@ -279,6 +291,15 @@ Assets::Assets(Settings settings, StringList assetSources) {
         Json acceptedVisual = JsonObject{{"imagePath", visual.get("imagePath")},
             {"color", visual.get("color")}, {"size", visual.get("size")}, {"label", visual.get("label")}};
         AssetPathAssetProof = JsonObject{{"version", 1}, {"assets", AssetPathAssetRows},
+            {"visual", acceptedVisual}};
+      });
+      callbacks.registerCallback("recordJsonPatchLabProof", [](Json visual) {
+        std::lock_guard<std::mutex> lock(JsonPatchAssetProofMutex);
+        if (JsonPatchAssetRow.isNull() || !JsonPatchAssetProof.isNull())
+          throw AssetException("BehaviorLab: incomplete or repeated jsonpatch proof");
+        Json acceptedVisual = JsonObject{{"imagePath", visual.get("imagePath")},
+            {"color", visual.get("color")}, {"scale", visual.get("scale")}, {"label", visual.get("label")}};
+        JsonPatchAssetProof = JsonObject{{"version", 1}, {"assets", JsonPatchAssetRow},
             {"visual", acceptedVisual}};
       });
       callbacks.registerCallback("jsonPathLabCounts", []() -> Json {
@@ -357,6 +378,32 @@ Assets::Assets(Settings settings, StringList assetSources) {
     }
     callbacks.registerCallbackWithSignature<StringSet, String>("byExtension", bind(&Assets::scanExtension, this, _1));
     callbacks.registerCallback("json", [this](String const& path) -> Json {
+      if (std::getenv("STAR_BEHAVIOR_LAB") && path == "/behaviorlab/jsonpatch-input.json") {
+        {
+          std::lock_guard<std::mutex> lock(JsonPatchAssetProofMutex);
+          if (!JsonPatchAssetRow.isNull())
+            throw AssetException("BehaviorLab: repeated jsonpatch asset query");
+        }
+        auto before = jsonPatchLabSnapshot();
+        auto result = json(path);
+        auto calls = jsonPatchLabDelta(before);
+        // Raw indexed reads are outside the actual first JSON load scope.
+        auto source = read(path);
+        auto patch1 = read("/behaviorlab/jsonpatch-ops.json");
+        auto patch2 = read("/behaviorlab/jsonpatch-rollback.json");
+        String backend = "cpp";
+#ifdef STAR_USE_RUST_JSON_PATCH
+        backend = "rust";
+#endif
+        Json row = JsonObject{{"backend", backend}, {"sourceHex", hexEncode(source)},
+            {"patchesHex", JsonArray{hexEncode(patch1), hexEncode(patch2)}},
+            {"value", result}, {"calls", jsonPatchLabJson(calls)}};
+        std::lock_guard<std::mutex> lock(JsonPatchAssetProofMutex);
+        if (!JsonPatchAssetRow.isNull())
+          throw AssetException("BehaviorLab: concurrent jsonpatch asset query");
+        JsonPatchAssetRow = std::move(row);
+        return result;
+      }
       if (std::getenv("STAR_BEHAVIOR_LAB") && (path == "/behaviorlab/jsonpath-input.json:visual.rgb"
           || path == "/behaviorlab/jsonpath-input.json:visual.scale"
           || path == "/behaviorlab/jsonpath-input.json:visual.label")) {

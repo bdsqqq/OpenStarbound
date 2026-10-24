@@ -121,3 +121,10 @@ native envelopes also record GL vendor/renderer/version. `metadata.lightingDiagn
 manifest hashes bind binaries, packed assets, every overlay file (namespaced as `opensb/…` and `behavior-fixture/…`), boot/scenario configs and every png/receipt. comparison checks equal assets/overlay/semantic configuration, equal dimensions, exact `inWorld`/`stage`/`worldState`, backend use, and every rgba pixel. normalized config comparison removes only per-run storage/output paths, not behavioral settings. repeatability requires distinct capture identities and the same reference binary. standalone candidate comparison without `--repeat` can produce diffs but returns failure rather than imply certification. `--same-backend` is a separate baseline-only diagnostic that may pass without claiming candidate parity.
 
 exit codes: `0` automated gates passed (inspection still required), `1` behavioral/repeatability gate failed, `2` invalid input, launch failure or timeout. partial capture failures retain logs; use a fresh output path to retry. python 3 with pillow is required; nix fallback uses `python3` and `python3Packages.pillow`.
+
+
+## JSON patch control flow
+
+`jsonpatch-room` loads two literal operation files through normal `assets.patch` and the first uncached `assets.json`. all seven handlers, seven searches, inverse traversal, nested rollback and whole-patch rollback produce the full independently checked JSON. native attempt/success/exception vectors distinguish20dispatch attempts/18successes/two caught test failures; the public whole-PATCH entry is not called by Assets. observed RGB64/128/192, scale4 and labelPATCH drive a normal64×64image and Font label.
+
+parent isolated/combined fixtures and all eleven prior combined scenarios pass exact native frames/state/receipts; historical pixels remain unchanged. evidence, commands, source-bound oracle reports, invalid-metadata/known-failure controls and limitations: [JSON patch candidate](../json-patch/CANDIDATE_EVIDENCE.md). script modes `jsonpatch`/`jsonpatch-combined`; selector defaults OFF. no universal/performance/OOM/save/network/playback claim.
