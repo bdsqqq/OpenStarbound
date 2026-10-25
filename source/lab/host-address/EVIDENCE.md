@@ -1,6 +1,14 @@
 # host address evidence
 
-## experimental Rust checkpoint — application qualification blocked
+## current: actual TCP/rendering matrix passed; historical regressions in progress
+
+`build/behavior/host-address-awake-r1/report.json` passes C++ baseline repeatability before Rust launch, then exact three-frame/state comparison. all three Rust PNGs were inspected: normal64x64 green Assets image, white127.0.0.1 Font label, occlusion/restoration. actual accepted peer supplies native address bytes; real typed TCP-received text supplies the label. raw listener40169 and ephemeral ports51145/51158/51182 are retained and validated before comparison projection. eight isolated corruptions of the actual Rust receipt fail validation. this is manually configured packet compatibility5, not a Universe handshake or full OS address reciprocity.
+
+read-only host power history overlaps both failed windows; SDK mach_time.h documents continuous time as the clock that advances during sleep, unlike Python's mach_absolute_time monotonic clock. the old isolated supervisor SIGTERM fixture exited-15 leaving a detached child alive. scoped SIGTERM handling now defers interruption until ownership is available, reaps the private group and restores prior handlers. 164 parent behavior tests pass, including fail-closed wall/active-clock discontinuity tests. no image/capture timeout widening. SIGKILL remains outside this guarantee.
+
+actual runs use bounded transient idle/display assertions only; no pmset settings, lid override or cleanup. failed artifacts remain historical. fresh literal PCM decoder checks pass for both binaries; no audible mixer claim. the 16 previous scenario matrices/historical decoded RGBA sequences must finish before overall HostAddress qualification; see the active plan/PID.
+
+## historical experimental Rust checkpoint — application qualification blocked
 
 all27 compiled controllers now have a default-off Rust path; the public native header, native ownership and byte-exact OFF namespace remain. this is NOT an accepted application migration.
 

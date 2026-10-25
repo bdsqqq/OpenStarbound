@@ -818,6 +818,14 @@ def stop_process_group(process: subprocess.Popen) -> None:
     process.wait()
 
 
+def validate_capture_clock(active_elapsed: float, wall_elapsed: float) -> None:
+    """A suspended host or clock jump invalidates a run, not its pixel oracle."""
+    if (not math.isfinite(active_elapsed) or not math.isfinite(wall_elapsed)
+            or min(active_elapsed, wall_elapsed) < 0
+            or abs(wall_elapsed - active_elapsed) > 5):
+        raise LabError("capture host clock discontinuity or suspension")
+
+
 def asset_overlays(scenario="lighting-room") -> dict:
     overlays = dict(ASSET_OVERLAYS)
     if scenario == "encoding-room":
@@ -913,19 +921,52 @@ def capture(executable: Path, assets: Path, directory: Path, timeout: float, sce
          "overlayFiles": overlay, "bootconfig": boot_id, "configuration": configuration_id,
          "command": command, "timeoutSeconds": timeout})
     started = time.monotonic()
+    wall_started = time.time()
     with (directory / "process.log").open("xb") as log:
-        process = subprocess.Popen(command, cwd=directory, env=environment, stdout=log,
-                                   stderr=subprocess.STDOUT, start_new_session=True)
+        previous_sigterm = signal.getsignal(signal.SIGTERM)
+        interrupted = False
+        waiting = False
+
+        def interrupt_capture(signum, frame):
+            nonlocal interrupted
+            interrupted = True
+            # Defer during Popen until its private group is available for cleanup.
+            # Repeated SIGTERM during cleanup must not interrupt reaping either.
+            if waiting:
+                raise LabError("capture interrupted by SIGTERM")
+
+        signal.signal(signal.SIGTERM, interrupt_capture)
         try:
-            code = process.wait(timeout=timeout)
-        except BaseException:
-            stop_process_group(process)
-            dump(directory / "failure.json", {"reason": "capture interrupted or timed out",
-                                              "timeoutSeconds": timeout, "pid": process.pid})
-            raise
-        finally:
-            if process.poll() is not None:
+            process = subprocess.Popen(command, cwd=directory, env=environment, stdout=log,
+                                       stderr=subprocess.STDOUT, start_new_session=True)
+            try:
+                waiting = True
+                if interrupted:
+                    raise LabError("capture interrupted by SIGTERM")
+                code = process.wait(timeout=timeout)
+            except BaseException:
+                waiting = False
                 stop_process_group(process)
+                dump(directory / "failure.json", {"reason": "capture interrupted or timed out",
+                                                  "timeoutSeconds": timeout, "pid": process.pid})
+                raise
+            finally:
+                waiting = False
+                if process.poll() is not None:
+                    stop_process_group(process)
+            if interrupted:
+                dump(directory / "failure.json", {"reason": "capture interrupted or timed out",
+                                                  "timeoutSeconds": timeout, "pid": process.pid})
+                raise LabError("capture interrupted by SIGTERM")
+        finally:
+            signal.signal(signal.SIGTERM, previous_sigterm)
+    active_elapsed, wall_elapsed = time.monotonic() - started, time.time() - wall_started
+    try:
+        validate_capture_clock(active_elapsed, wall_elapsed)
+    except LabError as error:
+        dump(directory / "failure.json", {"reason": str(error),
+             "activeElapsedSeconds": active_elapsed, "wallElapsedSeconds": wall_elapsed})
+        raise
     if code:
         dump(directory / "failure.json", {"exitCode": code, "log": str(directory / "process.log")})
         raise LabError(f"client exited {code}; inspect {directory / 'process.log'}")

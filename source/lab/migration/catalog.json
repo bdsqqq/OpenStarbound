@@ -30236,7 +30236,7 @@
     },
     {
       "path": "source/lab/behavior/behavior_lab.py",
-      "sha256": "18d91f927e82a4ce80202e7a2b4f25465ca5dbabb9312eac0273f5e6876ae8b2"
+      "sha256": "ec53089e678248d627871f64af2e7cef3d9b68cf065a34f99a4d93a5baa09941"
     },
     {
       "path": "source/lab/behavior/build_provenance.py",
@@ -30292,7 +30292,7 @@
     },
     {
       "path": "source/lab/behavior/test_behavior_lab.py",
-      "sha256": "1c061d40b24dc9e9934fdfd133a5a1d918bf38eeadd9ad603486f0f53c313723"
+      "sha256": "8aebfd062f90517c356d60d1f9a238db7dcc4f3e4cd5f276507571ea38d4b8dd"
     },
     {
       "path": "source/lab/behavior/test_build_provenance.py",

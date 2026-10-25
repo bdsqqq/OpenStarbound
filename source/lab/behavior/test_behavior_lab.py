@@ -3,6 +3,8 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import signal
+import time
 import tempfile
 import unittest
 from unittest import mock
@@ -644,7 +646,11 @@ class BehaviorLabTests(unittest.TestCase):
         assets = self.root / "packed.pak"
         assets.write_bytes(b"synthetic assets only")
         lab.build_provenance.seal(executable, lab.build_provenance.begin())
+        previous_term = signal.getsignal(signal.SIGTERM)
+        previous_int = signal.getsignal(signal.SIGINT)
         captured = lab.capture(executable, assets, self.root / "isolated-run", 10)
+        self.assertIs(signal.getsignal(signal.SIGTERM), previous_term)
+        self.assertIs(signal.getsignal(signal.SIGINT), previous_int)
         frames, manifest = lab.validated(captured)
         self.assertEqual(len(frames), 3)
         self.assertEqual(manifest["binary"]["sha256"], lab.sha(executable))
@@ -691,6 +697,32 @@ class BehaviorLabTests(unittest.TestCase):
         self.assertFalse(report["passed"])
         self.assertIn("source-bound build identity", report["errors"][0])
 
+    def test_capture_clock_invalidates_suspend_and_wall_clock_jumps(self):
+        lab.validate_capture_clock(2.0, 2.1)
+        for active, wall in ((2, 62), (62, 2), (2, -1), (float('nan'), 2), (2, float('inf'))):
+            with self.subTest(active=active, wall=wall), self.assertRaisesRegex(lab.LabError, 'clock'):
+                lab.validate_capture_clock(active, wall)
+
+    def test_capture_clock_failure_is_unsealed_and_retained(self):
+        executable = Path(os.sys.executable).resolve()
+        assets = self.root / 'clock-assets.pak'
+        assets.write_bytes(b'synthetic assets')
+        output = self.root / 'clock-jump-run'
+        process = mock.Mock(pid=123)
+        process.wait.return_value = 0
+        with mock.patch.object(lab, 'verified_build', return_value={}), \
+                mock.patch.object(lab, 'overlay_identity', return_value={}), \
+                mock.patch.object(lab.subprocess, 'Popen', return_value=process), \
+                mock.patch.object(lab, 'stop_process_group'), \
+                mock.patch.object(lab.time, 'monotonic', side_effect=[10, 12]), \
+                mock.patch.object(lab.time, 'time', side_effect=[100, 162]):
+            with self.assertRaisesRegex(lab.LabError, 'clock'):
+                lab.capture(executable, assets, output, 10)
+        failure = lab.load(output / 'failure.json')
+        self.assertEqual(failure['activeElapsedSeconds'], 2)
+        self.assertEqual(failure['wallElapsedSeconds'], 62)
+        self.assertFalse((output / 'frames/manifest.json').exists())
+
     def test_capture_timeout_retains_failure_and_kills_owned_process(self):
         executable = self.root / "sleeper"
         executable.write_text("#!" + os.sys.executable + "\nimport time\ntime.sleep(60)\n")
@@ -699,13 +731,133 @@ class BehaviorLabTests(unittest.TestCase):
         assets.write_bytes(b"synthetic assets")
         lab.build_provenance.seal(executable, lab.build_provenance.begin())
         run = self.root / "timed-out-run"
+        previous_term = signal.getsignal(signal.SIGTERM)
         with self.assertRaises(subprocess.TimeoutExpired):
             lab.capture(executable, assets, run, 0.05)
+        self.assertIs(signal.getsignal(signal.SIGTERM), previous_term)
         failure = lab.load(run / "failure.json")
         self.assertIn("timed out", failure["reason"])
         with self.assertRaises(ProcessLookupError):
             os.killpg(failure["pid"], 0)
         self.assertFalse((run / "frames/manifest.json").exists())
+
+    def test_capture_restores_custom_handlers_on_spawn_failure_and_interrupt(self):
+        executable = Path(os.sys.executable).resolve()
+        assets = self.root / "handler-assets.pak"
+        assets.write_bytes(b"synthetic assets")
+        previous_term = signal.getsignal(signal.SIGTERM)
+        previous_int = signal.getsignal(signal.SIGINT)
+        custom = lambda *_: None
+        signal.signal(signal.SIGTERM, custom)
+        try:
+            for label, error in (("spawn", OSError("fixture spawn failure")),
+                                 ("interrupt", KeyboardInterrupt())):
+                with self.subTest(label=label):
+                    process = mock.Mock(pid=123)
+                    process.wait.side_effect = error
+                    with mock.patch.object(lab, "verified_build", return_value={}), \
+                            mock.patch.object(lab, "overlay_identity", return_value={}), \
+                            mock.patch.object(lab.subprocess, "Popen", side_effect=error if label == "spawn" else None,
+                                              return_value=process), \
+                            mock.patch.object(lab, "stop_process_group") as cleanup:
+                        with self.assertRaises(type(error)):
+                            lab.capture(executable, assets, self.root / label, 1)
+                        if label == "spawn":
+                            cleanup.assert_not_called()
+                        else:
+                            cleanup.assert_called_with(process)
+                    self.assertIs(signal.getsignal(signal.SIGTERM), custom)
+                    self.assertIs(signal.getsignal(signal.SIGINT), previous_int)
+        finally:
+            signal.signal(signal.SIGTERM, previous_term)
+
+    def test_capture_defers_sigterm_until_spawned_group_is_owned(self):
+        executable = Path(os.sys.executable).resolve()
+        assets = self.root / "deferred-assets.pak"
+        assets.write_bytes(b"synthetic assets")
+        previous_term = signal.getsignal(signal.SIGTERM)
+        process = mock.Mock(pid=123)
+
+        def spawn(*args, **kwargs):
+            self.assertTrue(kwargs["start_new_session"])
+            os.kill(os.getpid(), signal.SIGTERM)
+            return process
+
+        with mock.patch.object(lab, "verified_build", return_value={}), \
+                mock.patch.object(lab, "overlay_identity", return_value={}), \
+                mock.patch.object(lab.subprocess, "Popen", side_effect=spawn), \
+                mock.patch.object(lab, "stop_process_group") as cleanup:
+            with self.assertRaisesRegex(lab.LabError, "SIGTERM"):
+                lab.capture(executable, assets, self.root / "deferred-run", 1)
+            cleanup.assert_called_with(process)
+            process.wait.assert_not_called()
+        self.assertIs(signal.getsignal(signal.SIGTERM), previous_term)
+
+    def test_capture_sigterm_cleans_detached_child(self):
+        # Signal only this fixture's supervisor, after the detached child is ready.
+        executable = self.root / "sigterm-sleeper"
+        marker = self.root / "child.pid"
+        executable.write_text(
+            "#!" + os.sys.executable + "\nimport os, pathlib, time\n"
+            f"marker = pathlib.Path({str(marker)!r})\n"
+            "ready = marker.with_suffix('.ready')\n"
+            "ready.write_text(str(os.getpid()))\nready.rename(marker)\n"
+            "time.sleep(5)\n")
+        executable.chmod(0o755)
+        assets = self.root / "sigterm-assets.pak"
+        assets.write_bytes(b"synthetic assets")
+        run = self.root / "sigterm-run"
+        script = (
+            "import pathlib, signal, sys; import behavior_lab as lab; "
+            "lab.verified_build = lambda _: {}; lab.overlay_identity = lambda *_: {}; "
+            "lab.asset_overlays = lambda *_: {}; "
+            "previous_int = signal.getsignal(signal.SIGINT); "
+            "previous_term = signal.getsignal(signal.SIGTERM)\n"
+            "try:\n"
+            f"    lab.capture(pathlib.Path({str(executable)!r}), pathlib.Path({str(assets)!r}), "
+            f"pathlib.Path({str(run)!r}), 5)\n"
+            "except lab.LabError as error:\n"
+            "    assert str(error) == 'capture interrupted by SIGTERM'\n"
+            "    assert signal.getsignal(signal.SIGTERM) is previous_term\n"
+            "    assert signal.getsignal(signal.SIGINT) is previous_int\n"
+            "    sys.exit(42)\n")
+        child_pid = None
+        with (self.root / "supervisor.log").open("wb") as log:
+            supervisor = subprocess.Popen([os.sys.executable, "-c", script],
+                cwd=Path(lab.__file__).parent, stdout=log, stderr=subprocess.STDOUT)
+            try:
+                deadline = time.monotonic() + 5
+                while not marker.exists() and supervisor.poll() is None and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                self.assertTrue(marker.exists(), "child never became ready")
+                child_pid = int(marker.read_text())
+                self.assertEqual(os.getpgid(child_pid), child_pid)
+                os.kill(supervisor.pid, signal.SIGTERM)
+                supervisor.wait(timeout=5)
+                status = subprocess.run(["ps", "-o", "stat=", "-p", str(child_pid)],
+                                        capture_output=True, text=True, timeout=5).stdout.strip()
+                # A zombie is dead but not reaped: require the group to be gone too.
+                observation = {"supervisorPid": supervisor.pid, "childPid": child_pid,
+                               "supervisorExit": supervisor.returncode, "childStatus": status}
+                lab.dump(self.root / "sigterm-observation.json", observation)
+                self.assertEqual(status, "", observation)
+                self.assertEqual(supervisor.returncode, 42, observation)
+                with self.assertRaises(ProcessLookupError):
+                    os.killpg(child_pid, 0)
+                failure = lab.load(run / "failure.json")
+                self.assertEqual(failure["pid"], child_pid)
+                self.assertFalse((run / "frames/manifest.json").exists())
+            finally:
+                if supervisor.poll() is None:
+                    supervisor.kill()
+                supervisor.wait(timeout=5)
+                if child_pid is None and marker.exists():
+                    child_pid = int(marker.read_text())
+                if child_pid is not None:
+                    try:
+                        os.killpg(child_pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
 
     def test_capture_unsafe_storage_never_launches(self):
         assets = self.root / "packed.pak"
