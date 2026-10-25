@@ -8,9 +8,43 @@ def adapt(s,ext):
  s=token.sub(lambda m:{'DataStream':'DataStreamReference','CurrentStreamVersion':'ReferenceCurrentStreamVersion'}.get(m[0],m[0]),s)
  if ext=='cpp':return s.replace('#include "StarDataStream.hpp"','#include "StarDataStream.reference.hpp"',1)
  return s.replace('#pragma once','#pragma once\n#include "StarDataStream.hpp"',1).replace('STAR_EXCEPTION(DataStreamException, IOException);\n','',1)
+def native_off_source(source):
+ # Retain every byte of the frozen namespace, including comments and spacing.
+ # Only a unique outer selector branch may supply the original implementation.
+ depth=0; start=None; end=None; close=None; selectors=0
+ for match in re.finditer(r'^[ \t]*#[ \t]*(if|ifdef|ifndef|else|elif|endif)\b([^\n]*)\n?',source,re.M):
+  kind,tail=match.group(1,2)
+  if kind in ('if','ifdef','ifndef'):
+   if depth==0 and 'STAR_USE_RUST_DATA_STREAM' in tail: selectors+=1
+   depth+=1
+  elif kind=='else' and depth==1:
+   if start is not None: raise ValueError('multiple outer else branches')
+   start=match.end()
+  elif kind=='elif' and depth==1: raise ValueError('outer elif unsupported')
+  elif kind=='endif':
+   depth-=1
+   if depth==0 and start is not None:
+    if end is not None: raise ValueError('multiple outer selectors')
+    end=match.start();close=match.end()
+  if depth<0: raise ValueError('unbalanced preprocessor')
+ if depth or selectors!=1 or start is None or end is None:
+  raise ValueError('unique outer DataStream selector required')
+ if source[close:]!='':raise ValueError('unexpected post-selector source')
+ branch=source[start:end]
+ if not branch.startswith('namespace Star {') or not branch.endswith('\n\n'):raise ValueError('unexpected native wrapper separators')
+ # The wrapper owns exactly one newline before #endif; every remaining byte
+ # belongs to the frozen namespace. No stripping or whitespace normalization.
+ return branch[:-1]
+
 def gate(ext,raw,ref):
  frozen=subprocess.check_output(['git','show',REV+':source/core/StarDataStream.'+ext],cwd=ROOT).decode()
- if (ROOT/f'source/core/StarDataStream.{ext}').read_text()!=frozen or raw!=frozen or ref!=adapt(frozen,ext):raise ValueError('source provenance')
+ current=(ROOT/f'source/core/StarDataStream.{ext}').read_text()
+ if ext=='cpp' and current!=frozen:
+  selector=re.search(r'^#if defined\(STAR_USE_RUST_DATA_STREAM\)\n',current,re.M)
+  if not selector or current[:selector.start()]!=frozen[:frozen.index('namespace Star {')]:raise ValueError('native prefix provenance')
+  if native_off_source(current)!=frozen[frozen.index('namespace Star {'):]:raise ValueError('native OFF source provenance')
+ elif current!=frozen:raise ValueError('source provenance')
+ if raw!=frozen or ref!=adapt(frozen,ext):raise ValueError('source provenance')
 def rows(data):
  out={}
  for line in data.decode().splitlines():

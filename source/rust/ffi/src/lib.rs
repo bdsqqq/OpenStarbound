@@ -222,3 +222,6 @@ mod tests {
         assert_eq!(star_lighting::star_lighting_call_count(), before + 2);
     }
 }
+
+mod data_stream;
+pub use data_stream::{star_data_stream_call_count, star_data_stream_run, StarDataStreamHost};

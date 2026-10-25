@@ -111,6 +111,7 @@ private:
   void prepareBehaviorCompressionFrame();
   void prepareBehaviorZstdFrame();
   void prepareBehaviorHostAddressFrame();
+  void prepareBehaviorDataStreamFrame();
   void prepareBehaviorOptionParserFrame();
   void validateBehaviorStorage();
   unsigned m_behaviorFrames = 0;
@@ -131,6 +132,8 @@ private:
   Json m_behaviorJsonPathProof;
   bool m_behaviorOptionParserRoom = false;
   Json m_behaviorOptionParserProof;
+  bool m_behaviorDataStreamRoom = false;
+  Json m_behaviorDataStreamProof;
   bool m_behaviorHostAddressRoom = false;
   Json m_behaviorHostAddressProof;
   bool m_behaviorZstdRoom = false;

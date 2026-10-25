@@ -3,6 +3,7 @@
 #include "StarCompression.hpp"
 #include "StarLogging.hpp"
 #include "StarZstdLab.hpp"
+#include "StarDataStreamLab.hpp"
 
 namespace Star {
 
@@ -297,7 +298,9 @@ bool TcpPacketSocket::writeData() {
         } while (!m_compressedOutputBuffer.empty());
       } else {
         do {
+          dataStreamLabOffer(this, m_outputBuffer.ptr(), m_outputBuffer.size());
           size_t written = m_socket->send(m_outputBuffer.ptr(), m_outputBuffer.size());
+          dataStreamLabSent(this, written);
           if (written == 0)
             break;
           dataSent = true;
