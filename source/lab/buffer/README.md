@@ -1,0 +1,1 @@
+native-only buffer calibration; no rust, production ABI, or game qualification. lexical identifiers and cpp header include only are adapted for references. all growth observations stay within 256 explicitly initialized bytes. external clone keeps the native missing-format-argument logger call.

@@ -1,0 +1,206 @@
+{
+  "count": 50,
+  "source": "source/core/StarBuffer.cpp",
+  "definitions": [
+    {
+      "definition": "Buffer::Buffer()",
+      "line": 9
+    },
+    {
+      "definition": "Buffer::Buffer(size_t initialSize)",
+      "line": 14
+    },
+    {
+      "definition": "Buffer::Buffer(ByteArray b)",
+      "line": 19
+    },
+    {
+      "definition": "Buffer::Buffer(Buffer const& buffer)",
+      "line": 24
+    },
+    {
+      "definition": "Buffer::Buffer(Buffer&& buffer)",
+      "line": 29
+    },
+    {
+      "definition": "StreamOffset Buffer::pos() {",
+      "line": 34
+    },
+    {
+      "definition": "void Buffer::seek(StreamOffset pos, IOSeek mode) {",
+      "line": 38
+    },
+    {
+      "definition": "void Buffer::resize(StreamOffset size) {",
+      "line": 49
+    },
+    {
+      "definition": "bool Buffer::atEnd() {",
+      "line": 53
+    },
+    {
+      "definition": "size_t Buffer::read(char* data, size_t len) {",
+      "line": 57
+    },
+    {
+      "definition": "size_t Buffer::write(char const* data, size_t len) {",
+      "line": 63
+    },
+    {
+      "definition": "size_t Buffer::readAbsolute(StreamOffset readPosition, char* data, size_t len) {",
+      "line": 69
+    },
+    {
+      "definition": "size_t Buffer::writeAbsolute(StreamOffset writePosition, char const* data, size_t len) {",
+      "line": 77
+    },
+    {
+      "definition": "void Buffer::open(IOMode mode) {",
+      "line": 85
+    },
+    {
+      "definition": "String Buffer::deviceName() const {",
+      "line": 93
+    },
+    {
+      "definition": "StreamOffset Buffer::size() {",
+      "line": 97
+    },
+    {
+      "definition": "ByteArray& Buffer::data() {",
+      "line": 101
+    },
+    {
+      "definition": "ByteArray const& Buffer::data() const {",
+      "line": 105
+    },
+    {
+      "definition": "ByteArray Buffer::takeData() {",
+      "line": 109
+    },
+    {
+      "definition": "char* Buffer::ptr() {",
+      "line": 115
+    },
+    {
+      "definition": "char const* Buffer::ptr() const {",
+      "line": 119
+    },
+    {
+      "definition": "size_t Buffer::dataSize() const {",
+      "line": 123
+    },
+    {
+      "definition": "void Buffer::reserve(size_t size) {",
+      "line": 127
+    },
+    {
+      "definition": "void Buffer::clear() {",
+      "line": 131
+    },
+    {
+      "definition": "bool Buffer::empty() const {",
+      "line": 136
+    },
+    {
+      "definition": "void Buffer::reset(size_t newSize) {",
+      "line": 140
+    },
+    {
+      "definition": "void Buffer::reset(ByteArray b) {",
+      "line": 145
+    },
+    {
+      "definition": "Buffer& Buffer::operator=(Buffer const& buffer) {",
+      "line": 150
+    },
+    {
+      "definition": "Buffer& Buffer::operator=(Buffer&& buffer) {",
+      "line": 157
+    },
+    {
+      "definition": "size_t Buffer::doRead(size_t pos, char* data, size_t len) {",
+      "line": 168
+    },
+    {
+      "definition": "size_t Buffer::doWrite(size_t pos, char const* data, size_t len) {",
+      "line": 183
+    },
+    {
+      "definition": "ExternalBuffer::ExternalBuffer()",
+      "line": 197
+    },
+    {
+      "definition": "ExternalBuffer::ExternalBuffer(char const* externalData, size_t len) : ExternalBuffer() {",
+      "line": 202
+    },
+    {
+      "definition": "StreamOffset ExternalBuffer::pos() {",
+      "line": 206
+    },
+    {
+      "definition": "void ExternalBuffer::seek(StreamOffset pos, IOSeek mode) {",
+      "line": 210
+    },
+    {
+      "definition": "bool ExternalBuffer::atEnd() {",
+      "line": 221
+    },
+    {
+      "definition": "size_t ExternalBuffer::read(char* data, size_t len) {",
+      "line": 225
+    },
+    {
+      "definition": "size_t ExternalBuffer::write(char const*, size_t) {",
+      "line": 231
+    },
+    {
+      "definition": "size_t ExternalBuffer::readAbsolute(StreamOffset readPosition, char* data, size_t len) {",
+      "line": 235
+    },
+    {
+      "definition": "size_t ExternalBuffer::writeAbsolute(StreamOffset, char const*, size_t) {",
+      "line": 243
+    },
+    {
+      "definition": "String ExternalBuffer::deviceName() const {",
+      "line": 247
+    },
+    {
+      "definition": "StreamOffset ExternalBuffer::size() {",
+      "line": 251
+    },
+    {
+      "definition": "char const* ExternalBuffer::ptr() const {",
+      "line": 255
+    },
+    {
+      "definition": "size_t ExternalBuffer::dataSize() const {",
+      "line": 259
+    },
+    {
+      "definition": "bool ExternalBuffer::empty() const {",
+      "line": 263
+    },
+    {
+      "definition": "ExternalBuffer::operator bool() const {",
+      "line": 267
+    },
+    {
+      "definition": "void ExternalBuffer::reset(char const* externalData, size_t len) {",
+      "line": 271
+    },
+    {
+      "definition": "IODevicePtr Buffer::clone() {",
+      "line": 277
+    },
+    {
+      "definition": "IODevicePtr ExternalBuffer::clone() {",
+      "line": 284
+    },
+    {
+      "definition": "size_t ExternalBuffer::doRead(size_t pos, char* data, size_t len) {",
+      "line": 289
+    }
+  ]
+}
