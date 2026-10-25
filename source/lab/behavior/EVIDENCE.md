@@ -1,4 +1,14 @@
-# native behavioral evidence — 2026-10-24
+# native behavioral evidence
+
+## HostAddress: numeric endpoint → actual TCP → normal Assets/Font (2026-10-25)
+
+VERIFIED — `build/behavior/host-address-awake-r1/report.json` passed two C++ baselines before Rust launch, then exact1000×600 framebuffer/state comparisons at all three stages. all three new Rust PNGs were read and inspected: normal64×64 green image, white127.0.0.1 label, occlusion and restoration. parsed numeric127.0.0.1:40169 feeds the owned listener/connect/accept path; actual accepted sockaddr bytes drive color16/192/144/255 and typed TCP-received text drives Font. scoped Rust controllers execute; C++ FFI rows remain zero. raw ephemeral ports51145/51158/51182 are retained and validated before projection. only accepted remote is OS sockaddr: other public addresses are caches, including unpopulated client-local0:0. manually configured compatibility5 is NOT a Universe handshake.
+
+all16 previous matrices pass and48 historical candidate RGBA frames remain exact (`host-address-historical-pixels.json`):17 matrices total. eight isolated corruptions of an actual Rust receipt are rejected. twelve current client CLI executions and fresh monoPCM16/WAV8000Hz/eight literal samples/seek/EOF/17byte receipts/corrupt control pass; no audible mixer/Ogg claim. `host-address-awake-r1/qualification.json` binds these reports, native/Rust430-record oracle receipts, inspected-frame manifests and unchanged canonical archive. its known-bad historical-count fixture is rejected.
+
+two prior full capture timeouts remain unqualified. filtered pmset history shows host suspension during both windows; SDK clock declarations distinguish sleep-advancing continuous time from Python's mach_absolute_time clock. a separate isolated fixture reproduced SIGTERM orphaning a detached child. scoped supervision now defers interruption until ownership is available, reaps private groups and restores handlers;164 behavior tests include that known failure and fail-closed large wall/active-clock disagreement. current captures use bounded transient idle/display assertions, not permanent power changes or lid overrides. no image/ref-flag/capture-timeout widening. SIGKILL cleanup is not claimed.
+
+scope: all27 compiled HostAddress definitions/control graphs, default-OFF selector, sole Rust archive; public native layout/ownership/String/Either/ostream and native resolver/vendor leaves remain. finite Apple Silicon/macOS27 evidence, not universal resources/performance/other-platform/remote-DNS/Universe/full-engine qualification. source/runtime limits and historical failures: `../host-address/EVIDENCE.md`.
 
 ## OptionParser: actual client argv, Root configuration and rendering
 
