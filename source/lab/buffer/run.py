@@ -8,9 +8,28 @@ def adapt(s,ext):
  s=token.sub(lambda m:{'Buffer':'BufferReference','ExternalBuffer':'ExternalBufferReference'}.get(m[0],m[0]),s)
  return s.replace('#include "StarBuffer.hpp"','#include "StarBuffer.reference.hpp"',1) if ext=='cpp' else s
 
+def native_off_source(current, frozen):
+ # Keep the original include prefix outside the selector, and the complete
+ # native namespace byte-exact. Boundary newlines are part of this contract.
+ prefix, marker, tail = frozen.partition('namespace Star {')
+ if not marker:
+  raise ValueError('missing frozen namespace')
+ top = prefix + '#ifdef STAR_USE_RUST_BUFFER\n'
+ if not current.startswith(top):
+  raise ValueError('native prefix/selector provenance')
+ selected, boundary, native = current[len(top):].partition('#else\n')
+ if not boundary or not selected or native != marker + tail + '\n#endif\n':
+  raise ValueError('native branch/boundary provenance')
+ if len(re.findall(r'^#(?:if|ifdef|ifndef|elif).*STAR_USE_RUST_BUFFER', current, re.M)) != 1:
+  raise ValueError('nonunique buffer selector')
+ return frozen
+
 def gate(ext,raw,ref):
  frozen=subprocess.check_output(['git','show',REV+':source/core/StarBuffer.'+ext],cwd=ROOT).decode()
- if (ROOT/f'source/core/StarBuffer.{ext}').read_text()!=frozen or raw!=frozen or ref!=adapt(frozen,ext):raise ValueError('source provenance')
+ current=(ROOT/f'source/core/StarBuffer.{ext}').read_bytes().decode()
+ if (HERE/f'StarBuffer.original.{ext}').read_bytes().decode()!=frozen or (HERE/f'StarBuffer.reference.{ext}').read_bytes().decode()!=adapt(frozen,ext):raise ValueError('raw/reference byte provenance')
+ if ext=='cpp' and current!=frozen:current=native_off_source(current,frozen)
+ if current!=frozen or raw!=frozen or ref!=adapt(frozen,ext):raise ValueError('source provenance')
 
 def rows(data):
  result={}

@@ -225,3 +225,6 @@ mod tests {
 
 mod data_stream;
 pub use data_stream::{star_data_stream_call_count, star_data_stream_run, StarDataStreamHost};
+
+mod buffer;
+pub use buffer::{star_buffer_call_count, star_buffer_run, StarBufferHost};

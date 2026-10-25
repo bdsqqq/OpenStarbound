@@ -21,6 +21,7 @@
 #include "StarZstdLab.hpp"
 #include "StarHostAddressLab.hpp"
 #include "StarDataStreamLab.hpp"
+#include "StarBufferLab.hpp"
 #include "StarBTreeLab.hpp"
 #include <sstream>
 #include "StarOptionParserLab.hpp"
@@ -575,6 +576,8 @@ void ClientApplication::render() {
         prepareBehaviorOptionParserFrame();
       if (BehaviorLab::enabled() && m_behaviorZstdRoom)
         prepareBehaviorZstdFrame();
+      if (BehaviorLab::enabled() && m_behaviorBufferRoom)
+        prepareBehaviorBufferFrame();
       if (BehaviorLab::enabled() && m_behaviorDataStreamRoom)
         prepareBehaviorDataStreamFrame();
       if (BehaviorLab::enabled() && m_behaviorHostAddressRoom)
@@ -616,6 +619,7 @@ void ClientApplication::render() {
           || (m_behaviorRandomMwcRoom && !m_behaviorRandomMwcProof.isNull())
           || (m_behaviorCompressionRoom && !m_behaviorCompressionProof.isNull())
           || (m_behaviorZstdRoom && !m_behaviorZstdProof.isNull())
+          || (m_behaviorBufferRoom && !m_behaviorBufferProof.isNull())
           || (m_behaviorDataStreamRoom && !m_behaviorDataStreamProof.isNull())
           || (m_behaviorHostAddressRoom && !m_behaviorHostAddressProof.isNull())
           || (m_behaviorOptionParserRoom && !m_behaviorOptionParserProof.isNull())) {
@@ -623,11 +627,12 @@ void ClientApplication::render() {
         // claimed. Screen-space coordinates avoid the 64px world-image area.
         m_guiContext->clearTextStyle();
         m_guiContext->setDefaultFont();
-        m_guiContext->setFontSize((m_behaviorZstdRoom || m_behaviorHostAddressRoom || m_behaviorDataStreamRoom) ? 8 : 16, 1.0f);
+        m_guiContext->setFontSize((m_behaviorBufferRoom || m_behaviorZstdRoom || m_behaviorHostAddressRoom || m_behaviorDataStreamRoom) ? 8 : 16, 1.0f);
         m_guiContext->setFontColor(Vec4B(255, 255, 255, 255));
         m_guiContext->setFontMode(FontMode::Normal);
         m_guiContext->setFontProcessingDirectives("");
-        m_guiContext->renderText(m_behaviorDataStreamRoom ? m_behaviorDataStreamProof.get("visual").getString("label")
+        m_guiContext->renderText(m_behaviorBufferRoom ? m_behaviorBufferProof.get("visual").getString("label")
+            : m_behaviorDataStreamRoom ? m_behaviorDataStreamProof.get("visual").getString("label")
             : m_behaviorHostAddressRoom ? m_behaviorHostAddressProof.get("visual").getString("label")
             : m_behaviorOptionParserRoom ? m_behaviorOptionParserProof.get("visual").getString("label")
             : m_behaviorJsonPatchRoom ? m_behaviorJsonPatchProof.get("visual").getString("label")
@@ -1523,7 +1528,7 @@ void ClientApplication::validateBehaviorStorage() {
       && scenario != "unicode-room" && scenario != "shell-room" && scenario != "jsonpath-room" && scenario != "assetpath-room"
       && scenario != "random-room" && scenario != "jsonpatch-room" && scenario != "text-room"
       && scenario != "compression-room" && scenario != "zstd-room" && scenario != "option-parser-room"
-      && scenario != "host-address-room" && scenario != "datastream-room")
+      && scenario != "host-address-room" && scenario != "datastream-room" && scenario != "buffer-room")
     throw StarException("BehaviorLab: unsupported scenario");
   m_behaviorRaycastRoom = scenario == "raycast-room";
   m_behaviorEncodingRoom = scenario == "encoding-room";
@@ -1542,6 +1547,7 @@ void ClientApplication::validateBehaviorStorage() {
   m_behaviorZstdRoom = scenario == "zstd-room";
   m_behaviorHostAddressRoom = scenario == "host-address-room";
   m_behaviorDataStreamRoom = scenario == "datastream-room";
+  m_behaviorBufferRoom = scenario == "buffer-room";
   if (config.getUInt("maxFrames", 1800) == 0 || config.getUInt("maxFrames", 1800) > 18000)
     throw StarException("BehaviorLab: maxFrames must be in [1, 18000]");
 
@@ -1662,7 +1668,7 @@ void ClientApplication::updateBehaviorScenario() {
       return;
     if (m_behaviorStage == 2) {
       Logger::info("BehaviorLab: {} completed (three acknowledged world frames)",
-          m_behaviorDataStreamRoom ? "datastream-room" : m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
+          m_behaviorBufferRoom ? "buffer-room" : m_behaviorDataStreamRoom ? "datastream-room" : m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
       m_behaviorPhase = 5;
       appController()->quit();
       return;
@@ -2456,6 +2462,237 @@ void ClientApplication::prepareBehaviorOptionParserFrame() {
         {"mainThreadCounters", optionParserLabCounters()}};
   }
   auto visual = m_behaviorOptionParserProof.get("visual");
+  auto drawable = Drawable::makeImage(visual.getString("imagePath"),
+      visual.getFloat("scale") * 0.5f / TilePixels, true, Vec2F(64, 48));
+  drawable.fullbright = true;
+  m_renderData.foregroundOverlays.append(std::move(drawable));
+}
+
+void ClientApplication::prepareBehaviorBufferFrame() {
+  if (m_behaviorBufferProof.isNull()) {
+    auto before = BufferLabCounts::snapshot();
+    JsonArray scopes;
+    uint64_t nativeCalls = 0;
+    auto observed = [&](String const& method, auto&& operation) {
+      auto start = BufferLabCounts::snapshot();
+      operation();
+      ++nativeCalls;
+      scopes.append(JsonObject{{"method", method}, {"completed", true},
+          {"calls", BufferLabCounts::snapshot().delta(start)}});
+    };
+    TcpSocketPtr listener;
+    HostAddressWithPort parsed;
+    uint16_t port = 0;
+    for (uint16_t candidate = 40233; candidate <= 40264; ++candidate) {
+      parsed = HostAddressWithPort(strf("127.0.0.1:{}", candidate));
+      if (!(parsed.address() == HostAddress::localhost(NetworkMode::IPv4)) || parsed.port() != candidate)
+        throw StarException("BehaviorLab: unsafe Buffer bind identity");
+      try { listener = TcpSocket::listen(parsed); port = candidate; break; }
+      catch (NetworkException const&) {}
+    }
+    if (!listener) throw StarException("BehaviorLab: no owned Buffer port");
+    listener->setNonBlocking(true);
+    auto rawSender = TcpSocket::connectTo(parsed);
+    TcpSocketPtr rawReceiver;
+    auto deadline = Time::monotonicMilliseconds() + 2000;
+    while (!rawReceiver && Time::monotonicMilliseconds() < deadline) rawReceiver = listener->accept();
+    if (!rawReceiver) throw StarException("BehaviorLab: Buffer accept deadline");
+    auto acceptedPeer = rawReceiver->remoteAddress();
+    if (!(acceptedPeer.address() == HostAddress::localhost(NetworkMode::IPv4)) || !acceptedPeer.port()
+        || !(rawReceiver->localAddress() == parsed))
+      throw StarException("BehaviorLab: Buffer accepted OS peer mismatch");
+    listener->close(); rawSender->setNonBlocking(true); rawSender->setNoDelay(true);
+    auto receiver = TcpPacketSocket::open(rawReceiver);
+    receiver->setNetRules(NetCompatibilityRules(VersionNumber(5)));
+    receiver->setCompressionStreamEnabled(false);
+    BufferLabReceiver wire; wire.socket = receiver.get();
+    struct Armed {
+      explicit Armed(BufferLabReceiver* p) {
+        if (BufferLabActiveReceiver) throw StarException("BehaviorLab: nested Buffer receiver observer");
+        BufferLabActiveReceiver = p;
+      }
+      ~Armed() { BufferLabActiveReceiver = nullptr; }
+    } armed(&wire);
+    // Independent raw producer, derived from ChatSendPacket::write, rules 5:
+    // type 0x12, signed VLQ(8)=0x10, string length5, BUF-A/B,
+    // broadcast enum0, empty JsonObject length0. No paired encoder is used.
+    char const frameA[] = {0x12,0x10,5,'B','U','F','-','A',0,0};
+    char const frameB[] = {0x12,0x10,5,'B','U','F','-','B',0,0};
+    ByteArray chunks[] = {ByteArray(frameA,1), ByteArray(frameA+1,4), ByteArray(frameA+5,5), ByteArray(frameB+4,6)};
+    chunks[2].append(frameB,4);
+    size_t const totals[] = {1,5,14,20}, counts[] = {0,0,1,2};
+    List<PacketPtr> received;
+    JsonArray stages;
+    ByteArray sentWire;
+    uint64_t sendAttempts = 0;
+    for (unsigned stage = 0; stage != 4; ++stage) {
+      wire.stage = stage;
+      observed(strf("TcpPacketSocket::readData/receivePackets(stage{})", stage), [&] {
+        size_t sent = 0;
+        deadline = Time::monotonicMilliseconds() + 2000;
+        do {
+          if (sent < chunks[stage].size()) {
+            auto amount = rawSender->send(chunks[stage].ptr()+sent, chunks[stage].size()-sent);
+            ++sendAttempts;
+            sentWire.append(chunks[stage].ptr()+sent, amount); sent += amount;
+          }
+          receiver->readData(); received.appendAll(receiver->receivePackets());
+          if (!receiver->isOpen() || received.size() > counts[stage])
+            throw StarException("BehaviorLab: Buffer closed receiver/extra packet");
+          if (sent == chunks[stage].size() && wire.wire.size() >= totals[stage]) break;
+        } while (Time::monotonicMilliseconds() < deadline);
+        if (sent != chunks[stage].size() || wire.wire.size() != totals[stage] || received.size() != counts[stage])
+          throw StarException("BehaviorLab: Buffer staged receive deadline/count mismatch");
+      });
+      stages.append(JsonObject{{"stage", stage}, {"sentBytes", sentWire.size()},
+          {"receivedBytes", wire.wire.size()}, {"packetCount", received.size()}});
+    }
+    String label;
+    JsonArray receivedTexts;
+    for (unsigned i = 0; i != 2; ++i) {
+      auto chat = std::dynamic_pointer_cast<ChatSendPacket>(received[i]);
+      if (!chat || chat->text != (i == 0 ? "BUF-A" : "BUF-B") || chat->sendMode != ChatSendMode::Broadcast || !chat->data.empty())
+        throw StarException("BehaviorLab: Buffer typed packet mismatch");
+      receivedTexts.append(chat->text);
+      if (i) label += "|";
+      label += chat->text;
+    }
+    String const expectedWire = "1210054255462d4100001210054255462d420000";
+    if (hexEncode(wire.wire) != expectedWire || sentWire != wire.wire)
+      throw StarException("BehaviorLab: Buffer independent wire mismatch");
+    BufferLabActiveReceiver = nullptr;
+    receiver->close(); rawSender->close();
+
+    // Startup already bound Root storage to a strict canonical descendant of
+    // the sentinel-owned output. Reject existing files, including swap files.
+    namespace fs = std::filesystem;
+    auto storage = fs::canonical(fs::path(m_root->toStoragePath("").utf8()));
+    auto declared = fs::canonical(fs::path(BehaviorLab::configuration().getString("storageDirectory").utf8()));
+    if (storage != declared) throw StarException("BehaviorLab: Buffer storage binding drift");
+    String savePath((storage / "buffer-save.sbvj").string());
+    String databasePath((storage / "buffer-payload.btree").string());
+    for (auto const& path : {savePath, savePath + ".new", databasePath})
+      if (fs::symlink_status(fs::path(path.utf8())).type() != fs::file_type::not_found)
+        throw StarException("BehaviorLab: Buffer refuses existing owned output");
+    std::string payload;
+    for (unsigned i = 0; i != 1537; ++i) payload += char('a' + i % 26);
+    auto value = VersionedJson::fromJson(JsonObject{{"id", "bufferlab"}, {"version", 1},
+        {"content", JsonArray{64, 144, 224, 255, String(payload)}}, {"subVersions", JsonObject{}}});
+    observed("VersionedJson::writeFile", [&] { VersionedJson::writeFile(value, savePath); });
+    VersionedJson decoded;
+    observed("VersionedJson::readFile", [&] { decoded = VersionedJson::readFile(savePath); });
+    auto saveBytes = File::readFile(savePath);
+    // Single-key trailer and integer-array content have a fixed source-derived
+    // encoding: SBVJ01, id, Maybe<u32>, Json array, u32 trailer version,
+    // one-entry subVersions map containing an empty Json object.
+    // SBVJ01/id/Maybe<u32>, array5, signed VLQ integers, string tag5,
+    // unsigned VLQ(1537)=8c01, then the one-key subVersions trailer.
+    String const expectedSave = "5342564a3031096275666665726c61620100000001060504810004822004834004837e058c01"
+        + hexEncode(ByteArray(payload.data(), payload.size())) + "00000001010b73756256657273696f6e730700";
+    if (hexEncode(saveBytes) != expectedSave)
+      throw StarException("BehaviorLab: Buffer independent save bytes mismatch");
+    DataStreamBuffer saveReader(saveBytes);
+    VersionedJson inspected;
+    observed("VersionedJson::readSubVersioning(owned file bytes)", [&] {
+      if (saveReader.readBytes(VersionedJson::MagicStringSize) != ByteArray("SBVJ01", 6))
+        throw StarException("BehaviorLab: Buffer save magic mismatch");
+      saveReader.read(inspected); VersionedJson::readSubVersioning(saveReader, inspected);
+    });
+    if (decoded.toJson() != value.toJson() || inspected.toJson() != value.toJson() || !saveReader.atEnd())
+      throw StarException("BehaviorLab: Buffer save schema/data/EOF mismatch");
+    // Buffer::resize does not initialize growth. Seed the entire bounded
+    // backing allocation before truncating so unused database-header bytes
+    // are defined, like the real file device's zero-filled extension.
+    auto memoryDevice = make_shared<BehaviorBTreeBuffer>();
+    ByteArray memoryPages, memoryFound;
+    observed("BTreeSha256Database::open/insert/commit/close(memory)", [&] {
+      BTreeSha256Database db("bufferlab");
+      db.setIODevice(memoryDevice); db.setBlockSize(512); db.setAutoCommit(false);
+      if (!db.open() || db.insert(String("buffer-payload"), saveBytes))
+        throw StarException("BehaviorLab: Buffer memory database initial state mismatch");
+      db.commit();
+      if (memoryDevice->size() > 8192) throw StarException("BehaviorLab: Buffer initialized memory extent exceeded");
+      memoryPages = memoryDevice->data(); db.close(false);
+    });
+    observed("BTreeSha256Database::open/find/close(memory)", [&] {
+      BTreeSha256Database db("bufferlab"); db.setIODevice(memoryDevice);
+      if (db.open()) throw StarException("BehaviorLab: Buffer memory database lost pages");
+      auto result = db.find(String("buffer-payload"));
+      if (!result || *result != saveBytes) throw StarException("BehaviorLab: Buffer memory database mismatch");
+      memoryFound = *result; db.close(false);
+    });
+    DataStreamBuffer memoryReader(memoryFound);
+    VersionedJson memoryValue;
+    observed("VersionedJson::readSubVersioning(memory BTree value)", [&] {
+      if (memoryReader.readBytes(6) != ByteArray("SBVJ01", 6))
+        throw StarException("BehaviorLab: Buffer memory database magic mismatch");
+      memoryReader.read(memoryValue); VersionedJson::readSubVersioning(memoryReader, memoryValue);
+    });
+    if (memoryValue.toJson() != value.toJson() || !memoryReader.atEnd())
+      throw StarException("BehaviorLab: Buffer memory database decoded value/EOF mismatch");
+    // BTree uses its real file device, commits, closes, then reopens independently.
+    ByteArray found;
+    observed("BTreeSha256Database::open/insert/commit/close(file)", [&] {
+      auto device = File::open(databasePath, IOMode::ReadWrite | IOMode::Truncate);
+      BTreeSha256Database db("bufferlab");
+      db.setIODevice(device); db.setBlockSize(512); db.setAutoCommit(false);
+      if (!db.open() || db.insert(String("buffer-payload"), saveBytes))
+        throw StarException("BehaviorLab: Buffer database initial state mismatch");
+      db.commit(); db.close(true);
+    });
+    observed("BTreeSha256Database::open/find/close(file)", [&] {
+      BTreeSha256Database db("bufferlab");
+      db.setIODevice(File::open(databasePath, IOMode::ReadWrite));
+      if (db.open()) throw StarException("BehaviorLab: Buffer database lost committed file");
+      auto result = db.find(String("buffer-payload"));
+      if (!result) throw StarException("BehaviorLab: Buffer database missing key");
+      found = *result; db.close(true);
+    });
+    if (found != saveBytes) throw StarException("BehaviorLab: Buffer database value mismatch");
+    DataStreamBuffer colorReader(found);
+    VersionedJson databaseValue;
+    observed("VersionedJson::readSubVersioning(BTree value)", [&] {
+      if (colorReader.readBytes(6) != ByteArray("SBVJ01", 6))
+        throw StarException("BehaviorLab: Buffer database value magic mismatch");
+      colorReader.read(databaseValue); VersionedJson::readSubVersioning(colorReader, databaseValue);
+    });
+    if (databaseValue.toJson() != decoded.toJson() || !colorReader.atEnd())
+      throw StarException("BehaviorLab: Buffer database decoded value/EOF mismatch");
+    auto components = databaseValue.content.toArray();
+    Vec4B color(components[0].toUInt(), components[1].toUInt(), components[2].toUInt(), components[3].toUInt());
+    String path = strf("/behaviorlab/buffer.png?multiply={:02x}{:02x}{:02x}{:02x}", color[0], color[1], color[2], color[3]);
+    auto image = m_root->assets()->image(path);
+    if (image->size() != Vec2U(16, 16)) throw StarException("BehaviorLab: Buffer image dimensions");
+    for (unsigned y = 0; y != 16; ++y)
+      for (unsigned x = 0; x != 16; ++x)
+        if (image->get(x, y) != color) throw StarException("BehaviorLab: Buffer Assets pixels mismatch");
+    String backend = "cpp";
+#ifdef STAR_USE_RUST_BUFFER
+    backend = "rust";
+#endif
+    m_behaviorBufferProof = JsonObject{{"version", 1}, {"backend", backend},
+        {"nativeObservedCalls", nativeCalls}, {"scopes", std::move(scopes)},
+        {"calls", BufferLabCounts::snapshot().delta(before)},
+        {"network", JsonObject{{"transport", "tcp"}, {"producer", "independent-literal-raw-sender"},
+            {"inputEndpoint", strf("127.0.0.1:{}", port)}, {"chosenPort", port}, {"ownedBindSucceeded", true},
+            {"rulesVersion", 5}, {"streamEnabled", false}, {"universeHandshake", false},
+            {"expectedWireHex", expectedWire}, {"actualWireHex", hexEncode(wire.wire)}, {"sentWireHex", hexEncode(sentWire)},
+            {"sendAttempts", sendAttempts}, {"stages", std::move(stages)}, {"parserEvents", std::move(wire.events)},
+            {"acceptedPeerAddress", "127.0.0.1"}, {"acceptedPeerPort", acceptedPeer.port()},
+            {"acceptedPeerSource", "OS-accept-sockaddr"}, {"clientLocalOsAvailable", false},
+            {"receivedTexts", std::move(receivedTexts)}, {"receivedPacketCount", received.size()}}},
+        {"save", JsonObject{{"filename", savePath}, {"wireHex", hexEncode(saveBytes)}, {"expectedWireHex", expectedSave}, {"value", decoded.toJson()},
+            {"consumed", saveReader.pos()}, {"atEnd", saveReader.atEnd()}}},
+        {"database", JsonObject{{"filename", databasePath}, {"key", "buffer-payload"}, {"blockSize", 512},
+            {"pagesHex", hexEncode(File::readFile(databasePath))}, {"foundHex", hexEncode(found)},
+            {"memoryPagesHex", hexEncode(memoryPages)}, {"memoryFoundHex", hexEncode(memoryFound)},
+            {"memoryValue", memoryValue.toJson()}, {"memoryConsumed", memoryReader.pos()}, {"memoryAtEnd", memoryReader.atEnd()},
+            {"value", databaseValue.toJson()}, {"consumed", colorReader.pos()}, {"atEnd", colorReader.atEnd()}}},
+        {"visual", JsonObject{{"imagePath", path}, {"color", JsonArray{color[0], color[1], color[2], color[3]}}, {"sourceSize", JsonArray{16, 16}},
+            {"displaySize", JsonArray{64, 64}}, {"scale", 4}, {"label", label}}}};
+  }
+  if (!m_behaviorReady || BehaviorLab::hasPendingFrame() || m_renderData.isFullbright) return;
+  auto visual = m_behaviorBufferProof.get("visual");
   auto drawable = Drawable::makeImage(visual.getString("imagePath"),
       visual.getFloat("scale") * 0.5f / TilePixels, true, Vec2F(64, 48));
   drawable.fullbright = true;
@@ -3498,7 +3735,7 @@ void ClientApplication::renderBehaviorScenario() {
       {"layout", "row-major-rgb-f32-bits"}, {"bits", std::move(lightmapBits)}};
   Json metadata = JsonObject{
       {"lightingDiagnostics", std::move(lightmapDiagnostic)},
-      {"scenario", m_behaviorDataStreamRoom ? "datastream-room" : m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
+      {"scenario", m_behaviorBufferRoom ? "buffer-room" : m_behaviorDataStreamRoom ? "datastream-room" : m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
       {"worldState", JsonObject{
           {"worldId", printWorldId(m_universeClient->clientContext()->playerWorldId())},
           {"worldSize", jsonFromVec2U(world->geometry().size())},
@@ -3589,6 +3826,10 @@ void ClientApplication::renderBehaviorScenario() {
     if (m_behaviorOptionParserProof.isNull())
       throw StarException("BehaviorLab: option parser frame has no completed proof");
     metadata = metadata.set("optionParserProof", m_behaviorOptionParserProof);
+  }
+  if (m_behaviorBufferRoom) {
+    if (m_behaviorBufferProof.isNull()) throw StarException("BehaviorLab: missing Buffer proof");
+    metadata = metadata.set("bufferProof", m_behaviorBufferProof);
   }
   if (m_behaviorDataStreamRoom) {
     if (m_behaviorDataStreamProof.isNull())

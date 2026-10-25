@@ -4,6 +4,7 @@
 #include "StarLogging.hpp"
 #include "StarZstdLab.hpp"
 #include "StarDataStreamLab.hpp"
+#include "StarBufferLab.hpp"
 
 namespace Star {
 
@@ -214,6 +215,11 @@ List<PacketPtr> TcpPacketSocket::receivePackets() {
   try {
     DataStreamExternalBuffer ds(m_inputBuffer);
     size_t trimPos = 0;
+    auto bufferLabCheckpoint = [&](char const* kind) {
+      if (bufferLabReceiver(this))
+        bufferLabParser(this, kind, ds.pos(), ds.size(), ds.remaining(), trimPos);
+    };
+    bufferLabCheckpoint("begin");
     while (!ds.atEnd()) {
       PacketType packetType;
       uint64_t packetSize = 0;
@@ -225,6 +231,7 @@ List<PacketPtr> TcpPacketSocket::receivePackets() {
         packetCompressed = len < 0;
         packetSize = packetCompressed ? -len : len;
       } catch (EofException const&) {
+        bufferLabCheckpoint("incomplete-header");
         // Guard against not having the entire packet header available when
         // trying to read.
         break;
@@ -233,8 +240,10 @@ List<PacketPtr> TcpPacketSocket::receivePackets() {
       if (packetSize > PacketSizeLimit)
         throw IOException::format("{} bytes large {} exceeds max size!", packetSize, PacketTypeNames.getRight(packetType));
 
-      if (packetSize > ds.remaining())
+      if (packetSize > ds.remaining()) {
+        bufferLabCheckpoint("incomplete-payload");
         break;
+      }
 
       m_incomingStats.mix(packetType, packetSize, !compressionStreamEnabled());
 
@@ -259,9 +268,13 @@ List<PacketPtr> TcpPacketSocket::receivePackets() {
         packet->read(packetStream, netRules());
         packets.append(std::move(packet));
       } while (!packetStream.atEnd());
+      bufferLabCheckpoint("packet-complete");
     }
+    bufferLabCheckpoint("before-trim");
     if (trimPos)
       m_inputBuffer.trimLeft(trimPos);
+    if (bufferLabReceiver(this))
+      bufferLabParser(this, "after-trim", 0, m_inputBuffer.size(), m_inputBuffer.size(), trimPos);
   } catch (IOException const& e) {
     Logger::warn("I/O error in TcpPacketSocket::receivePackets, closing: {}", outputException(e, false));
     m_inputBuffer.clear();
@@ -333,6 +346,7 @@ bool TcpPacketSocket::readData() {
         receipt.success(m_inputBuffer);
       } else {
         m_inputBuffer.append(readBuffer, readAmount);
+        bufferLabReceived(this, readBuffer, readAmount, m_inputBuffer.size());
       }
     }
   } catch (SocketClosedException const& e) {

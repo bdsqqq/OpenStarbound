@@ -4,8 +4,8 @@
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mode="${1:-lighting}"
-if [[ $# -gt 1 || ! "$mode" =~ ^(lighting|traversal|combined|encode|encode-combined|sha256|sha256-combined|vlq|vlq-combined|bytes|bytes-combined|unicode|unicode-combined|shell|shell-combined|jsonpath|jsonpath-combined|assetpath|assetpath-combined|random-mwc|random-mwc-combined|jsonpatch|jsonpatch-combined|textscan|textscan-combined|compression|compression-combined|zstd-combined|option-parser-combined|host-address-combined|data-stream-combined)$ ]]; then
-  printf '%s\n' 'usage: build-behavior-lab.sh [lighting|traversal|combined|encode|encode-combined|sha256|sha256-combined|vlq|vlq-combined|bytes|bytes-combined|unicode|unicode-combined|shell|shell-combined|jsonpath|jsonpath-combined|assetpath|assetpath-combined|random-mwc|random-mwc-combined|jsonpatch|jsonpatch-combined|textscan|textscan-combined|compression|compression-combined|zstd-combined|option-parser-combined|host-address-combined|data-stream-combined]'  >&2
+if [[ $# -gt 1 || ! "$mode" =~ ^(lighting|traversal|combined|encode|encode-combined|sha256|sha256-combined|vlq|vlq-combined|bytes|bytes-combined|unicode|unicode-combined|shell|shell-combined|jsonpath|jsonpath-combined|assetpath|assetpath-combined|random-mwc|random-mwc-combined|jsonpatch|jsonpatch-combined|textscan|textscan-combined|compression|compression-combined|zstd-combined|option-parser-combined|host-address-combined|data-stream-combined|buffer-combined)$ ]]; then
+  printf '%s\n' 'usage: build-behavior-lab.sh [lighting|traversal|combined|encode|encode-combined|sha256|sha256-combined|vlq|vlq-combined|bytes|bytes-combined|unicode|unicode-combined|shell|shell-combined|jsonpath|jsonpath-combined|assetpath|assetpath-combined|random-mwc|random-mwc-combined|jsonpatch|jsonpatch-combined|textscan|textscan-combined|compression|compression-combined|zstd-combined|option-parser-combined|host-address-combined|data-stream-combined|buffer-combined]'  >&2
   exit 2
 fi
 if [[ "$(uname -s)" != Darwin || "$(uname -m)" != arm64 ]]; then
@@ -44,6 +44,7 @@ for backend in reference candidate; do
   option_parser=OFF
   host_address=OFF
   data_stream=OFF
+  buffer=OFF
   # All modes share the identical all-C++ reference; candidates stay isolated.
   base="$root/build/behavior"
   if [[ "$backend" == candidate ]]; then
@@ -79,6 +80,7 @@ for backend in reference candidate; do
       option-parser-combined) rust=ON; blocks=ON; encode=ON; sha256=ON; vlq=ON; bytes=ON; unicode=ON; shell=ON; jsonpath=ON; assetpath=ON; random_mwc=ON; jsonpatch=ON; textscan=ON; compression=ON; zstd=ON; option_parser=ON ;;
       host-address-combined) rust=ON; blocks=ON; encode=ON; sha256=ON; vlq=ON; bytes=ON; unicode=ON; shell=ON; jsonpath=ON; assetpath=ON; random_mwc=ON; jsonpatch=ON; textscan=ON; compression=ON; zstd=ON; option_parser=ON; host_address=ON ;;
       data-stream-combined) rust=ON; blocks=ON; encode=ON; sha256=ON; vlq=ON; bytes=ON; unicode=ON; shell=ON; jsonpath=ON; assetpath=ON; random_mwc=ON; jsonpatch=ON; textscan=ON; compression=ON; zstd=ON; option_parser=ON; host_address=ON; data_stream=ON ;;
+      buffer-combined) rust=ON; blocks=ON; encode=ON; sha256=ON; vlq=ON; bytes=ON; unicode=ON; shell=ON; jsonpath=ON; assetpath=ON; random_mwc=ON; jsonpatch=ON; textscan=ON; compression=ON; zstd=ON; option_parser=ON; host_address=ON; data_stream=ON; buffer=ON ;;
     esac
     if [[ "$mode" != lighting ]]; then base="$base/$mode"; fi
   fi
@@ -100,7 +102,7 @@ for backend in reference candidate; do
     -DSTAR_BUILD_LIGHTING_LAB=OFF "-DSTAR_USE_RUST_LIGHTING=$rust" \
     "-DSTAR_USE_RUST_BLOCKS_ALONG_LINE=$blocks" \
     "-DSTAR_USE_RUST_LINE_QUERY=OFF" "-DSTAR_USE_RUST_ENCODE=$encode" \
-    "-DSTAR_USE_RUST_SHA256=$sha256" "-DSTAR_USE_RUST_VLQ=$vlq" "-DSTAR_USE_RUST_BYTES=$bytes" "-DSTAR_USE_RUST_UNICODE=$unicode" "-DSTAR_USE_RUST_SHELL=$shell" "-DSTAR_USE_RUST_JSON_PATH=$jsonpath" "-DSTAR_USE_RUST_ASSET_PATH=$assetpath" "-DSTAR_USE_RUST_RANDOM_MWC=$random_mwc" "-DSTAR_USE_RUST_JSON_PATCH=$jsonpatch" "-DSTAR_USE_RUST_TEXT_SCAN=$textscan" "-DSTAR_USE_RUST_COMPRESSION=$compression" "-DSTAR_USE_RUST_ZSTD=$zstd" "-DSTAR_USE_RUST_OPTION_PARSER=$option_parser" "-DSTAR_USE_RUST_HOST_ADDRESS=$host_address" "-DSTAR_USE_RUST_DATA_STREAM=$data_stream" \
+    "-DSTAR_USE_RUST_SHA256=$sha256" "-DSTAR_USE_RUST_VLQ=$vlq" "-DSTAR_USE_RUST_BYTES=$bytes" "-DSTAR_USE_RUST_UNICODE=$unicode" "-DSTAR_USE_RUST_SHELL=$shell" "-DSTAR_USE_RUST_JSON_PATH=$jsonpath" "-DSTAR_USE_RUST_ASSET_PATH=$assetpath" "-DSTAR_USE_RUST_RANDOM_MWC=$random_mwc" "-DSTAR_USE_RUST_JSON_PATCH=$jsonpatch" "-DSTAR_USE_RUST_TEXT_SCAN=$textscan" "-DSTAR_USE_RUST_COMPRESSION=$compression" "-DSTAR_USE_RUST_ZSTD=$zstd" "-DSTAR_USE_RUST_OPTION_PARSER=$option_parser" "-DSTAR_USE_RUST_HOST_ADDRESS=$host_address" "-DSTAR_USE_RUST_DATA_STREAM=$data_stream" "-DSTAR_USE_RUST_BUFFER=$buffer" \
     "-DSTAR_RUNTIME_OUTPUT_DIRECTORY=$base/$backend/bin" "${extra[@]}"
   cmake --build "$build" --target starbound --parallel "${CMAKE_BUILD_PARALLEL_LEVEL:-8}"
   python3 "$provenance" seal --source-root "$root" --snapshot "$snapshot" \

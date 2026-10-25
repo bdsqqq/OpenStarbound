@@ -4,6 +4,87 @@
 #include "StarFormat.hpp"
 #include "StarLogging.hpp"
 
+#ifdef STAR_USE_RUST_BUFFER
+#include "StarBufferHost.hpp"
+
+// Capturingless member-scope thunks have legal private/protected access. No
+// std::function allocation, field-layout mirror, or owner-wide busy lock.
+#define BCONST NativeCtx c; c.constOwner=this;c.constPosition=&m_pos;c.constBytes=&m_bytes
+#define BCTX BCONST; c.owner=this;c.position=&m_pos;c.bytes=&m_bytes; \
+ c.setMode=+[](NativeCtx& x,IOMode m){x.owner->setMode(m);}; \
+ c.baseCopy=+[](NativeCtx& x){x.owner->IODevice::operator=(*x.source);}; \
+ c.child=+[](NativeCtx& x,uint64_t op,uint64_t v)->uint64_t{switch(op){ \
+ case 0:x.owner->reset((size_t)v);break;case 1:if(!x.param)throw Stop{2};x.owner->reset(std::move(*x.param));break; \
+ case 2:if(!x.source)throw Stop{2};*x.owner=*x.source;break;case 3:if(!x.moveSource)throw Stop{2};*x.owner=std::move(*x.moveSource);break; \
+ case 4:x.ref=&x.owner->data();break;case 5:return x.owner->doRead(v,x.output,x.args[1]);case 6:return x.owner->doWrite(v,x.input,x.args[1]); \
+ case 7:x.owner->resize((StreamOffset)v);break;case 8:x.owner->seek(0,IOSeek::End);break;default:throw Stop{2};}return 0;}
+#define ECONST NativeCtx c;c.constExternal=this;c.constPosition=&m_pos;c.constBorrowed=&m_bytes;c.constExternalSize=&m_size
+#define ECTX ECONST;c.external=this;c.position=&m_pos;c.borrowed=&m_bytes;c.externalSize=&m_size; \
+ c.setMode=+[](NativeCtx& x,IOMode m){x.external->setMode(m);}; \
+ c.child=+[](NativeCtx& x,uint64_t op,uint64_t v)->uint64_t{if(op==9){x.external->reset(x.input,x.args[0]);return 0;}if(op!=5)throw Stop{2};return x.external->doRead(v,x.output,x.args[1]);}
+#define SRC c.source=&buffer;c.sourcePosition=&buffer.m_pos;c.sourceBytes=&buffer.m_bytes
+#define MOVESRC SRC;c.moveSource=&buffer;c.moveSourcePosition=&buffer.m_pos;c.moveSourceBytes=&buffer.m_bytes
+namespace Star {
+using namespace BufferRust;
+Buffer::Buffer(){BCTX;c.posReady=false;execute(c,SB_B_CTOR);}
+Buffer::Buffer(size_t initialSize):Buffer(){BCTX;c.args[0]=initialSize;execute(c,SB_B_CTOR_SIZE);}
+Buffer::Buffer(ByteArray b):Buffer(){BCTX;c.param=&b;execute(c,SB_B_CTOR_BYTES);}
+Buffer::Buffer(Buffer const& buffer):Buffer(){BCTX;SRC;execute(c,SB_B_CTOR_COPY);}
+Buffer::Buffer(Buffer&& buffer):Buffer(){BCTX;MOVESRC;execute(c,SB_B_CTOR_MOVE);}
+StreamOffset Buffer::pos(){BCTX;execute(c,SB_B_POS);return c.result;}
+void Buffer::seek(StreamOffset pos,IOSeek mode){BCTX;c.args[0]=pos;c.args[1]=(uint8_t)mode;execute(c,SB_B_SEEK);}
+void Buffer::resize(StreamOffset size){BCTX;c.args[0]=size;execute(c,SB_B_RESIZE);}
+bool Buffer::atEnd(){BCTX;execute(c,SB_B_END);return c.result;}
+size_t Buffer::read(char* data,size_t len){BCTX;c.output=data;c.args[1]=len;execute(c,SB_B_READ);return c.result;}
+size_t Buffer::write(char const* data,size_t len){BCTX;c.input=data;c.args[1]=len;execute(c,SB_B_WRITE);return c.result;}
+size_t Buffer::readAbsolute(StreamOffset p,char* data,size_t len){BCTX;c.output=data;c.args[0]=p;c.args[1]=len;execute(c,SB_B_READ_ABS);return c.result;}
+size_t Buffer::writeAbsolute(StreamOffset p,char const* data,size_t len){BCTX;c.input=data;c.args[0]=p;c.args[1]=len;execute(c,SB_B_WRITE_ABS);return c.result;}
+void Buffer::open(IOMode mode){BCTX;c.args[0]=(uint8_t)mode;execute(c,SB_B_OPEN);}
+String Buffer::deviceName()const{BCONST;execute(c,SB_B_NAME);return std::move(c.name);}
+StreamOffset Buffer::size(){BCTX;execute(c,SB_B_SIZE);return c.result;}
+ByteArray& Buffer::data(){BCTX;execute(c,SB_B_DATA);return *c.ref;}
+ByteArray const& Buffer::data()const{BCONST;execute(c,SB_B_CONST_DATA);return *c.constRef;}
+ByteArray Buffer::takeData(){BCTX;execute(c,SB_B_TAKE);return std::move(c.value);}
+char* Buffer::ptr(){BCTX;execute(c,SB_B_PTR);return c.pointer;}
+char const* Buffer::ptr()const{BCONST;execute(c,SB_B_CONST_PTR);return c.constPointer;}
+size_t Buffer::dataSize()const{BCONST;execute(c,SB_B_DATA_SIZE);return c.result;}
+void Buffer::reserve(size_t size){BCTX;c.args[0]=size;execute(c,SB_B_RESERVE);}
+void Buffer::clear(){BCTX;execute(c,SB_B_CLEAR);}
+bool Buffer::empty()const{BCONST;execute(c,SB_B_EMPTY);return c.result;}
+void Buffer::reset(size_t size){BCTX;c.args[0]=size;execute(c,SB_B_RESET_SIZE);}
+void Buffer::reset(ByteArray b){BCTX;c.param=&b;execute(c,SB_B_RESET_BYTES);}
+Buffer& Buffer::operator=(Buffer const& buffer){BCTX;SRC;execute(c,SB_B_COPY);return *this;}
+Buffer& Buffer::operator=(Buffer&& buffer){BCTX;MOVESRC;execute(c,SB_B_MOVE);return *this;}
+size_t Buffer::doRead(size_t pos,char* data,size_t len){BCTX;c.args[0]=pos;c.args[1]=len;c.output=data;execute(c,SB_B_PRIVATE_READ);return c.result;}
+size_t Buffer::doWrite(size_t pos,char const* data,size_t len){BCTX;c.args[0]=pos;c.args[1]=len;c.input=data;execute(c,SB_B_PRIVATE_WRITE);return c.result;}
+ExternalBuffer::ExternalBuffer(){ECTX;c.posReady=false;c.extReady=false;execute(c,SB_E_CTOR);}
+ExternalBuffer::ExternalBuffer(char const* data,size_t len):ExternalBuffer(){ECTX;c.input=data;c.args[0]=len;execute(c,SB_E_CTOR_BYTES);}
+StreamOffset ExternalBuffer::pos(){ECTX;execute(c,SB_E_POS);return c.result;}
+void ExternalBuffer::seek(StreamOffset pos,IOSeek mode){ECTX;c.args[0]=pos;c.args[1]=(uint8_t)mode;execute(c,SB_E_SEEK);}
+bool ExternalBuffer::atEnd(){ECTX;execute(c,SB_E_END);return c.result;}
+size_t ExternalBuffer::read(char* data,size_t len){ECTX;c.output=data;c.args[1]=len;execute(c,SB_E_READ);return c.result;}
+size_t ExternalBuffer::write(char const*,size_t){ECTX;execute(c,SB_E_WRITE);return c.result;}
+size_t ExternalBuffer::readAbsolute(StreamOffset pos,char* data,size_t len){ECTX;c.output=data;c.args[0]=pos;c.args[1]=len;execute(c,SB_E_READ_ABS);return c.result;}
+size_t ExternalBuffer::writeAbsolute(StreamOffset,char const*,size_t){ECTX;execute(c,SB_E_WRITE_ABS);return c.result;}
+String ExternalBuffer::deviceName()const{ECONST;execute(c,SB_E_NAME);return std::move(c.name);}
+StreamOffset ExternalBuffer::size(){ECTX;execute(c,SB_E_SIZE);return c.result;}
+char const* ExternalBuffer::ptr()const{ECONST;execute(c,SB_E_PTR);return c.constPointer;}
+size_t ExternalBuffer::dataSize()const{ECONST;execute(c,SB_E_DATA_SIZE);return c.result;}
+bool ExternalBuffer::empty()const{ECONST;execute(c,SB_E_EMPTY);return c.result;}
+ExternalBuffer::operator bool()const{ECONST;execute(c,SB_E_BOOL);return c.result;}
+void ExternalBuffer::reset(char const* data,size_t len){ECTX;c.input=data;c.args[0]=len;execute(c,SB_E_RESET);}
+IODevicePtr Buffer::clone(){BCTX;execute(c,SB_B_CLONE);return std::move(c.clone);}
+IODevicePtr ExternalBuffer::clone(){ECTX;execute(c,SB_E_CLONE);return std::move(c.clone);}
+size_t ExternalBuffer::doRead(size_t pos,char* data,size_t len){ECTX;c.output=data;c.args[0]=pos;c.args[1]=len;execute(c,SB_E_PRIVATE_READ);return c.result;}
+}
+#undef BCTX
+#undef BCONST
+#undef ECTX
+#undef ECONST
+#undef SRC
+#undef MOVESRC
+
+#else
 namespace Star {
 
 Buffer::Buffer()
@@ -302,3 +383,5 @@ size_t ExternalBuffer::doRead(size_t pos, char* data, size_t len) {
 }
 
 }
+
+#endif
