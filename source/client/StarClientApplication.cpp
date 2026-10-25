@@ -21,6 +21,7 @@
 #include "StarZstdLab.hpp"
 #include "StarHostAddressLab.hpp"
 #include "StarDataStreamLab.hpp"
+#include "StarBTreeLab.hpp"
 #include <sstream>
 #include "StarOptionParserLab.hpp"
 #include "StarRootLuaBindings.hpp"
@@ -1866,7 +1867,7 @@ void ClientApplication::prepareBehaviorSha256Frame() {
 
   // Real persistent BTree pages, but only in RAM. A fresh database object must
   // reopen the same Buffer; do not substitute a map or touch player storage.
-  auto buffer = make_shared<Buffer>();
+  auto buffer = make_shared<BehaviorBTreeBuffer>();
   String const key = "behaviorlab-sha256-key";
   ByteArray const initial("alpha\0one", 9);
   ByteArray const updated("beta\0two", 8);
@@ -2069,7 +2070,7 @@ void ClientApplication::prepareBehaviorVlqFrame() {
         {"readCalls", packetReadCalls}};
 
     before = snapshot();
-    auto rawBuffer = make_shared<Buffer>();
+    auto rawBuffer = make_shared<BehaviorBTreeBuffer>();
     std::array<String, 3> const keys{"vlq-a", "vlq-b", "vlq-c"};
     std::array<size_t, 3> const lengths{127, 128, 700};
     std::array<ByteArray, 3> values;
@@ -2240,7 +2241,7 @@ void ClientApplication::prepareBehaviorBytesFrame() {
         {"writeCalls", packetWriteCalls}, {"readCalls", packetReadCalls}};
 
     before = snapshot();
-    auto rawBuffer = make_shared<Buffer>();
+    auto rawBuffer = make_shared<BehaviorBTreeBuffer>();
     std::array<String, 3> const keys{"vlq-a", "vlq-b", "vlq-c"};
     std::array<size_t, 3> const lengths{127, 128, 700};
     std::array<ByteArray, 3> values;

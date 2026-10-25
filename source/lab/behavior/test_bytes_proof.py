@@ -75,6 +75,17 @@ class BytesProofTests(unittest.TestCase):
         d["pagesBase64"] = base64.b64encode(pages).decode()
         with self.assertRaisesRegex(ValueError, "fixed-width header"): proof.validate(p)
 
+    def test_initialized_padding_required_before_projection(self):
+        for backend in ('cpp', 'rust'):
+            for offset in (67, 511):
+                p = fixture(backend)
+                d = p['bytesProof']['database']
+                pages = bytearray(base64.b64decode(d['pagesBase64']))
+                pages[offset] = 0xa5  # logical values/header fields unchanged
+                d['pagesBase64'] = base64.b64encode(pages).decode()
+                with self.subTest(backend=backend, offset=offset), self.assertRaisesRegex(ValueError, 'BTree header padding'):
+                    proof.validate(p)
+
     def test_unknown_field_rejected(self):
         p = fixture(); p["bytesProof"]["assets"]["unmeasured"] = True
         with self.assertRaisesRegex(ValueError, "schema"): proof.validate(p)

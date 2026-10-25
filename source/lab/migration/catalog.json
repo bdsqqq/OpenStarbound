@@ -2703,6 +2703,16 @@
       "rule": "assets"
     },
     {
+      "cmake_membership": [],
+      "disposition": "harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/base/StarBTreeLab.hpp",
+      "rule": "btree-lab-contract"
+    },
+    {
       "cmake_membership": [
         {
           "cmake": "source/base/CMakeLists.txt",
@@ -20072,6 +20082,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/btree_padding.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/behavior/build_provenance.py",
       "rule": "laboratories"
     },
@@ -20163,6 +20183,26 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/behavior/option_parser_proof.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/ram_btree_probe.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/ram_btree_probe.py",
       "rule": "laboratories"
     },
     {
@@ -20403,6 +20443,16 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/behavior/unicode_proof.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/verify_ram_btree_probe.py",
       "rule": "laboratories"
     },
     {
@@ -26435,6 +26485,10 @@
       "sha256": "48da6d565ef2e012057a1d74e82cd6757d699592eaac6d590f7259c67564284f"
     },
     {
+      "path": "source/base/StarBTreeLab.hpp",
+      "sha256": "4ff3f74de9ceee5d3e216cebf7ee262411d45d0939dc10f405da2cb4475b0777"
+    },
+    {
       "path": "source/base/StarBlocksAlongLine.hpp",
       "sha256": "c9ee28351263a8058f8747074d9742b734f2744cb779480f3cf057d35e12234d"
     },
@@ -26592,7 +26646,7 @@
     },
     {
       "path": "source/client/StarClientApplication.cpp",
-      "sha256": "a5c13f94d72fc3bb472d4bd9dbc40ea13eec51590d4a6ad15062909e52245130"
+      "sha256": "0fc9371a89669506fe96da59ead35546fd31059ca0b2f2a5a793adfb4a22c5bd"
     },
     {
       "path": "source/client/StarClientApplication.hpp",
@@ -30451,12 +30505,16 @@
       "sha256": "287e27ed95b0b6d6f35c205b2d5e2a4a4b45f2fd3eef7efdc8a1a5b02e2e69d1"
     },
     {
+      "path": "source/lab/behavior/btree_padding.py",
+      "sha256": "6044fb861554c04da2f7eaa92a4f4a887bfe5ebbeab179d871158e40da93d981"
+    },
+    {
       "path": "source/lab/behavior/build_provenance.py",
       "sha256": "851f75f4832c5e0a620f05f85cc0d2db220dd2494adf444acfa37870c8e57b33"
     },
     {
       "path": "source/lab/behavior/bytes_proof.py",
-      "sha256": "a84d59675d20a32274881ae2399e1ad297fe4166b0bdadd336b80c275d5d87c4"
+      "sha256": "22f5389f839ccc67e58fd5df7746520bf08599c5e11bfcd6c29a6ef74a18ee58"
     },
     {
       "path": "source/lab/behavior/compression_proof.py",
@@ -30491,6 +30549,14 @@
       "sha256": "7d7a1daaa2e422014dcd1f76fcf700b02aef3c94875540c4fb18f7d4cbb27900"
     },
     {
+      "path": "source/lab/behavior/ram_btree_probe.cpp",
+      "sha256": "a404a50134337e21ab19765e6cae89316b2718ab0edbe9a6c07e594242a9be6d"
+    },
+    {
+      "path": "source/lab/behavior/ram_btree_probe.py",
+      "sha256": "603f0531575b816bc3ecbd1c54646a3300b25e944f56ad1d316bd17c78ab5a21"
+    },
+    {
       "path": "source/lab/behavior/random_mwc_proof.py",
       "sha256": "e1d008b581c9210502878697dcce0276ff1d02915854704890d8071a46932974"
     },
@@ -30516,7 +30582,7 @@
     },
     {
       "path": "source/lab/behavior/test_bytes_proof.py",
-      "sha256": "a35b3c870244076cf7b4acbf85e1240fd2efbaee42c0cbeb09f95250c7128d23"
+      "sha256": "ecfad7fc8ce534d1cd61a26687fe247b7b86d532fdee8186d70c6f9b5ad3a378"
     },
     {
       "path": "source/lab/behavior/test_compression_proof.py",
@@ -30572,7 +30638,7 @@
     },
     {
       "path": "source/lab/behavior/test_vlq_proof.py",
-      "sha256": "2028b3ade88eac9d2c78b7321c258d9d54314159e19677c04a46f159e58edfe8"
+      "sha256": "d65d3ec6a42932dd318d4c66f56623ca7adee0d0b5948963ff6ef0db4d55cecd"
     },
     {
       "path": "source/lab/behavior/test_zstd_proof.py",
@@ -30587,8 +30653,12 @@
       "sha256": "44125a1e6bf920b1c4af111bf3c392c287613fb582130682e8df3f9c1968884d"
     },
     {
+      "path": "source/lab/behavior/verify_ram_btree_probe.py",
+      "sha256": "d300c6496b4803a20b1b5c5d495a8fe0a0d36b84851a21d99fea6f3a7ae22bf6"
+    },
+    {
       "path": "source/lab/behavior/vlq_proof.py",
-      "sha256": "0cc552e4f0ee2d7347669393338069917a9ac0cb6ad4bcf9c12d78cbeb53bc2e"
+      "sha256": "f037a11621219541ebadd087a8375edee955c6256f4d2d83d1353b9ab54f30a2"
     },
     {
       "path": "source/lab/behavior/zstd_proof.py",
@@ -30924,7 +30994,7 @@
     },
     {
       "path": "source/lab/migration/modules.json",
-      "sha256": "06069c00e1e0dd3ff24215ac474dba0353240c9b77d31baa382af630f6590c3f"
+      "sha256": "5314136e163675c756a2507737016ad4f1cae88668e497cdb5d8a5fa46e97889"
     },
     {
       "path": "source/lab/option-parser/StarOptionParser.original.cpp",
@@ -32225,11 +32295,11 @@
   "summary": {
     "by_disposition": {
       "ffi-adapter": 25,
-      "harness": 20,
+      "harness": 21,
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 195,
+      "oracle/harness": 199,
       "retain-tooling": 20,
       "retained-third-party": 296,
       "rust-candidate": 19,
@@ -32270,14 +32340,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 35,
-      "validation.oracles-harness": 215,
+      "validation.oracles-harness": 220,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1637,
+    "files": 1642,
     "modules": 39,
-    "no_direct_target": 531
+    "no_direct_target": 536
   }
 }

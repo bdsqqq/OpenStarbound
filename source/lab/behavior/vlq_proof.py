@@ -1,4 +1,5 @@
 """Independent bytes and observed native I/O, never paired round-trip alone."""
+import btree_padding
 import base64
 import binascii
 import re
@@ -93,6 +94,7 @@ def validate(receipt):
         raise ValueError("invalid VLQ database page encoding") from error
     if len(pages) < 1024 or len(pages) % 512 or base64.b64encode(pages).decode() != d["pagesBase64"]:
         raise ValueError("invalid VLQ database page structure")
+    btree_padding.validate_pages(pages)
     _calls(d["rustCalls"], backend, active=(0, 1, 2))
     _keys(e, "kind unsignedValue consumed readCalls", "EOF")
     if (e["kind"] != "EofException" or type(e["unsignedValue"]) is not int or e["unsignedValue"] != 1

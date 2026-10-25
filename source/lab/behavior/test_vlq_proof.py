@@ -82,6 +82,17 @@ class VlqProofTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             vlq.validate({"vlqProof": p})
 
+    def test_initialized_padding_required_before_projection(self):
+        for backend in ('cpp', 'rust'):
+            for offset in (67, 511):
+                p = proof(backend)
+                d = p['database']
+                pages = bytearray(base64.b64decode(d['pagesBase64']))
+                pages[offset] = 0xa5  # paired values still match
+                d['pagesBase64'] = base64.b64encode(pages).decode()
+                with self.subTest(backend=backend, offset=offset), self.assertRaisesRegex(ValueError, 'BTree header padding'):
+                    vlq.validate({'vlqProof': p})
+
     def test_database_bytes_not_only_paired_values(self):
         reference = self.capture("ref")
         candidate = self.capture("changed-pages", "rust")

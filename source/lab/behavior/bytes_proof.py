@@ -1,4 +1,5 @@
 """Independent fixed-width wire anchors and visible native Assets observation."""
+import btree_padding
 import base64
 import binascii
 
@@ -85,6 +86,7 @@ def validate(receipt):
             or pages[:8] != b"BTreeDB5" or pages[8:12] != b"\x00\x00\x02\x00"
             or pages[28:32] != b"\x00\x00\x00\x20"):
         raise ValueError("byte-order database fixed-width header differs")
+    btree_padding.validate_pages(pages)
     calls(d["rustCalls"], backend)
     return {"version": 1,
             "assets": {key: value for key, value in a.items() if key not in ("backend", "rustCalls")},

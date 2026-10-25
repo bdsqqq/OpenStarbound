@@ -1,5 +1,16 @@
 # native behavioral evidence
 
+## initialized RAM BTree fixture backing (2026-10-25)
+
+VERIFIED — `Buffer::resize` does not initialize growth. native BTree writes header fields but leaves `[67,512)` unused; `rawWriteBlock` also copies newly grown device bytes before overwriting them. previous SHA receipts did not export pages; VLQ/Bytes did. this is a missing initialization guarantee, not a sanitizer demonstration of past executions. production Buffer/BTree/serialization algorithms remain unchanged.
+
+three fixtures now use `BehaviorBTreeBuffer`: seed8192 bytes, logically truncate, and reject resize/write extents BEFORE escaping initialized storage. `ram-btree-domain-r1/parent-postbuild-r1/report.json` passes12 native sequences (three source sequences × zero/zero-repeat/initialized-poison/poison-repeat), seven guard cases per run and1109 bound inputs. only `[67,512)` differs between fills; logical results remain identical. normal-exit poison outputs fail the SAME zero-padding predicate now used by actual VLQ/Bytes receipt validators. independent verifier rejects five synthetic artifact corruptions. earlier attempt2 remains DRAFT due stale game seals; no compile-failure/closure-gap negative credit.
+
+`build/behavior/ram-btree-actual-report.json` passes the three affected real-game matrices plus DataStream's actual TCP/save/file+memory BTree matrix: two native baselines BEFORE Rust per matrix, exact frame/state parity, and12 historical decoded-RGBA frames unchanged. nine affected Rust frames inspected at1000×600: normal room lighting/occlusion/restoration; red VLQ and blue Bytes64×64 image consumers. SHA remains its normal room/hash-and-database receipt consumer, NOT an invented SHA overlay. no visual golden/reference/tolerance changes. padding-zero validators reject initialized poison while values/other header fields/counters still match.
+
+current build seals pass. fresh `oracle-ram-btree-r1` and `rust-ram-btree-r1` rebind/replay DataStream683/all51 against the rebuilt native closure, with four normal value-equivalent controls and10 integrity controls. actual aggregate remains SHA07671916fb5ec8674ac81396a9e1e4feaf04a5b3bbcc6097d48f77a975a3a996; no Rust algorithm changed. prior raw padding observations are historical, not retroactively proven initialized. no new module, universal allocator/OOM/sanitizer/platform/performance or audible mixer claim.
+
+
 ## HostAddress: numeric endpoint → actual TCP → normal Assets/Font (2026-10-25)
 
 VERIFIED — `build/behavior/host-address-awake-r1/report.json` passed two C++ baselines before Rust launch, then exact1000×600 framebuffer/state comparisons at all three stages. all three new Rust PNGs were read and inspected: normal64×64 green image, white127.0.0.1 label, occlusion and restoration. parsed numeric127.0.0.1:40169 feeds the owned listener/connect/accept path; actual accepted sockaddr bytes drive color16/192/144/255 and typed TCP-received text drives Font. scoped Rust controllers execute; C++ FFI rows remain zero. raw ephemeral ports51145/51158/51182 are retained and validated before projection. only accepted remote is OS sockaddr: other public addresses are caches, including unpopulated client-local0:0. manually configured compatibility5 is NOT a Universe handshake.
