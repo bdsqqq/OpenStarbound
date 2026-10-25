@@ -8,6 +8,18 @@ parent source review found and corrected defined-domain problems BEFORE acceptan
 
 full-range signed VLQ native expressions are admitted: the scoped C++17 shift diagnostic at `build/data-stream-lab/domain-signed-vlq-r1/report.json` matches independent zigzag anchors for INT64_MIN/MAX and detects its known-bad shift64 fixture. this is neither full-Core UBSan nor another copy of the old restricted signed domain. remaining alias/resource/platform gaps stay explicit; no ABI is frozen yet.
 
+## accepted native ownership/controller blueprint
+
+`build/data-stream-lab/host-parent-final-guards-r1/report.json` passes an independent fresh51-definition/683-record blueprint replay and repeat with the same ordered SHA. strictC11, actual production-header private-member bindings, opaque-null custom host and selected native guards pass. five executed binaries/14 commands/1109 before-after bindings are verified by `verify_host.py`; seven isolated metadata corruptions are rejected. three normally exiting controller controls detect early byte-order snapshot, skipped zero-length IO and mid-loop string-mode reread. linker maps reject pulling the original DataStream archive member.
+
+51 modes and21 documented operations stay scalar-only; actual native owner/vtable/typed caller/container/temporaries/exception objects stay C++. the controller preserves direct caller mutation before IO failure, bool-local assignment after success, fresh post-read order, captured string views, fresh post-prefix ByteArray views and native `String = std::move(stdstring)` publication. per-invocation busy/pending/finish and known output-alias/span guards are selected checks, not a complete state automaton or arbitrary-pointer validator.
+
+parent review required source-exact unconditional directional Bytes dependency calls, including NoConversion/native order, and bool→migrated uint8 child dispatch. these are in the accepted blueprint; existing Bytes/VLQ code remains a dependency, not newly ported DataStream algorithms. initial value-VLQ recursion failed and received no negative credit; native temporaries/reference child calls fixed it. source-only independent review found no actionable surviving findings. C++ foreign-callback catch tests are prototype-only: no future Rust unwind guarantee.
+
+parent additionally reproduced a real malformed-protocol gap: an aligned output backed by live uint64 objects could alias C-string input, be accepted, and overwrite it. `parent-cstr-alias-r1/report.json` retains the pre-fix exit1/status0/input-changed observation and fixed exit0/status2/input-unchanged. guards now cover current C-string extent before capture and the saved extent afterward; they must NOT re-read strlen after a source-valid callback removes the terminator. selected tests cover captured extent after an in-place early NUL and terminator removal. final whole683 replay remains exact. a scoped ASan experiment passed the fixed tests but its known-bad re-scan variant did NOT discriminate, so it receives NO sanitizer verification credit; investigate that diagnostic limitation separately.
+
+this freezes a native-calibrated contract, NOT production/Rust/game qualification. production Core/public header/Rust/CMake are unchanged. worker final-r3 is historical after the parent changed only the header's DRAFT wording; parent accepted report binds the final files. replay: `python3 -B source/lab/data-stream/host_run.py --values build/data-stream-lab/oracle-parent-r1 --output build/data-stream-lab/NEW-HOST-ROOT`, then `verify_host.py --report .../report.json --self-test`.
+
 ## worker calibration handoff: r5 only
 
 VERIFIED finite native calibration at source HEAD `9f2316a22d5abcb10ff2778b628bc3bef7de5b99`.
