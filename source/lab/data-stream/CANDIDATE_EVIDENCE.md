@@ -85,12 +85,20 @@ read-only follow-up is required for unused padding in three older RAM BTree
 fixtures (SHA/VLQ/Bytes): their observed finite pixels/receipts do NOT establish
 initialized padding. those older scene methods remain unchanged in this unit.
 
-## remaining application qualification
+## accepted finite application qualification
 
-seventeen historical scenario matrices/frame sequences are running separately;
-not credited until their aggregate `data-stream-historical-pixels.json` passes.
-fresh PCM WAV decode/seek/EOF and corrupt-PCM control use the actual native and
-combined link closures; no audible mixer/Ogg claim. real client CLI literals,
-final build/source seals and qualification binding remain required before the
-parent accepts application integration. no full-engine, OOM, destructor,
-allocator, performance, remote-DNS or cross-platform completion claim.
+source checkpoint **fd285405**. `build/behavior/data-stream-historical-pixels.json`
+passes all17 historical scenario matrices/51 decoded-RGBA frames unchanged;
+with the new scene,18 actual matrices pass C++ repeatability before Rust launch.
+fresh PCM WAV decode/seek/EOF and corrupt-PCM controls pass both actual link
+closures; no audible mixer/Ogg claim. `data-stream-option-cli-r1/report.json`
+passes12 real client CLI literal/exit executions. current build/source seals,
+actual linked archive and reports are bound in
+`build/behavior/data-stream-actual-r1/qualification.json`; its verifier rejects
+a known-bad historical-count fixture.169 behavior tests and catalog1637files/
+39modules/eight drift controls pass. all delegated tasks and owned processes
+are terminal. pre-existing storage and Steam remain untouched.
+
+next is the explicit legacy RAM-header padding domain audit above, before another
+port. no full-engine, OOM, destructor, allocator, performance, remote-DNS, Universe
+handshake, sanitizer or cross-platform completion claim.

@@ -1,4 +1,10 @@
-# native DataStream calibration
+# DataStream evidence
+
+current finite Rust/application checkpoint: **fd285405**, all51 compiled controllers,
+683 exact native records and18 actual matrices. see `CANDIDATE_EVIDENCE.md` and
+`build/behavior/data-stream-actual-r1/qualification.json` for current postbuild
+archive/source/packet/save/BTree/frames/PCM/CLI bindings and remaining limits.
+sections below describe historical native-only calibration at their tested revisions.
 
 ## accepted parent replay
 
