@@ -99,6 +99,10 @@ a known-bad historical-count fixture.169 behavior tests and catalog1637files/
 39modules/eight drift controls pass. all delegated tasks and owned processes
 are terminal. pre-existing storage and Steam remain untouched.
 
-next is the explicit legacy RAM-header padding domain audit above, before another
-port. no full-engine, OOM, destructor, allocator, performance, remote-DNS, Universe
+the legacy RAM-header padding follow-up above is now repaired at **021fc9eb**:
+bounded initialized fixture storage,12 native zero/poison sequences and four real
+game matrices pass; see `../behavior/EVIDENCE.md` and
+`build/behavior/ram-btree-qualification.json`. Buffer's next native calibration
+is **243ecab3**, not another qualified Rust port. no full-engine, OOM, destructor,
+allocator, performance, remote-DNS, Universe
 handshake, sanitizer or cross-platform completion claim.

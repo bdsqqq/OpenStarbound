@@ -1,0 +1,3 @@
+# Frozen native header bytes retain source whitespace.
+StarBuffer.original.hpp -whitespace
+StarBuffer.reference.hpp -whitespace
