@@ -19,6 +19,8 @@
 #include "StarRandomMwcLab.hpp"
 #include "StarCompressionLab.hpp"
 #include "StarZstdLab.hpp"
+#include "StarHostAddressLab.hpp"
+#include <sstream>
 #include "StarOptionParserLab.hpp"
 #include "StarRootLuaBindings.hpp"
 #include "StarNetPacketSocket.hpp"
@@ -571,6 +573,8 @@ void ClientApplication::render() {
         prepareBehaviorOptionParserFrame();
       if (BehaviorLab::enabled() && m_behaviorZstdRoom)
         prepareBehaviorZstdFrame();
+      if (BehaviorLab::enabled() && m_behaviorHostAddressRoom)
+        prepareBehaviorHostAddressFrame();
 
       auto paintStart = Time::monotonicMicroseconds();
       m_worldPainter->render(m_renderData, [&]() -> bool {
@@ -608,16 +612,18 @@ void ClientApplication::render() {
           || (m_behaviorRandomMwcRoom && !m_behaviorRandomMwcProof.isNull())
           || (m_behaviorCompressionRoom && !m_behaviorCompressionProof.isNull())
           || (m_behaviorZstdRoom && !m_behaviorZstdProof.isNull())
+          || (m_behaviorHostAddressRoom && !m_behaviorHostAddressProof.isNull())
           || (m_behaviorOptionParserRoom && !m_behaviorOptionParserProof.isNull())) {
         // Normal Font -> TextPainter -> GPU glyph path; only ASCII coverage is
         // claimed. Screen-space coordinates avoid the 64px world-image area.
         m_guiContext->clearTextStyle();
         m_guiContext->setDefaultFont();
-        m_guiContext->setFontSize(m_behaviorZstdRoom ? 8 : 16, 1.0f);
+        m_guiContext->setFontSize((m_behaviorZstdRoom || m_behaviorHostAddressRoom) ? 8 : 16, 1.0f);
         m_guiContext->setFontColor(Vec4B(255, 255, 255, 255));
         m_guiContext->setFontMode(FontMode::Normal);
         m_guiContext->setFontProcessingDirectives("");
-        m_guiContext->renderText(m_behaviorOptionParserRoom ? m_behaviorOptionParserProof.get("visual").getString("label")
+        m_guiContext->renderText(m_behaviorHostAddressRoom ? m_behaviorHostAddressProof.get("visual").getString("label")
+            : m_behaviorOptionParserRoom ? m_behaviorOptionParserProof.get("visual").getString("label")
             : m_behaviorJsonPatchRoom ? m_behaviorJsonPatchProof.get("visual").getString("label")
             : m_behaviorZstdRoom ? m_behaviorZstdProof.get("visual").getString("label")
             : m_behaviorCompressionRoom ? m_behaviorCompressionProof.get("visual").getString("label")
@@ -1510,7 +1516,8 @@ void ClientApplication::validateBehaviorStorage() {
       && scenario != "sha256-room" && scenario != "vlq-room" && scenario != "bytes-room"
       && scenario != "unicode-room" && scenario != "shell-room" && scenario != "jsonpath-room" && scenario != "assetpath-room"
       && scenario != "random-room" && scenario != "jsonpatch-room" && scenario != "text-room"
-      && scenario != "compression-room" && scenario != "zstd-room" && scenario != "option-parser-room")
+      && scenario != "compression-room" && scenario != "zstd-room" && scenario != "option-parser-room"
+      && scenario != "host-address-room")
     throw StarException("BehaviorLab: unsupported scenario");
   m_behaviorRaycastRoom = scenario == "raycast-room";
   m_behaviorEncodingRoom = scenario == "encoding-room";
@@ -1527,6 +1534,7 @@ void ClientApplication::validateBehaviorStorage() {
   m_behaviorCompressionRoom = scenario == "compression-room";
   m_behaviorOptionParserRoom = scenario == "option-parser-room";
   m_behaviorZstdRoom = scenario == "zstd-room";
+  m_behaviorHostAddressRoom = scenario == "host-address-room";
   if (config.getUInt("maxFrames", 1800) == 0 || config.getUInt("maxFrames", 1800) > 18000)
     throw StarException("BehaviorLab: maxFrames must be in [1, 18000]");
 
@@ -1647,7 +1655,7 @@ void ClientApplication::updateBehaviorScenario() {
       return;
     if (m_behaviorStage == 2) {
       Logger::info("BehaviorLab: {} completed (three acknowledged world frames)",
-          m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
+          m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
       m_behaviorPhase = 5;
       appController()->quit();
       return;
@@ -2447,6 +2455,150 @@ void ClientApplication::prepareBehaviorOptionParserFrame() {
   m_renderData.foregroundOverlays.append(std::move(drawable));
 }
 
+void ClientApplication::prepareBehaviorHostAddressFrame() {
+  if (m_behaviorHostAddressProof.isNull()) {
+    JsonArray scopes;
+    uint64_t nativeCalls = 0;
+    auto observed = [&](String const& name, auto&& operation) {
+      auto before = HostAddressLabCounts::snapshot();
+      auto result = operation();
+      ++nativeCalls;
+      scopes.append(JsonObject{{"method", name}, {"completed", true},
+          {"calls", HostAddressLabCounts::snapshot().delta(before)}});
+      return result;
+    };
+    auto before = HostAddressLabCounts::snapshot();
+    auto endpointText = [](HostAddressWithPort const& endpoint) {
+      std::ostringstream stream;
+      stream << endpoint;
+      return String(stream.str());
+    };
+    auto hostText = [](HostAddress const& host) {
+      std::ostringstream stream;
+      stream << host;
+      return String(stream.str());
+    };
+    auto endpointRecord = [&](HostAddressWithPort const& endpoint) {
+      auto address = endpoint.address();
+      JsonArray bytes;
+      for (size_t i = 0; i != address.size(); ++i) bytes.append(address.octet(i));
+      return Json(JsonObject{{"mode", int(address.mode())}, {"bytes", std::move(bytes)},
+          {"size", address.size()}, {"isLocalHost", address.isLocalHost()}, {"isZero", address.isZero()},
+          {"hash", uint64_t(hash<HostAddress>()(address))}, {"text", hostText(address)},
+          {"port", endpoint.port()}, {"endpointText", endpointText(endpoint)},
+          {"endpointHash", uint64_t(hash<HostAddressWithPort>()(endpoint))}});
+    };
+    TcpSocketPtr listener;
+    HostAddressWithPort parsed;
+    String input;
+    uint16_t port = 0;
+    for (uint16_t candidate = 40169; candidate <= 40200; ++candidate) {
+      input = strf("127.0.0.1:{}", candidate);
+      parsed = observed("HostAddressWithPort::HostAddressWithPort(String)", [&] { return HostAddressWithPort(input); });
+      auto bindHost = parsed.address();
+      if (parsed.port() != candidate || bindHost.mode() != NetworkMode::IPv4 || bindHost.size() != 4
+          || bindHost.octet(0) != 127 || bindHost.octet(1) != 0 || bindHost.octet(2) != 0 || bindHost.octet(3) != 1)
+        throw StarException("BehaviorLab: HostAddress parser returned unsafe bind identity");
+      try {
+        listener = observed("TcpSocket::listen(parsed)", [&] { return TcpSocket::listen(parsed); });
+        port = candidate;
+        break;
+      } catch (NetworkException const&) {}
+    }
+    if (!listener) throw StarException("BehaviorLab: no owned HostAddress loopback port");
+    listener->setNonBlocking(true);
+    // No connect occurs until THIS fixture owns the successfully bound listener.
+    auto client = observed("TcpSocket::connectTo(parsed)", [&] { return TcpSocket::connectTo(parsed); });
+    TcpSocketPtr server;
+    auto deadline = Time::monotonicMilliseconds() + 2000;
+    while (!server && Time::monotonicMilliseconds() < deadline)
+      server = observed("TcpSocket::accept()", [&] { return listener->accept(); });
+    if (!server) throw StarException("BehaviorLab: HostAddress accept deadline");
+    auto listenerLocal = listener->localAddress();
+    listener->close();
+    auto clientLocal = client->localAddress();
+    auto clientRemote = client->remoteAddress();
+    auto serverLocal = server->localAddress();
+    auto serverRemote = server->remoteAddress();
+    auto actualPeer = serverRemote.address();
+    if (port < 40169 || port > 40200 || parsed.port() != port || !(listenerLocal == parsed)
+        || !(serverLocal == clientRemote) || !(serverLocal == parsed)
+        || actualPeer.mode() != NetworkMode::IPv4 || actualPeer.size() != 4
+        || actualPeer.octet(0) != 127 || actualPeer.octet(1) != 0 || actualPeer.octet(2) != 0 || actualPeer.octet(3) != 1
+        || serverRemote.port() == 0 || !actualPeer.isLocalHost() || actualPeer.isZero())
+      throw StarException("BehaviorLab: HostAddress owned TCP identities mismatch");
+    // Independent numeric anchors: PL101 host hash and native size_t wrapping
+    // combine, not another invocation of the migrated hash to predict itself.
+    size_t hostHash = ((size_t(127) * 101) * 101) * 101 + 1;
+    size_t endpointHash = hostHash ^ (size_t(port) * 2654435761ULL + 0x9e3779b9ULL + (hostHash << 6) + (hostHash >> 2));
+    if (hash<HostAddress>()(actualPeer) != hostHash || hash<HostAddressWithPort>()(parsed) != endpointHash)
+      throw StarException("BehaviorLab: HostAddress independent hash mismatch");
+    auto sent = observed("operator<<(HostAddress accepted OS peer)", [&] { return hostText(actualPeer); });
+    auto a = TcpPacketSocket::open(client);
+    auto b = TcpPacketSocket::open(server);
+    a->setNetRules(NetCompatibilityRules(VersionNumber(5)));
+    b->setNetRules(NetCompatibilityRules(VersionNumber(5)));
+    a->setCompressionStreamEnabled(false);
+    b->setCompressionStreamEnabled(false);
+    a->sendPackets({make_shared<ChatSendPacket>(sent, ChatSendMode::Broadcast, JsonObject{})});
+    List<PacketPtr> received;
+    deadline = Time::monotonicMilliseconds() + 2000;
+    while (Time::monotonicMilliseconds() < deadline) {
+      if (auto ready = Socket::poll({{client, {true, false}}, {server, {true, false}}}, 0))
+        for (auto const& peer : *ready)
+          if (peer.second.exception) throw StarException("BehaviorLab: HostAddress TCP EOF/error");
+      a->writeData(); b->readData();
+      received.appendAll(b->receivePackets());
+      if (!a->sentPacketsPending() && !received.empty()) break;
+    }
+    if (a->sentPacketsPending() || received.size() != 1)
+      throw StarException("BehaviorLab: HostAddress typed TCP deadline/count");
+    auto chat = std::dynamic_pointer_cast<ChatSendPacket>(received.first());
+    if (!chat || chat->text != sent || chat->sendMode != ChatSendMode::Broadcast || !chat->data.empty())
+      throw StarException("BehaviorLab: HostAddress typed TCP payload mismatch");
+    Vec4B color(16, 192, 128 + 16 * actualPeer.octet(3), 255);
+    String path = strf("/behaviorlab/host-address.png?multiply={:02x}{:02x}{:02x}{:02x}", color[0], color[1], color[2], color[3]);
+    auto image = m_root->assets()->image(path);
+    if (image->size() != Vec2U(16, 16)) throw StarException("BehaviorLab: HostAddress image dimensions");
+    for (unsigned y = 0; y != 16; ++y)
+      for (unsigned x = 0; x != 16; ++x)
+        if (image->get(x, y) != color) throw StarException("BehaviorLab: HostAddress normal Assets pixel mismatch");
+    auto parsedRecord = endpointRecord(parsed);
+    auto listenerRecord = endpointRecord(listenerLocal);
+    auto clientLocalRecord = endpointRecord(clientLocal);
+    auto clientRemoteRecord = endpointRecord(clientRemote);
+    auto serverLocalRecord = endpointRecord(serverLocal);
+    auto serverRemoteRecord = endpointRecord(serverRemote);
+    String backend = "cpp";
+#ifdef STAR_USE_RUST_HOST_ADDRESS
+    backend = "rust";
+#endif
+    m_behaviorHostAddressProof = JsonObject{{"version", 1}, {"backend", backend},
+        {"inputEndpoint", input}, {"chosenPort", port}, {"ownedBindSucceeded", true},
+        {"parsed", parsedRecord}, {"listenerLocal", listenerRecord},
+        {"clientLocal", clientLocalRecord}, {"clientRemote", clientRemoteRecord},
+        {"serverLocal", serverLocalRecord}, {"serverRemote", serverRemoteRecord},
+        {"addressSources", JsonObject{{"listenerLocal", "cached-bind-input"},
+            {"clientLocal", "unpopulated-default-NOT-OS-getsockname"}, {"clientRemote", "cached-connect-input"},
+            {"serverLocal", "cached-listener-input"}, {"serverRemote", "OS-accept-sockaddr"}}},
+        {"clientLocalOsAvailable", false}, {"nativeObservedCalls", nativeCalls}, {"scopes", std::move(scopes)},
+        {"calls", HostAddressLabCounts::snapshot().delta(before)},
+        {"network", JsonObject{{"transport", "tcp"}, {"rulesVersion", 5}, {"streamEnabled", false},
+            {"universeHandshake", false}, {"sentText", sent}, {"receivedText", chat->text},
+            {"sendMode", unsigned(chat->sendMode)}, {"data", chat->data}}},
+        {"visual", JsonObject{{"imagePath", path}, {"color", JsonArray{color[0], color[1], color[2], color[3]}},
+            {"sourceSize", JsonArray{16, 16}}, {"displaySize", JsonArray{64, 64}},
+            {"scale", 4}, {"label", chat->text}}}};
+    a->close(); b->close();
+  }
+  if (!m_behaviorReady || BehaviorLab::hasPendingFrame() || m_renderData.isFullbright) return;
+  auto visual = m_behaviorHostAddressProof.get("visual");
+  auto drawable = Drawable::makeImage(visual.getString("imagePath"),
+      visual.getFloat("scale") * 0.5f / TilePixels, true, Vec2F(64, 48));
+  drawable.fullbright = true;
+  m_renderData.foregroundOverlays.append(std::move(drawable));
+}
+
 void ClientApplication::prepareBehaviorZstdFrame() {
   // Run before the frame-ready guard: the first normal Assets image lookup must
   // be driven by the actual TCP-received path, not a Lua preload or proxy.
@@ -3141,7 +3293,7 @@ void ClientApplication::renderBehaviorScenario() {
       {"layout", "row-major-rgb-f32-bits"}, {"bits", std::move(lightmapBits)}};
   Json metadata = JsonObject{
       {"lightingDiagnostics", std::move(lightmapDiagnostic)},
-      {"scenario", m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
+      {"scenario", m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
       {"worldState", JsonObject{
           {"worldId", printWorldId(m_universeClient->clientContext()->playerWorldId())},
           {"worldSize", jsonFromVec2U(world->geometry().size())},
@@ -3232,6 +3384,11 @@ void ClientApplication::renderBehaviorScenario() {
     if (m_behaviorOptionParserProof.isNull())
       throw StarException("BehaviorLab: option parser frame has no completed proof");
     metadata = metadata.set("optionParserProof", m_behaviorOptionParserProof);
+  }
+  if (m_behaviorHostAddressRoom) {
+    if (m_behaviorHostAddressProof.isNull())
+      throw StarException("BehaviorLab: HostAddress frame has no completed proof");
+    metadata = metadata.set("hostAddressProof", m_behaviorHostAddressProof);
   }
   if (m_behaviorZstdRoom) {
     if (m_behaviorZstdProof.isNull())

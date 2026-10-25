@@ -10,7 +10,17 @@ def adapt(s,ext):
  return s.replace('#pragma once','#pragma once\n#include "StarHostAddress.hpp"',1).replace('STAR_EXCEPTION(NetworkException, IOException);\n','',1).replace('enum class NetworkMode {\n  IPv4,\n  IPv6\n};\n','',1)
 def gate(ext,raw,ref):
  frozen=subprocess.check_output(['git','show',REV+':source/core/StarHostAddress.'+ext],cwd=ROOT).decode()
- if raw!=frozen or ref!=adapt(frozen,ext) or (ROOT/f'source/core/StarHostAddress.{ext}').read_text()!=frozen:raise ValueError('source provenance')
+ current=(ROOT/f'source/core/StarHostAddress.{ext}').read_text()
+ if ext=='cpp' and current!=frozen:
+  # The default-OFF production branch remains the original source, byte for
+  # byte. A selector must not silently bless a changed native oracle.
+  prefix,body=frozen.split('namespace Star {',1)
+  marker='\n#else\n';ending='#endif\n'
+  if current.count(marker)!=1 or not current.endswith(ending):raise ValueError('native fallback framing')
+  selected,native=current.split(marker)
+  if not selected.startswith(prefix+'#ifdef STAR_USE_RUST_HOST_ADDRESS\n') or native[:-len(ending)]!='namespace Star {'+body:raise ValueError('native fallback provenance')
+ elif current!=frozen:raise ValueError('current source provenance')
+ if raw!=frozen or ref!=adapt(frozen,ext):raise ValueError('source provenance')
 def rows(data):
  out={}
  for line in data.decode().splitlines():

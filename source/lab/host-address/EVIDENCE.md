@@ -1,4 +1,21 @@
-# native host address calibration
+# host address evidence
+
+## experimental Rust checkpoint — application qualification blocked
+
+all27 compiled controllers now have a default-off Rust path; the public native header, native ownership and byte-exact OFF namespace remain. this is NOT an accepted application migration.
+
+- final post-build reports: `build/host-address-lab/native-postbuild-r1/report.json` and `rust-postbuild-r1/report.json`. both retain430 records and SHA `e9a14b9a678ad9819b4f17043ef08ccc901270dd1510d9bfcd516083454aa9b1`; parent independently rehashed1144 native /1179 Rust bindings. actual production-context protocol and three normally exiting backend controls pass. the input profile was reacquired only after sealed native builds; only build.ninja and StarVersion.cpp.o changed from the prior201-input profile.
+- parent reran106 Rust tests in each profile, fmt and159 behavior tests. core strict C11/linked C and both C++ selector syntax checks passed; independent source review found no actionable core-boundary findings.
+- canonical aggregate: `build/host-address-rust/target/release/libstar_engine_ffi.a`, SHA `23c074410c1e6695c03795504b07ee7878d77fcd84d1564d62b505c2d77c4cd9`. current Core source SHA `cd3e67c12f6566523d19458dafb44003a24f10f46b99d79ae8ca4e3841e8cf7b`; the parent removed one extra LF that the strict native fallback gate correctly rejected. no algorithm/golden/reference-flag changes.
+- both native game binaries passed current-source provenance checks. the initial full build hit its limit at442/466; incremental continuation linked and produced a valid candidate seal, despite the outer tool reporting a timeout. a timeout itself is not build evidence; the independent seal is.
+- one C++ actual TCP/Assets/Font sequence is sealed at `build/behavior/host-address-diagnostic-r2/reference/frames`. all three1000x600 PNGs were inspected: a64x64 green image, white127.0.0.1 label, occlusion and exact restoration. numeric endpoint parsing feeds an owned loopback listener/connect/accept and real typed packets. only accepted remote is OS sockaddr; other addresses are caches, including unpopulated client-local0:0. no fabricated OS reciprocity or Universe handshake claim.
+- full capture attempts `host-address-actual-r1` and `host-address-diagnostic-r2` repeat run timed out before a baseline-repeatability comparison. an owned orphan fixture PID43506 was observed, then had already exited when identity-checked for cleanup; no kill was sent. diagnostics remain in `/tmp/openstarbound-host-address-{actual-r1,actual-r2,capture-diagnostic-r2}.log`. the successful single diagnostic capture does not reset the two-failure approach budget.
+
+five isolated corruptions of the actual sealed C++ receipt were rejected: owned-bind flag, accepted-peer port, host hash, received packet text and cache/OS provenance. these checks do not establish Rust execution. final catalog check1617files/39modules and eight inventory controls pass.
+
+Rust game capture was NOT launched. C++ repeatability, Rust frame/state parity, historical16-scenario regression matrices, fresh PCM and actual-receipt corruption gates remain open. continuation is paused rather than repeating the exhausted capture approach. next work must diagnose bounded capture/process ownership separately, not relax timing, counters, images or provenance. no cleanup/deletion authority remains.
+
+## historical native-only calibration
 
 VERIFIED on this apple silicon macOS checkout; native-only, not a Rust port or game qualification.
 
@@ -43,6 +60,73 @@ parent caught an ACTUAL bridge bookkeeping defect: after normal `freeaddrinfo`, 
 
 an aligned top-eight-byte output span is now rejected before exclusive-end arithmetic can wrap. selected tests also reject resolver operations before acquisition/after free, repeated acquire/free, and raw IPv4 reads beyond four input bytes. explicit source catch semantics permit ONLY NetworkException conversion into Left; if constructing that catch result throws, the new exception replaces pending as C++ does. catch-body allocation failure replacement is source-traced, not runtime-injected.
 
-## limitations / remaining gates
+## historical native-only limitations / remaining gates
 
 parent native and blueprint replays are recorded above; they do not replace the future Rust and actual-consumer acceptance gates. whole compiled reference is retained, but finite corpus is not universal equivalence. no actual OOM, exotic locale, allocator/destructor timing, all exception sites, IPv4 inactive-tail inspection, platform universality, Rust, actual TCP consumer, screenshots or game behavior claim. native-private C ABI access belongs to the parent's reserved prototype, not this oracle.
+
+## actual production rust replay, 2026-10-24 22:44 utc
+
+VERIFIED: fresh native calibration at
+`build/host-address-lab/rust-resume-r1-native/report.json` passed430 ordered
+records,16 executables and37 commands with1144 stable bindings. original,
+reference, current native and repeat streams retain SHA256
+`e9a14b9a678ad9819b4f17043ef08ccc901270dd1510d9bfcd516083454aa9b1`.
+all eleven compiled semantic controls, paired-wrong literal control, source
+provenance controls and known-bad literal fixture were detected. independent
+`verify_receipts.py` passed, including eight isolated synthetic corruptions at
+`build/host-address-lab/rust-resume-r1-native-integrity`.
+
+VERIFIED: actual rust replay at
+`build/host-address-lab/rust-resume-r1/report.json` passed the same full430
+records through original, class-renamed reference, selected production bridge
+and repeat. seven executables and20 commands bind1179 inputs. the production
+`StarHostAddress.cpp` is a separate translation unit, using the canonical
+aggregate archive; the old lab c++ blueprint is never compiled into the rust
+candidate. the generated protocol adapter includes actual
+`StarHostAddressHost.hpp` and retains the frozen selected native guards and
+custom/null callback tests. ONLY the deliberate foreign c++ throw assertion is
+omitted. strict c11 header syntax passed. separate rust contained-panic unit
+tests belong to core/parent evidence, not this oracle execution.
+
+tested production source SHA256:
+`cd3e67c12f6566523d19458dafb44003a24f10f46b99d79ae8ca4e3841e8cf7b`.
+canonical `build/host-address-rust/target/release/libstar_engine_ffi.a` SHA256:
+`23c074410c1e6695c03795504b07ee7878d77fcd84d1564d62b505c2d77c4cd9`.
+parent source/archive release was explicit before compilation. the initial
+source-only gate rejected an extra LF before `#endif`; the parent removed that
+LF before freeze. the original fallback namespace and public header then passed
+the unchanged byte-exact gate. no reference bytes, expectations or flags changed.
+
+all27 rust mode attempt/success counts were positive; attempts equal success
+plus native pending counts. independently observed actual dispatch return
+statuses agree for every mode, without fitted count totals. for example,
+lookup mode1 has209 successes while native setter mode11 has178 successes and31
+pending returns; constructor mode3 has44 successes and10 pending returns.
+these are observations for this corpus, not universal invocation predictions.
+
+three compiled, normally exiting controls preserve the entire430-record value
+stream but fail backend qualification:
+
+- native bypass: all rust receipts zero, with1297 positive observations inside
+  the actual native `HostAddress::mode` body.
+- suppressed receipt: actual rust dispatch still runs, but reported rust
+  counters are zero.
+- pending route: constructor mode3 publishes invalid2 instead of pending1
+  AFTER actual rust returns. native exception rethrow/catch still preserves
+  values; ten invalid route observations disagree with the real pending counts.
+
+independent `verify_candidate.py` passed and rejected seven isolated corruptions
+at `build/host-address-lab/rust-resume-r1-integrity`: after-map, archive, source
+binding, binary binding, executed-tool receipt, stdout and semantic counters.
+the counter corruption updates its stream hash receipt first, so rejection
+exercises semantic counter parsing rather than merely a stale output hash.
+all command stdout/stderr, executable hashes, generated sources, before/after
+maps and literal streams remain in the fresh output roots. no failed compiled
+candidate execution or algorithm repair occurred in this resumed oracle unit.
+
+remaining gates: actual native project build, actual tcp consumer and rendering,
+frame/state regressions and screenshots remain parent-owned and unqualified
+here. scripted resolver cases remain counterfactual; only canonical127.0.0.1
+queries reach libc. no resource-failure timing, destructor/allocation equivalence,
+performance, other-platform or whole-engine completion claim. no cargo/native
+project/game build, commit, deletion, user-storage or Steam change by this oracle.

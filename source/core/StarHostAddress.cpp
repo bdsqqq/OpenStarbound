@@ -2,6 +2,200 @@
 #include "StarLexicalCast.hpp"
 #include "StarNetImpl.hpp"
 
+#ifdef STAR_USE_RUST_HOST_ADDRESS
+#include "StarHostAddressHost.hpp"
+namespace Star {
+using HostAddressRust::Context;
+HostAddress HostAddress::localhost(NetworkMode mode) {
+  Context c(HA_LOCALHOST);
+  c.requested = mode;
+  c.run();
+  return c.hostResult ? std::move(*c.hostResult) : std::move(c.lookup->right());
+}
+Either<String, HostAddress> HostAddress::lookup(String const& a) {
+  Context c(HA_LOOKUP);
+  c.input = &a;
+  c.setString = [](Context& c, String const& s) { c.temporary->set(s); };
+  c.run();
+  return std::move(*c.lookup);
+}
+HostAddress::HostAddress(NetworkMode m, uint8_t* a) {
+  Context c(HA_CTOR_RAW);
+  c.requested = m;
+  c.raw = a;
+  c.destination = this;
+  c.setRaw = [](Context& c, NetworkMode m, uint8_t const* p) { c.destination->set(m, p); };
+  c.run();
+}
+HostAddress::HostAddress(String const& a) {
+  Context c(HA_CTOR_STRING);
+  c.input = &a;
+  c.destination = this;
+  c.run();
+}
+NetworkMode HostAddress::mode() const {
+  Context c(HA_MODE);
+  c.fieldMode = &m_mode;
+  c.run();
+  return c.nativeMode(c.scalar);
+}
+uint8_t const* HostAddress::bytes() const {
+  Context c(HA_BYTES);
+  c.fieldBytes = m_address;
+  c.run();
+  return c.pointerResult;
+}
+uint8_t HostAddress::octet(size_t i) const {
+  Context c(HA_OCTET);
+  c.fieldBytes = m_address;
+  c.index = i;
+  c.run();
+  return uint8_t(c.scalar);
+}
+bool HostAddress::isLocalHost() const {
+  Context c(HA_IS_LOCALHOST);
+  c.subject = this;
+  c.fieldMode = &m_mode;
+  c.fieldBytes = m_address;
+  c.run();
+  return c.scalar;
+}
+bool HostAddress::isZero() const {
+  Context c(HA_IS_ZERO);
+  c.subject = this;
+  c.run();
+  return c.scalar;
+}
+size_t HostAddress::size() const {
+  Context c(HA_SIZE);
+  c.fieldMode = &m_mode;
+  c.run();
+  return c.scalar;
+}
+bool HostAddress::operator==(HostAddress const& a) const {
+  Context c(HA_EQUAL);
+  c.subject = this;
+  c.other = &a;
+  c.fieldMode = &m_mode;
+  c.fieldBytes = m_address;
+  c.run();
+  return c.scalar;
+}
+void HostAddress::set(String const& a) {
+  Context c(HA_SET_STRING);
+  c.subject = this;
+  c.input = &a;
+  c.destination = this;
+  c.setRaw = [](Context& c, NetworkMode m, uint8_t const* p) { c.destination->set(m, p); };
+  c.run();
+}
+void HostAddress::set(NetworkMode m, uint8_t const* a) {
+  Context c(HA_SET_RAW);
+  c.requested = m;
+  c.raw = a;
+  c.writeMode = &m_mode;
+  c.writeBytes = m_address;
+  c.run();
+}
+std::ostream& operator<<(std::ostream& os, HostAddress const& a) {
+  Context c(HA_STREAM);
+  c.subject = &a;
+  c.stream = &os;
+  c.run();
+  return os;
+}
+size_t hash<HostAddress>::operator()(HostAddress const& a) const {
+  Context c(HA_HASH);
+  c.subject = &a;
+  c.run();
+  return c.scalar;
+}
+Either<String, HostAddressWithPort> HostAddressWithPort::lookup(String const& a, uint16_t p) {
+  Context c(HA_EP_LOOKUP);
+  c.input = &a;
+  c.supplied = p;
+  c.run();
+  return std::move(*c.endpointLookup);
+}
+Either<String, HostAddressWithPort> HostAddressWithPort::lookupWithPort(String const& a) {
+  Context c(HA_EP_PARSE);
+  c.input = &a;
+  c.run();
+  return std::move(*c.endpointLookup);
+}
+HostAddressWithPort::HostAddressWithPort() : m_port(0) {
+  Context c(HA_EP_CTOR_DEFAULT);
+  c.writePort = &m_port;
+  c.run();
+}
+HostAddressWithPort::HostAddressWithPort(HostAddress const& a, uint16_t p) : m_address(a), m_port(p) {
+  Context c(HA_EP_CTOR_HOST);
+  c.subject = &a;
+  c.supplied = p;
+  c.writePort = &m_port;
+  // The source member initializer already performed this native copy.
+  c.copyEndpointHost = [](Context&, HostAddress const&) {};
+  c.run();
+}
+HostAddressWithPort::HostAddressWithPort(NetworkMode m, uint8_t* a, uint16_t p) {
+  Context c(HA_EP_CTOR_RAW);
+  c.requested = m;
+  c.raw = a;
+  c.mutableRaw = a;
+  c.supplied = p;
+  c.writePort = &m_port;
+  c.endpointDestination = this;
+  c.copyEndpointHost = [](Context& c, HostAddress const& h) { c.endpointDestination->m_address = h; };
+  c.run();
+}
+HostAddressWithPort::HostAddressWithPort(String const& a, uint16_t p) {
+  Context c(HA_EP_CTOR_STRING_PORT);
+  c.input = &a;
+  c.supplied = p;
+  c.endpointDestination = this;
+  c.run();
+}
+HostAddressWithPort::HostAddressWithPort(String const& a) {
+  Context c(HA_EP_CTOR_STRING);
+  c.input = &a;
+  c.endpointDestination = this;
+  c.run();
+}
+HostAddress HostAddressWithPort::address() const {
+  Context c(HA_EP_ADDRESS);
+  c.subject = &m_address;
+  c.run();
+  return std::move(*c.hostResult);
+}
+uint16_t HostAddressWithPort::port() const {
+  Context c(HA_EP_PORT);
+  c.fieldPort = &m_port;
+  c.run();
+  return uint16_t(c.scalar);
+}
+bool HostAddressWithPort::operator==(HostAddressWithPort const& a) const {
+  Context c(HA_EP_EQUAL);
+  c.endpoint = this;
+  c.otherEndpoint = &a;
+  c.run();
+  return c.scalar;
+}
+std::ostream& operator<<(std::ostream& os, HostAddressWithPort const& a) {
+  Context c(HA_EP_STREAM);
+  c.endpoint = &a;
+  c.stream = &os;
+  c.run();
+  return os;
+}
+size_t hash<HostAddressWithPort>::operator()(HostAddressWithPort const& a) const {
+  Context c(HA_EP_HASH);
+  c.endpoint = &a;
+  c.run();
+  return c.scalar;
+}
+}// namespace Star
+
+#else
 namespace Star {
 
 HostAddress HostAddress::localhost(NetworkMode mode) {
@@ -279,3 +473,4 @@ size_t hash<HostAddressWithPort>::operator()(HostAddressWithPort const& addressW
 }
 
 }
+#endif

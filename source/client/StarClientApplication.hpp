@@ -110,6 +110,7 @@ private:
   void prepareBehaviorRandomMwcFrame();
   void prepareBehaviorCompressionFrame();
   void prepareBehaviorZstdFrame();
+  void prepareBehaviorHostAddressFrame();
   void prepareBehaviorOptionParserFrame();
   void validateBehaviorStorage();
   unsigned m_behaviorFrames = 0;
@@ -130,6 +131,8 @@ private:
   Json m_behaviorJsonPathProof;
   bool m_behaviorOptionParserRoom = false;
   Json m_behaviorOptionParserProof;
+  bool m_behaviorHostAddressRoom = false;
+  Json m_behaviorHostAddressProof;
   bool m_behaviorZstdRoom = false;
   Json m_behaviorZstdProof;
   bool m_behaviorCompressionRoom = false;
