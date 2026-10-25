@@ -1,4 +1,55 @@
-# native buffer calibration
+# native buffer evidence
+
+## accepted native ownership/controller blueprint
+
+`build/buffer-lab/host-parent-final-r2/report.json` independently compiles all50
+actual member definitions against unchanged `StarBuffer.hpp` and matches all583
+original/reference/current/prototype/repeat records, SHA
+`08a3143c0f6ad6dd6dbf29a5457e197fcfa05ec85a4cf4f04cde60af0edb7b38`.
+2570 bindings/5 executed binaries/16 commands are independently rehashed;
+eight isolated synthetic integrity corruptions reject. strictC11, actual native
+Context assertions,50 standalone member symbols and linker exclusion of archived
+`StarBuffer.cpp.o` pass. three normally exiting controller mutations distinguish
+end subtraction, zero-before-mode ordering and virtual open callback ordering.
+
+50 source-ordered modes and25 scalar-only operations keep native ownership,
+ByteArray/IODevice storage, copy/move, borrowed pointers, shared_ptr/String
+results, vtables and exception objects in C++. private/protected access is bound
+inside real member bodies, not a class-layout mirror. enum payload domains are
+uint8. constructor guards inspect addresses until scalar initialization; callbacks
+contain native exceptions and wrappers rethrow while native state remains alive.
+selected native guards are NOT an exhaustive automaton/pointer-validity proof.
+C++ foreign-callback containment is prototype-only, never a Rust unwind guarantee.
+
+parent found and reproduced two defects before acceptance. a SIZE_MAX read request
+can legally copy only eight available bytes; borrowed logical sizes may be stored
+and queried without reading that span. eager requested/logical-span alias guards
+rejected those native-defined cases. `parent-wide-read-r1/report.json` retains
+normal-exit native/prototype differences; `fixed-report.json` matches all five
+original observations after moving IO span checks to actual-copy operations.
+
+raw COPY_OUT/IN also lacked logical-size/requested-count checks. an initialized
+16-byte allocation shrunk to logical size4 supplied a defined-memory malformed
+protocol case: old status0 read Q/wrote X outside logical extent; corrected status2
+preserves destination Z and tail Q. `copy-bounds-report.json` retains both normal
+executions. pointer arithmetic/copy now follows logical/count/nonwrap/actual-span
+checks. no sanitizer, invalid-pointer crash or allocator-failure credit.
+
+added permanent assertions cover these cases, EOF/null/negative reads, huge
+borrowed logical sizes, known scalar/object/output aliases and contradictory
+ERROR-success rejection. wrappers require FINISH on successful return. the first
+source-only review identified the two span defects; a fresh repair review traced
+all50 and found no surviving actionable findings. parent fixed the approach once
+and replayed successfully; no native/reference algorithms, flags or observations
+were fitted. worker report and parent-r1 are historical after parent corrections
+and header calibration wording; ONLY final-r2 binds the final source/header.
+
+no production Core/public header/Rust/CMake or game binary changed in this phase.
+next is all50 Rust controllers/default-off/single aggregate archive under this
+frozen native boundary, then actual PNG/audio/save/BTree/typed fragmented TCP
+consumers and existing game matrices. native-blueprint acceptance is NOT Rust,
+application, full-engine, OOM/destructor/performance/other-platform qualification.
+
 
 ## accepted parent replay
 

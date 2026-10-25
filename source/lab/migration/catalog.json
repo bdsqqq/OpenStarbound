@@ -20522,6 +20522,46 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/buffer/host_contract.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/buffer/host_contract.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/buffer/host_contract_test.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/buffer/host_run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/buffer/lab.cpp",
       "rule": "laboratories"
     },
@@ -20533,6 +20573,16 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/buffer/run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/buffer/verify_host.py",
       "rule": "laboratories"
     },
     {
@@ -30751,12 +30801,32 @@
       "sha256": "2ffe9428e9617d70b92409907b8cbf4671a9ec0454cd4d8a44532c5f07ee6d35"
     },
     {
+      "path": "source/lab/buffer/host_contract.cpp",
+      "sha256": "b6314909717dc11436891052a30b9a88b7f2bead5f5cb83a6a0c62f2335a4bbb"
+    },
+    {
+      "path": "source/lab/buffer/host_contract.hpp",
+      "sha256": "d265705c031d9586a2e0d28997de24c82787e05313e604adf8b38fb5398c91bb"
+    },
+    {
+      "path": "source/lab/buffer/host_contract_test.cpp",
+      "sha256": "b57cfe242238d72f5d5d4fa1603032865c7a4a48a568fc70cdf55e107f3d7ced"
+    },
+    {
+      "path": "source/lab/buffer/host_run.py",
+      "sha256": "506a17644180661f761efdf77b9ebfa4743614e56ce36737b3b95e29ffad8562"
+    },
+    {
       "path": "source/lab/buffer/lab.cpp",
       "sha256": "4f321be0801631bdb22ed74205f1b3d074493cafc5477b13281f8c1904efaa4a"
     },
     {
       "path": "source/lab/buffer/run.py",
       "sha256": "e772eda651fb03675ae355f1201d0112d555bd4c292b8e4a77f5dfee88fdfeb5"
+    },
+    {
+      "path": "source/lab/buffer/verify_host.py",
+      "sha256": "e13dd0d75a4cac9620c94aa4e493c2e75e315d97b0826e63599087bb2e035f78"
     },
     {
       "path": "source/lab/buffer/verify_receipts.py",
@@ -32397,7 +32467,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 206,
+      "oracle/harness": 211,
       "retain-tooling": 20,
       "retained-third-party": 296,
       "rust-candidate": 19,
@@ -32438,14 +32508,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 35,
-      "validation.oracles-harness": 227,
+      "validation.oracles-harness": 232,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1649,
+    "files": 1654,
     "modules": 39,
-    "no_direct_target": 543
+    "no_direct_target": 548
   }
 }
