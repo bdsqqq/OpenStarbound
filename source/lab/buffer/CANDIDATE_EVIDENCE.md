@@ -79,9 +79,16 @@ fresh literal PCM decode/seek/EOF and corruption controls pass at
 `build/bytes-audio/buffer-{cpp,rust}-r1/report.json`; this is not audible mixer,
 Ogg, or a new Buffer-specific audio receipt claim.
 
-**application-wide qualification remains open until all 18 historical scenes,
-current matrices, CLI exits and final seals are complete.** current progress is
-`build/behavior/buffer-actual-progress.json`; completed historical frames are
-compared byte-exact, never regenerated as goldens. the bounded-unit handoff is
-in `doc/rust-migration-plan.md`. no full-engine, allocator/OOM, destructor,
-performance, platform or sanitizer qualification is implied.
+**finite application qualification passed at source checkpoint `c233825b`.**
+`build/behavior/buffer-actual-r2/qualification.json` binds all 19 current matrices,
+18 historical sequences/54 unchanged RGBA frames, both production archives'
+583-record replays, 21 actual-receipt synthetic corruptions, PCM and 12 CLI exits.
+`check_qualification.py` independently replayed every current baseline/baseline
+and baseline/candidate frame/state gate and all historical pixels before sealing;
+its historical-count and artifact-binding corruptions reject. the previously
+interrupted host-address-r1 remains unaccepted; fresh host-address-r2 and
+DataStream-r1 pass. the six resumed Rust PNGs were inspected: green numeric-host
+and orange STREAM consumers remain visible across occlusion/restoration.
+
+this does not qualify the full engine, universal allocator/OOM/destructor,
+performance, platform or sanitizer behavior. production selection remains off.

@@ -1,5 +1,13 @@
 # native behavioral evidence
 
+## Buffer: fragmented typed receive and multi-block persistence (2026-10-26)
+
+VERIFIED — source `c233825b`, default-off Rust Buffer/ExternalBuffer controllers. `build/behavior/buffer-actual-r2/qualification.json` binds 19 actual matrices, 18 historical sequences/54 unchanged RGBA frames, 583-record native/canonical/actual-archive replays, 21 actual-receipt synthetic corruptions, fresh PCM seek/EOF and 12 CLI exits. every current baseline-repeat and candidate comparison was independently replayed under current state/pixel validators; historical pixels were reread, not regenerated. two qualification-count/binding corruptions reject.
+
+actual Buffer input is an independent literal raw TCP producer feeding the production typed decoder: staged totals 1/5/14/20 bytes, packet counts 0/0/1/2, actual socket bytes and all native cursor/remaining/trim checkpoints. a 1594-byte VersionedJson file traverses initialized/bounded RAM and file BTree commit/close/reopen/find. retrieved color drives normal blue64×64 Assets rendering; decoded BUF-A|BUF-B drives Font. three Buffer PNGs and six resumed host/DataStream PNGs were inspected at1000×600. no typed-producer or Universe-handshake claim. interrupted host-address-r1 remains unaccepted; fresh r2 passes.
+
+actual aggregate SHA `c879d281fb54fff17ac914213779872d3de13c3c87e994f29def5a3cecc4a46e` is separately replayed, not assumed identical to canonical archive. native ownership/public header/layout and byte-exact native off namespace remain. this qualifies 50 compiled controllers only, not ByteArray, IODevice, device wrappers, audible mixer, universal resources/platforms/sanitizers or the full engine. details: `source/lab/buffer/CANDIDATE_EVIDENCE.md`.
+
 ## initialized RAM BTree fixture backing (2026-10-25)
 
 VERIFIED — `Buffer::resize` does not initialize growth. native BTree writes header fields but leaves `[67,512)` unused; `rawWriteBlock` also copies newly grown device bytes before overwriting them. previous SHA receipts did not export pages; VLQ/Bytes did. this is a missing initialization guarantee, not a sanitizer demonstration of past executions. production Buffer/BTree/serialization algorithms remain unchanged.
