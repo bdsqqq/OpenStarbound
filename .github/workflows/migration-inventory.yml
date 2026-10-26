@@ -34,3 +34,5 @@ jobs:
         run: python -B -m unittest discover -s source/lab -p 'test_native_artifacts.py' -v
       - name: Exercise frozen native trace contract sensitivity without native execution
         run: python -B -m unittest discover -s source/lab/io-device -p 'test_*.py' -v
+      - name: Exercise ByteArray source contract and artifact-auditor sensitivity
+        run: python -B -m unittest discover -s source/lab/byte-array -p 'test_*.py' -v
