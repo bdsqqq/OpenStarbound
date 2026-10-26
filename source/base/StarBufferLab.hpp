@@ -1,6 +1,7 @@
 #pragma once
 #include "StarJson.hpp"
 #include "StarByteArray.hpp"
+#include "StarByteArrayLab.hpp"
 #ifdef STAR_USE_RUST_BUFFER
 #include "StarRustBuffer.h"
 #endif
@@ -41,14 +42,17 @@ inline BufferLabReceiver* bufferLabReceiver(void const* socket) {
 }
 inline void bufferLabReceived(void const* socket, char const* bytes, size_t size, size_t buffered) {
   if (auto p = bufferLabReceiver(socket)) {
+    ByteArrayLabBookkeepingScope bookkeeping;
     p->wire.append(bytes, size);
     p->events.append(JsonObject{{"stage", p->stage}, {"kind", "receive"},
         {"bytes", size}, {"cumulativeBytes", p->wire.size()}, {"bufferSize", buffered}});
   }
 }
 inline void bufferLabParser(void const* socket, char const* kind, size_t pos, size_t size, size_t remaining, size_t consumed) {
-  if (auto p = bufferLabReceiver(socket))
+  if (auto p = bufferLabReceiver(socket)) {
+    ByteArrayLabBookkeepingScope bookkeeping;
     p->events.append(JsonObject{{"stage", p->stage}, {"kind", kind}, {"pos", pos},
         {"size", size}, {"remaining", remaining}, {"consumed", consumed}});
+  }
 }
 }

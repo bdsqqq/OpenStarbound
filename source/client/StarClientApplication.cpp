@@ -23,6 +23,7 @@
 #include "StarDataStreamLab.hpp"
 #include "StarBufferLab.hpp"
 #include "StarIODeviceLab.hpp"
+#include "StarByteArrayLab.hpp"
 #include "StarBTreeLab.hpp"
 #include <sstream>
 #include "StarOptionParserLab.hpp"
@@ -2471,15 +2472,27 @@ void ClientApplication::prepareBehaviorOptionParserFrame() {
 
 void ClientApplication::prepareBehaviorBufferFrame() {
   if (m_behaviorBufferProof.isNull()) {
+    auto byteBefore = byteArrayConsumerSnapshot();
     auto before = BufferLabCounts::snapshot();
     auto ioBefore = IODeviceLabCounts::snapshot();
+    struct ByteScope {
+      String method;
+      ByteArrayLabCounts calls;
+    };
+    std::array<ByteScope, 14> byteScopes;
+    size_t byteScopeCount = 0;
     JsonArray scopes;
     JsonArray ioScopes;
     uint64_t nativeCalls = 0;
-    auto observed = [&](String const& method, auto&& operation) {
+    auto observed = [&](String const& method, auto&& operation, ByteArrayLabCounts const* consumerCalls = nullptr) {
       auto start = BufferLabCounts::snapshot();
       auto ioStart = IODeviceLabCounts::snapshot();
+      auto byteStart = byteArrayConsumerSnapshot();
       operation();
+      auto byteEnd = byteArrayConsumerSnapshot();
+      auto& byteScope = byteScopes.at(byteScopeCount++);
+      byteScope.calls = consumerCalls ? *consumerCalls : byteEnd.delta(byteStart);
+      byteScope.method = method;
       ++nativeCalls;
       scopes.append(JsonObject{{"method", method}, {"completed", true},
           {"calls", BufferLabCounts::snapshot().delta(start)}});
@@ -2533,6 +2546,7 @@ void ClientApplication::prepareBehaviorBufferFrame() {
     uint64_t sendAttempts = 0;
     for (unsigned stage = 0; stage != 4; ++stage) {
       wire.stage = stage;
+      ByteArrayLabCounts tcpConsumerCalls;
       observed(strf("TcpPacketSocket::readData/receivePackets(stage{})", stage), [&] {
         size_t sent = 0;
         deadline = Time::monotonicMilliseconds() + 2000;
@@ -2540,16 +2554,29 @@ void ClientApplication::prepareBehaviorBufferFrame() {
           if (sent < chunks[stage].size()) {
             auto amount = rawSender->send(chunks[stage].ptr()+sent, chunks[stage].size()-sent);
             ++sendAttempts;
-            sentWire.append(chunks[stage].ptr()+sent, amount); sent += amount;
+            {
+              ByteArrayLabBookkeepingScope bookkeeping;
+              sentWire.append(chunks[stage].ptr()+sent, amount);
+            }
+            sent += amount;
           }
-          receiver->readData(); received.appendAll(receiver->receivePackets());
+          // Sender/polling getters remain outside this production interval.
+          // The receiver observer bodies are subtracted by the count helper.
+          auto consumerStart = byteArrayConsumerSnapshot();
+          receiver->readData();
+          auto packets = receiver->receivePackets();
+          auto consumerDelta = byteArrayConsumerSnapshot().delta(consumerStart);
+          for (unsigned mode = 0; mode != 56; ++mode)
+            for (unsigned event = 0; event != 3; ++event)
+              tcpConsumerCalls.values[mode][event] += consumerDelta.values[mode][event];
+          received.appendAll(std::move(packets));
           if (!receiver->isOpen() || received.size() > counts[stage])
             throw StarException("BehaviorLab: Buffer closed receiver/extra packet");
           if (sent == chunks[stage].size() && wire.wire.size() >= totals[stage]) break;
         } while (Time::monotonicMilliseconds() < deadline);
         if (sent != chunks[stage].size() || wire.wire.size() != totals[stage] || received.size() != counts[stage])
           throw StarException("BehaviorLab: Buffer staged receive deadline/count mismatch");
-      });
+      }, &tcpConsumerCalls);
       stages.append(JsonObject{{"stage", stage}, {"sentBytes", sentWire.size()},
           {"receivedBytes", wire.wire.size()}, {"packetCount", received.size()}});
     }
@@ -2683,7 +2710,12 @@ void ClientApplication::prepareBehaviorBufferFrame() {
     // Assets may load on a worker or return cached bytes. Only this explicit
     // production decode is attributed to the main-thread PNG scope.
     auto pngStart = IODeviceLabCounts::snapshot();
+    auto byteStart = byteArrayConsumerSnapshot();
     auto sourceImage = Image::readPng(make_shared<Buffer>(*assetBytes));
+    auto byteEnd = byteArrayConsumerSnapshot();
+    auto& pngByteScope = byteScopes.at(byteScopeCount++);
+    pngByteScope.calls = byteEnd.delta(byteStart);
+    pngByteScope.method = "Image::readPng(owned asset bytes)";
     if (sourceImage.size() != Vec2U(16, 16))
       throw StarException("BehaviorLab: IODevice PNG source dimensions mismatch");
     auto sourceColor = sourceImage.getrgb(0, 0);
@@ -2699,9 +2731,23 @@ void ClientApplication::prepareBehaviorBufferFrame() {
 #endif
     // Freeze consumer counts before frame capture writes its evidence PNG.
     auto ioCalls = IODeviceLabCounts::snapshot().delta(ioBefore);
+    auto byteCalls = byteArrayConsumerSnapshot().delta(byteBefore);
+    // Keep the original consumers and receipts intact; only the saved raw
+    // main-thread intervals contribute to the new per-operation proof.
+    JsonArray byteScopeProof;
+    for (size_t i = 0; i != byteScopeCount; ++i)
+      byteScopeProof.append(JsonObject{{"method", byteScopes[i].method}, {"completed", true},
+          {"calls", byteScopes[i].calls.toJson()}});
+    char const* byteBackend = "cpp";
+#ifdef STAR_USE_RUST_BYTE_ARRAY
+    byteBackend = "rust";
+#endif
     m_behaviorBufferProof = JsonObject{{"version", 1}, {"backend", backend},
         {"nativeObservedCalls", nativeCalls}, {"scopes", std::move(scopes)},
         {"calls", std::move(bufferCalls)},
+        {"byteArray", JsonObject{{"version", 1}, {"backend", byteBackend},
+            {"scopeThread", "main"}, {"captureExcluded", true},
+            {"calls", byteCalls.toJson()}, {"scopes", std::move(byteScopeProof)}}},
         {"ioDevice", JsonObject{{"version", 1}, {"backend", ioBackend},
             {"scopeThread", "main"}, {"captureExcluded", true},
             {"calls", std::move(ioCalls)}, {"scopes", std::move(ioScopes)},

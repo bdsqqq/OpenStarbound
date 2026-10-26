@@ -134,6 +134,12 @@ def parser_events(events):
 
 def validate(receipt):
     p = receipt.get('bufferProof')
+    byte_array = None
+    if type(p) is dict and 'byteArray' in p:
+        from byte_array_proof import validate_fields
+        byte_array = validate_fields(p['byteArray'])
+        p = deepcopy(p)
+        p.pop('byteArray')
     io = None
     if type(p) is dict and 'ioDevice' in p:
         from io_device_proof import validate_fields
@@ -204,6 +210,8 @@ def validate(receipt):
     out['database']['filename']='<owned-storage>/buffer-payload.btree'
     if io is not None:
         out['ioDevice'] = io
+    if byte_array is not None:
+        out['byteArray'] = byte_array
     return out
 
 

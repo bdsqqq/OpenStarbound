@@ -77,6 +77,7 @@
     {"id":"rust-json-path","module":"foundation.serialization","disposition":"rust-candidate","pattern":"source/rust/ffi/src/json_path\\.rs"},
     {"id":"btree-lab-contract","module":"validation.oracles-harness","disposition":"harness","pattern":"source/base/StarBTreeLab\\.hpp"},
     {"id":"buffer-lab-contract","module":"validation.oracles-harness","disposition":"harness","pattern":"source/base/StarBufferLab\\.hpp"},
+    {"id":"byte-array-lab-contract","module":"validation.oracles-harness","disposition":"harness","pattern":"source/base/StarByteArrayLab\\.hpp"},
     {"id":"io-device-lab-contract","module":"validation.oracles-harness","disposition":"harness","pattern":"source/base/StarIODeviceLab\\.hpp"},
     {"id":"rust-buffer-abi","module":"foundation.serialization","disposition":"ffi-adapter","pattern":"source/core/StarRustBuffer\\.h"},
     {"id":"rust-buffer-host","module":"foundation.serialization","disposition":"ffi-adapter","pattern":"source/core/StarBufferHost\\.hpp"},

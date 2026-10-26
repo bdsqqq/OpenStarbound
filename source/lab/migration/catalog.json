@@ -2747,6 +2747,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/base/StarByteArrayLab.hpp",
+      "rule": "byte-array-lab-contract"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/base/StarBytesLab.hpp",
       "rule": "bytes-lab-contract"
     },
@@ -20192,6 +20202,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/byte_array_proof.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/behavior/bytes_proof.py",
       "rule": "laboratories"
     },
@@ -20373,6 +20393,16 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/behavior/test_build_provenance.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/test_byte_array_proof.py",
       "rule": "laboratories"
     },
     {
@@ -27424,7 +27454,11 @@
     },
     {
       "path": "source/base/StarBufferLab.hpp",
-      "sha256": "bba48e74a2490b204ef3982869d10abbf9bee7134710cbfd0ecbc84389fc160f"
+      "sha256": "e9f3bacab586e425bc3ddd0bc65af3817029a9538c69a5fd8c5cc4348dc8aa8c"
+    },
+    {
+      "path": "source/base/StarByteArrayLab.hpp",
+      "sha256": "ddb0a166e59066250ffe214c0005d5254fc765ff9518bd9c95f172bf83bd4de3"
     },
     {
       "path": "source/base/StarBytesLab.hpp",
@@ -27584,7 +27618,7 @@
     },
     {
       "path": "source/client/StarClientApplication.cpp",
-      "sha256": "fc6c57806bbbc3c8976915d5b23783e7a1a327035e782aefda63b6193a409a8d"
+      "sha256": "8bcaf396ca0feef064148a34000112b4ff71092f3b4545c54c2e914f8276d113"
     },
     {
       "path": "source/client/StarClientApplication.hpp",
@@ -31464,7 +31498,7 @@
     },
     {
       "path": "source/lab/behavior/behavior_lab.py",
-      "sha256": "29325a3771ee12d5f34fa107dc66eee6ed88710169a34d6c31e85a7673a50ef1"
+      "sha256": "4695ae96f9f00f79879c52539e9bf6ac2f241b9951a613f1f099b9ae33b195a0"
     },
     {
       "path": "source/lab/behavior/btree_padding.py",
@@ -31472,11 +31506,15 @@
     },
     {
       "path": "source/lab/behavior/buffer_proof.py",
-      "sha256": "84cf867ba72001cf8098788d9ab81cef2eec2344ec97f730a43c5e97f282f2a2"
+      "sha256": "062022ad1b77b0346c07592ea5a8102268eac7827ee9f407aef68db8e872a6ca"
     },
     {
       "path": "source/lab/behavior/build_provenance.py",
       "sha256": "851f75f4832c5e0a620f05f85cc0d2db220dd2494adf444acfa37870c8e57b33"
+    },
+    {
+      "path": "source/lab/behavior/byte_array_proof.py",
+      "sha256": "a7a52c722dd5a8427aa1d5630a84bebb094600fdc787a4213743803cd915a1ef"
     },
     {
       "path": "source/lab/behavior/bytes_proof.py",
@@ -31553,6 +31591,10 @@
     {
       "path": "source/lab/behavior/test_build_provenance.py",
       "sha256": "d3bd32c2ec0eb82e9779a6dd68b1c1d67f8f9d7af37352648b0824d25c09c1d1"
+    },
+    {
+      "path": "source/lab/behavior/test_byte_array_proof.py",
+      "sha256": "b3115f8286ee031a38f0ee03bae0ac6c01c7ca4b68bc2c6485b76bc12e6d8f8d"
     },
     {
       "path": "source/lab/behavior/test_bytes_proof.py",
@@ -32276,7 +32318,7 @@
     },
     {
       "path": "source/lab/migration/modules.json",
-      "sha256": "2fcf43def7ff12785519ea4fbeb1a1837ebf3b14697a45f67955e5060df7a35d"
+      "sha256": "dd70a52a0d56cdc22bc00a882041cf3f5512cc2d2e30329915ed334a7807273d"
     },
     {
       "path": "source/lab/native_artifacts.py",
@@ -33597,11 +33639,11 @@
   "summary": {
     "by_disposition": {
       "ffi-adapter": 31,
-      "harness": 23,
+      "harness": 24,
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 281,
+      "oracle/harness": 283,
       "retain-tooling": 20,
       "retained-third-party": 296,
       "rust-candidate": 22,
@@ -33642,14 +33684,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 35,
-      "validation.oracles-harness": 304,
+      "validation.oracles-harness": 307,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1735,
+    "files": 1738,
     "modules": 39,
-    "no_direct_target": 629
+    "no_direct_target": 632
   }
 }

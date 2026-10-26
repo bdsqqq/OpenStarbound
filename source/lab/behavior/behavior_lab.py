@@ -707,6 +707,15 @@ def pair_compare(reference: Path, candidate: Path, output: Path, same_backend=Fa
                 if ref_io is not None or cand_io is not None:
                     if ref_io is None or cand_io is None or ref_io["backend"] != "cpp" or cand_io["backend"] != wanted:
                         row["errors"].append("expected C++ reference and correct IODevice backend")
+                ref_ba = ref_meta["bufferProof"].get("byteArray")
+                cand_ba = cand_meta["bufferProof"].get("byteArray")
+                if ref_ba is not None or cand_ba is not None:
+                    if ref_ba is None or cand_ba is None or ref_ba["backend"] != "cpp" or (same_backend and cand_ba["backend"] != "cpp"):
+                        row["errors"].append("expected C++ reference and consistent ByteArray repeat backend")
+                    # Older combined profiles intentionally leave ByteArray OFF.
+                    # ByteArray qualification separately requires its ON build
+                    # selector and Rust receipt; either valid candidate backend
+                    # is compatible with this generic historical comparator.
                 if ref_meta["lightingBackend"] != "cpp" or (same_backend and cand_meta["lightingBackend"] != "cpp"):
                     row["errors"].append("expected C++ reference lighting")
             elif ref_meta["scenario"] == "datastream-room":
