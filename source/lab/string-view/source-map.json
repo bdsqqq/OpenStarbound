@@ -1,0 +1,481 @@
+{
+  "schema": 1,
+  "generator": "python3 -B source/lab/string-view/inventory.py --write",
+  "scope": "58 out-of-line definitions including private compare; native Unicode iterator dependency excluded",
+  "sources": {
+    "source/core/StarStringView.cpp": "a73916009fca7d23df1df83fd20be455a4137504b35eb897e5bdc6cd33aac60d",
+    "source/core/StarStringView.hpp": "2a08586162b46431483dc282d6a6a7306bd49e4dd93de8c4650ba74ae659ac3c"
+  },
+  "counts": {
+    "member": 46,
+    "string-bridge": 4,
+    "free": 7,
+    "formatter": 1
+  },
+  "definitions": [
+    {
+      "id": 1,
+      "kind": "string-bridge",
+      "signature": "String::String(StringView s) : m_string(s.utf8())",
+      "line": 5,
+      "endLine": 5,
+      "definitionSha256": "44abaed7797006683db9e32d26487a228c20a8f78aeeeda6d2fafe86c65fbe44"
+    },
+    {
+      "id": 2,
+      "kind": "string-bridge",
+      "signature": "String::String(std::string_view s) : m_string(s)",
+      "line": 6,
+      "endLine": 6,
+      "definitionSha256": "712609f34b2884b4f7ce98855c9a50429d83e4f32234aca29b7d1172ab4f9c75"
+    },
+    {
+      "id": 3,
+      "kind": "string-bridge",
+      "signature": "String& String::operator+=(StringView s)",
+      "line": 8,
+      "endLine": 11,
+      "definitionSha256": "18e33a39c7107beffc169c6447653331296dbad8228ff1298540e1d07eaed7a2"
+    },
+    {
+      "id": 4,
+      "kind": "string-bridge",
+      "signature": "String& String::operator+=(std::string_view s)",
+      "line": 13,
+      "endLine": 16,
+      "definitionSha256": "f99712706a97cf027f058307809b4efa68b2e75494e0b4d653ceba12b619a029"
+    },
+    {
+      "id": 5,
+      "kind": "member",
+      "signature": "StringView::StringView()",
+      "line": 18,
+      "endLine": 18,
+      "definitionSha256": "0c5d97277ea44ee19eddebc1a16b4ad4ad7bb5fbc79fdfe17b5c66b92711eb60"
+    },
+    {
+      "id": 6,
+      "kind": "member",
+      "signature": "StringView::StringView(StringView const& s) : m_view(s.m_view)",
+      "line": 19,
+      "endLine": 19,
+      "definitionSha256": "e29efff24ca1703812cf72cfc61eff68cc8fed2029e719fd2244a035686b8a3f"
+    },
+    {
+      "id": 7,
+      "kind": "member",
+      "signature": "StringView::StringView(StringView&& s) noexcept : m_view(std::move(s.m_view))",
+      "line": 20,
+      "endLine": 20,
+      "definitionSha256": "5ec911268a13596534ba4a04f549cfa98335b03dd33e7bf1493999699ddf0fd3"
+    },
+    {
+      "id": 8,
+      "kind": "member",
+      "signature": "StringView::StringView(String const& s) : m_view(s.utf8())",
+      "line": 21,
+      "endLine": 21,
+      "definitionSha256": "f685d14dd5ad2590a1436ee9a92e494151baa78f609905bcc2d12de733200a16"
+    },
+    {
+      "id": 9,
+      "kind": "member",
+      "signature": "StringView::StringView(char const* s) : m_view(s)",
+      "line": 22,
+      "endLine": 22,
+      "definitionSha256": "2b117399744b14f67438fb697cf05408ee41eabe9f4dc444d4fcff8b5423af32"
+    },
+    {
+      "id": 10,
+      "kind": "member",
+      "signature": "StringView::StringView(char const* s, size_t n) : m_view(s, n)",
+      "line": 23,
+      "endLine": 23,
+      "definitionSha256": "04f9aff3eb7f27afb725168ec0c0c0bdf923c5c0ba2d23ef8be319322df2dfd3"
+    },
+    {
+      "id": 11,
+      "kind": "member",
+      "signature": "StringView::StringView(std::string_view const& s) : m_view(s)",
+      "line": 25,
+      "endLine": 25,
+      "definitionSha256": "a971e4cec326a7d9600da118dea580942243c364980889ff393565353ffb3d8f"
+    },
+    {
+      "id": 12,
+      "kind": "member",
+      "signature": "StringView::StringView(std::string_view&& s) noexcept : m_view(std::move(s))",
+      "line": 26,
+      "endLine": 26,
+      "definitionSha256": "c24a7cf4f77bb4b28b15941af4fb638affab3acff59ee03db793095fef04681c"
+    },
+    {
+      "id": 13,
+      "kind": "member",
+      "signature": "StringView::StringView(std::string const& s) : m_view(s)",
+      "line": 27,
+      "endLine": 27,
+      "definitionSha256": "e0514f0c4851f647951818b41c0e63b558addbb37c0817fcb8ef739c06e51ecf"
+    },
+    {
+      "id": 14,
+      "kind": "member",
+      "signature": "StringView::StringView(Char const* s) : m_view((char const*)s, sizeof(*s))",
+      "line": 29,
+      "endLine": 29,
+      "definitionSha256": "be8f8c6f5b2a75f6a46e17e1163662397833b2f27eb28ef0c631ff313c6aa86c"
+    },
+    {
+      "id": 15,
+      "kind": "member",
+      "signature": "StringView::StringView(Char const* s, size_t n) : m_view((char const*)s, n * sizeof(*s))",
+      "line": 30,
+      "endLine": 30,
+      "definitionSha256": "253c2b55f073766bb7a7798ddf7b4465de8448d0f807d3f986fc7ab8c5449775"
+    },
+    {
+      "id": 16,
+      "kind": "member",
+      "signature": "std::string_view const& StringView::utf8() const",
+      "line": 32,
+      "endLine": 34,
+      "definitionSha256": "8c68bceef63f9ac39b79760bca63eea823057229ef0f57ae5fcfe9775be967df"
+    },
+    {
+      "id": 17,
+      "kind": "member",
+      "signature": "std::string_view StringView::takeUtf8()",
+      "line": 36,
+      "endLine": 38,
+      "definitionSha256": "8d6c16211c2e8280829d68c3982986463059e5a8495d9438ddafb8719901da9c"
+    },
+    {
+      "id": 18,
+      "kind": "member",
+      "signature": "ByteArray StringView::utf8Bytes() const",
+      "line": 40,
+      "endLine": 42,
+      "definitionSha256": "e7cb08524caac7d28bb44754eb938d1b94b58a0515244a0c51fe982b4d96690a"
+    },
+    {
+      "id": 19,
+      "kind": "member",
+      "signature": "char const* StringView::utf8Ptr() const",
+      "line": 44,
+      "endLine": 46,
+      "definitionSha256": "e728d71a8f87943970cda3bd557c4269872e1576fd4a14801b92dcfd0ca51cdc"
+    },
+    {
+      "id": 20,
+      "kind": "member",
+      "signature": "size_t StringView::utf8Size() const",
+      "line": 48,
+      "endLine": 50,
+      "definitionSha256": "7f0b4be6cd11aca11140c19f960bd91f8d596f20649804e4ccf522c5e84693fa"
+    },
+    {
+      "id": 21,
+      "kind": "member",
+      "signature": "StringView::const_iterator StringView::begin() const",
+      "line": 52,
+      "endLine": 54,
+      "definitionSha256": "5d007ecd29e995e980724023f6356b41a10baf4b6f83c0e3a35186c95a9a95d5"
+    },
+    {
+      "id": 22,
+      "kind": "member",
+      "signature": "StringView::const_iterator StringView::end() const",
+      "line": 56,
+      "endLine": 58,
+      "definitionSha256": "592c4b16c56e6667b4fdb33b401a9e24649324c0b1be8ba80c707dcf3cd0e184"
+    },
+    {
+      "id": 23,
+      "kind": "member",
+      "signature": "size_t StringView::size() const",
+      "line": 60,
+      "endLine": 62,
+      "definitionSha256": "464edb4c29bacc528c09603f27d56863acbbd4303ec516ff9ade89f16e4a30a0"
+    },
+    {
+      "id": 24,
+      "kind": "member",
+      "signature": "size_t StringView::length() const",
+      "line": 64,
+      "endLine": 66,
+      "definitionSha256": "7265ea7df570232062852d380ea03fde8f4c5642435cbbbc876072982f366fcc"
+    },
+    {
+      "id": 25,
+      "kind": "member",
+      "signature": "bool StringView::isValid() const",
+      "line": 68,
+      "endLine": 70,
+      "definitionSha256": "23230965afd1f2447860434ee2c0e4d24cc13a9de95cb1de6c1e2dbac00f35d6"
+    },
+    {
+      "id": 26,
+      "kind": "member",
+      "signature": "bool StringView::empty() const",
+      "line": 72,
+      "endLine": 74,
+      "definitionSha256": "c205006d9a912c7397762fe98802c30f12f42f16b989d10e6415427a6de2163a"
+    },
+    {
+      "id": 27,
+      "kind": "member",
+      "signature": "StringView::Char StringView::operator[](size_t index) const",
+      "line": 76,
+      "endLine": 81,
+      "definitionSha256": "5e61397f477126130ce8aae18f9f7321dd763e35b960e7e2dc28418eb0fefbea"
+    },
+    {
+      "id": 28,
+      "kind": "member",
+      "signature": "StringView::Char StringView::at(size_t index) const",
+      "line": 83,
+      "endLine": 92,
+      "definitionSha256": "cd1f18fe507f571d5ec4b3c3b6a31a9423a1ec697dcd6f07a6e468de240a0d92"
+    },
+    {
+      "id": 29,
+      "kind": "member",
+      "signature": "bool StringView::endsWith(StringView end, CaseSensitivity cs) const",
+      "line": 94,
+      "endLine": 104,
+      "definitionSha256": "4288a757ea58ce8a83bde076104c777df110ba99562a5bf3c8d5f0130ba204ea"
+    },
+    {
+      "id": 30,
+      "kind": "member",
+      "signature": "bool StringView::endsWith(Char end, CaseSensitivity cs) const",
+      "line": 105,
+      "endLine": 110,
+      "definitionSha256": "965409ff418ce9f450e8782deceb6546e5386b995f28b1d398a4b0f4cc32c17a"
+    },
+    {
+      "id": 31,
+      "kind": "member",
+      "signature": "bool StringView::beginsWith(StringView beg, CaseSensitivity cs) const",
+      "line": 112,
+      "endLine": 127,
+      "definitionSha256": "be4072ec3414388aa6a1a5dc16a0b650e37b0de422d0da11fef75bba4d5bd9fa"
+    },
+    {
+      "id": 32,
+      "kind": "member",
+      "signature": "bool StringView::beginsWith(Char beg, CaseSensitivity cs) const",
+      "line": 129,
+      "endLine": 134,
+      "definitionSha256": "6821bdefef9252ce673c96dacae0b9f3bb6f8ee6483354a2bd8c3b5e2ff34c39"
+    },
+    {
+      "id": 33,
+      "kind": "member",
+      "signature": "void StringView::forEachSplitAnyView(StringView chars, SplitCallback callback) const",
+      "line": 136,
+      "endLine": 150,
+      "definitionSha256": "af0d96d793ac54bff82efafae80912a9bd0c6812e55e9b64a6400ff553106ffa"
+    },
+    {
+      "id": 34,
+      "kind": "member",
+      "signature": "void StringView::forEachSplitView(StringView pattern, SplitCallback callback) const",
+      "line": 152,
+      "endLine": 166,
+      "definitionSha256": "eeea75335aa38cb1d50f5e048df4ab0a6c813d6b7be7d4aa816741ddbdbbb62c"
+    },
+    {
+      "id": 35,
+      "kind": "member",
+      "signature": "bool StringView::hasChar(Char c) const",
+      "line": 168,
+      "endLine": 173,
+      "definitionSha256": "52128a1444414b40298e541b3d3655d8206a347a7db65857d31f351aa3ba8b6a"
+    },
+    {
+      "id": 36,
+      "kind": "member",
+      "signature": "bool StringView::hasCharOrWhitespace(Char c) const",
+      "line": 175,
+      "endLine": 177,
+      "definitionSha256": "3ae75afefa378d7fd3d62f3447c04da94ee5678f6d569f3612d5db7a36b354f9"
+    },
+    {
+      "id": 37,
+      "kind": "member",
+      "signature": "size_t StringView::find(Char c, size_t pos, CaseSensitivity cs) const",
+      "line": 179,
+      "endLine": 195,
+      "definitionSha256": "d810efc14e47e1b0b0247812087387a191e33d48e2354ae34e27c6e2c78cf89a"
+    },
+    {
+      "id": 38,
+      "kind": "member",
+      "signature": "size_t StringView::find(StringView str, size_t pos, CaseSensitivity cs) const",
+      "line": 197,
+      "endLine": 227,
+      "definitionSha256": "62a7163187d85c186a0c6a6a0e13b6538db124dfd173978db2ec43e85ce78af4"
+    },
+    {
+      "id": 39,
+      "kind": "member",
+      "signature": "size_t StringView::findLast(Char c, CaseSensitivity cs) const",
+      "line": 229,
+      "endLine": 242,
+      "definitionSha256": "3571b3d6b023ec81c297ad6072c167d2fa2b04dced42a7454a08dcaa838516dc"
+    },
+    {
+      "id": 40,
+      "kind": "member",
+      "signature": "size_t StringView::findLast(StringView str, CaseSensitivity cs) const",
+      "line": 244,
+      "endLine": 272,
+      "definitionSha256": "1a4bc6e403fda6853d96e9790fc54f4d121b67c7757a7f99943f2ad6c24b1874"
+    },
+    {
+      "id": 41,
+      "kind": "member",
+      "signature": "size_t StringView::findFirstOf(StringView pattern, size_t beg) const",
+      "line": 274,
+      "endLine": 287,
+      "definitionSha256": "8707c8ac5370670186eff1dad89eace0e1cce7aa241424efdd9615f19b9e6a25"
+    },
+    {
+      "id": 42,
+      "kind": "member",
+      "signature": "size_t StringView::findFirstNotOf(StringView pattern, size_t beg) const",
+      "line": 289,
+      "endLine": 302,
+      "definitionSha256": "66e99b311bb73d6a6b7eb66ecd4abfd57f74e2eeca33a0401652bc88219ec5ba"
+    },
+    {
+      "id": 43,
+      "kind": "member",
+      "signature": "size_t StringView::findNextBoundary(size_t index, bool backwards) const",
+      "line": 304,
+      "endLine": 335,
+      "definitionSha256": "b4a35350a75c3f3e1d0506ef50c13f0a02449e2ec704468da1235b48446738a6"
+    },
+    {
+      "id": 44,
+      "kind": "member",
+      "signature": "bool StringView::contains(StringView s, CaseSensitivity cs) const",
+      "line": 337,
+      "endLine": 339,
+      "definitionSha256": "25efc162180a6dd712db7ce1d61d708e37c696c1957f9e9d34da2a23968b1472"
+    },
+    {
+      "id": 45,
+      "kind": "member",
+      "signature": "int StringView::compare(StringView s, CaseSensitivity cs) const",
+      "line": 341,
+      "endLine": 346,
+      "definitionSha256": "a71f36585fe23708b85782f5c20f5f64bc28ed3cf44e5b5ee6982f8edafb7fc6"
+    },
+    {
+      "id": 46,
+      "kind": "member",
+      "signature": "bool StringView::equals(StringView s, CaseSensitivity cs) const",
+      "line": 348,
+      "endLine": 350,
+      "definitionSha256": "de95fa850735df53253ffb78bc96637b9638e5a13040898cef0fb3026bea3fce"
+    },
+    {
+      "id": 47,
+      "kind": "member",
+      "signature": "bool StringView::equalsIgnoreCase(StringView s) const",
+      "line": 352,
+      "endLine": 354,
+      "definitionSha256": "58342bc5bb9684737cdc33738f3cb8fe4f4f732a224d464960aa4b02d46f4e9e"
+    },
+    {
+      "id": 48,
+      "kind": "member",
+      "signature": "StringView StringView::substr(size_t position, size_t n) const",
+      "line": 356,
+      "endLine": 376,
+      "definitionSha256": "618fd40a1daefedd517579c78bb1f6ff934a6e2ab94af491349572a2cbe10f92"
+    },
+    {
+      "id": 49,
+      "kind": "member",
+      "signature": "int StringView::compare(size_t selfOffset, size_t selfLen, StringView other, size_t otherOffset, size_t otherLen, CaseSensitivity cs) const",
+      "line": 378,
+      "endLine": 419,
+      "definitionSha256": "f912613f0c30101168c698a77024732ddebc19135b29c5a493dd5071a20ff082"
+    },
+    {
+      "id": 50,
+      "kind": "member",
+      "signature": "StringView& StringView::operator=(StringView s)",
+      "line": 421,
+      "endLine": 424,
+      "definitionSha256": "7c0f0a832532ad9e876e9a2954ba77c9f8d1a846e88692d918891f21d765a037"
+    },
+    {
+      "id": 51,
+      "kind": "free",
+      "signature": "bool operator==(StringView s1, const char* s2)",
+      "line": 426,
+      "endLine": 428,
+      "definitionSha256": "fc5db93a45cd280988b469b3c231e12a5ca39ac000bbcf23e415d9c764e929db"
+    },
+    {
+      "id": 52,
+      "kind": "free",
+      "signature": "bool operator==(StringView s1, std::string const& s2)",
+      "line": 430,
+      "endLine": 432,
+      "definitionSha256": "8f4476a6e4ee2eeaf4fc8af83972ac0a39a56dbfbe214003dd40dd37cc74af01"
+    },
+    {
+      "id": 53,
+      "kind": "free",
+      "signature": "bool operator==(StringView s1, String const& s2)",
+      "line": 434,
+      "endLine": 436,
+      "definitionSha256": "59daff59733a64e109c52047509179ddbdd78bde7b334586bcbe47d6217fb345"
+    },
+    {
+      "id": 54,
+      "kind": "free",
+      "signature": "bool operator==(StringView s1, StringView s2)",
+      "line": 438,
+      "endLine": 440,
+      "definitionSha256": "863ac4750fa9a46050c9d05cf272f597425739e50a77751621200efdb5f8cbc6"
+    },
+    {
+      "id": 55,
+      "kind": "free",
+      "signature": "bool operator!=(StringView s1, StringView s2)",
+      "line": 442,
+      "endLine": 444,
+      "definitionSha256": "ebbf9212b0f0bf1a5771fadb058ba36131bdab95b5e7b4578c8eebca477208f4"
+    },
+    {
+      "id": 56,
+      "kind": "free",
+      "signature": "bool operator<(StringView s1, StringView s2)",
+      "line": 446,
+      "endLine": 448,
+      "definitionSha256": "1e3f9d03ea3716211a43325d2d28c131d1ce698528a9a250b6ad9698bf1a20fe"
+    },
+    {
+      "id": 57,
+      "kind": "free",
+      "signature": "std::ostream& operator<<(std::ostream& os, StringView const& s)",
+      "line": 450,
+      "endLine": 453,
+      "definitionSha256": "d23f00b50df5fac3cbf6a819c1ab48dd152e5b709bb1ed253183bbe5099caa67"
+    },
+    {
+      "id": 58,
+      "kind": "formatter",
+      "signature": "fmt::appender fmt::formatter<Star::StringView>::format(Star::StringView const& s, format_context& ctx) const",
+      "line": 457,
+      "endLine": 459,
+      "definitionSha256": "83d0d423ebedaba4323a5a8b3e4bcd4ef8de74b649707dfd26f86ce9fbb304a0"
+    }
+  ]
+}
