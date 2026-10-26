@@ -45,11 +45,11 @@ HOST_COPY_EDIT = (
     '   case SB_BA_COPY_IN:{auto& o=role(c,a);span(ByteArrayNativeAccess::data(o),ByteArrayNativeAccess::size(o),b,d);need(ByteArrayNativeAccess::size(o)<=ByteArrayNativeAccess::capacity(o));span(c.input,c.inputCount,0,d);std::memcpy(ByteArrayNativeAccess::data(o)+b,c.input,d);break;}',
     '   case SB_BA_COPY_IN:{auto& o=role(c,a);if(d==0){need(b<=ByteArrayNativeAccess::size(o));need(ByteArrayNativeAccess::size(o)<=ByteArrayNativeAccess::capacity(o));break;}span(ByteArrayNativeAccess::data(o),ByteArrayNativeAccess::size(o),b,d);need(ByteArrayNativeAccess::size(o)<=ByteArrayNativeAccess::capacity(o));span(c.input,c.inputCount,0,d);std::memcpy(ByteArrayNativeAccess::data(o)+b,c.input,d);break;}')
 BUILD_FIXTURE = ROOT / 'scripts/build-behavior-lab.sh'
-BUILD_FIXTURE_EDIT = ('then base="$base-r3"; fi', 'then base="$base-r5"; fi')
+BUILD_FIXTURE_EDIT = ('then base="$base-r3"; fi', 'then base="$base-r6"; fi')
 FIXTURES = {
     BUILD_FIXTURE: (
         'dd0733d02d82b429eccf2127aa7ba27db0db9d32f61463452aea9db855f6f632',
-        'df9e44984d65915db86c67f0e256cc25b6da7286923db4ef7474279bdbf2082d'),
+        '10e9cf370464ff11e9434b78ebb9cbc91073fb2e928ff0557f312a4924b087e6'),
     ROOT / 'source/base/StarBufferLab.hpp': (
         'bba48e74a2490b204ef3982869d10abbf9bee7134710cbfd0ecbc84389fc160f',
         'e9f3bacab586e425bc3ddd0bc65af3817029a9538c69a5fd8c5cc4348dc8aa8c'),

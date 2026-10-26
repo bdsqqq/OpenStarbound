@@ -20892,6 +20892,26 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/byte-array/guard_ranges.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/byte-array/guard_ranges_run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/byte-array/host_api.h",
       "rule": "laboratories"
     },
@@ -31849,6 +31869,14 @@
       "sha256": "83bbfe4a5ddf76da10da909191c20f1ef4bc35c8b39a731c2dd676e7bd25174b"
     },
     {
+      "path": "source/lab/byte-array/guard_ranges.cpp",
+      "sha256": "430edfed4a5857f247aa67cd23a69e9dbbff23ae8b2256db38b948747af79501"
+    },
+    {
+      "path": "source/lab/byte-array/guard_ranges_run.py",
+      "sha256": "b8c11b96d44ba55424c175747fef0a7ce780b4e1dff4aa68182bf88471f06787"
+    },
+    {
       "path": "source/lab/byte-array/host_api.h",
       "sha256": "0d7c42bfbd4f39275eaa52cf304e7bc1bdf50de53261b442af32ed98a50a49cd"
     },
@@ -31910,7 +31938,7 @@
     },
     {
       "path": "source/lab/byte-array/rust_seal.py",
-      "sha256": "373d5445f9546290e6061995d60e2c2610ceff7c2c8384fc6799abd562882c66"
+      "sha256": "d3254bdd5448050fc7d4c8afdd2206bf171d23fba6c7ea7aae53d3f1d36b5a4f"
     },
     {
       "path": "source/lab/byte-array/stage.py",
@@ -32826,7 +32854,7 @@
     },
     {
       "path": "source/rust/ffi/src/byte_array.rs",
-      "sha256": "781626e630a43095421036e72a754c6af286633870af0ae8ab0ff8bb09050f3d"
+      "sha256": "a7e96fa4d65ba9e4a223248cedef348a2c1712bb4e07f92c8b0e15605a4905bf"
     },
     {
       "path": "source/rust/ffi/src/bytes.rs",
@@ -33727,7 +33755,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 289,
+      "oracle/harness": 291,
       "retain-tooling": 20,
       "retained-third-party": 296,
       "rust-candidate": 22,
@@ -33768,14 +33796,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 35,
-      "validation.oracles-harness": 313,
+      "validation.oracles-harness": 315,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1744,
+    "files": 1746,
     "modules": 39,
-    "no_direct_target": 638
+    "no_direct_target": 640
   }
 }

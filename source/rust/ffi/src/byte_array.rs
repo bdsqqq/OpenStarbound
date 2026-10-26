@@ -4,12 +4,13 @@ use std::ffi::c_void;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
 pub type StarByteArrayHost = unsafe extern "C" fn(*mut c_void, u32, u64, u64, u64, *mut u64) -> u32;
-thread_local! { static COUNTS: Cell<[[u64; 3]; 56]> = const { Cell::new([[0; 3]; 56]) }; }
+// Per-slot cells avoid copying the whole receipt matrix for every getter call.
+// No borrow survives this closure or crosses a native callback.
+thread_local! { static COUNTS: [[Cell<u64>; 3]; 56] = const { [const { [const { Cell::new(0) }; 3] }; 56] }; }
 fn count(mode: u32, event: usize) {
     COUNTS.with(|c| {
-        let mut v = c.get();
-        v[mode as usize][event] = v[mode as usize][event].wrapping_add(1);
-        c.set(v);
+        let slot = &c[mode as usize][event];
+        slot.set(slot.get().wrapping_add(1));
     });
 }
 #[no_mangle]
@@ -17,7 +18,7 @@ pub extern "C" fn star_byte_array_call_count(mode: u32, event: u32) -> u64 {
     if mode >= 56 || event >= 3 {
         return 0;
     }
-    COUNTS.with(|c| c.get()[mode as usize][event as usize])
+    COUNTS.with(|c| c[mode as usize][event as usize].get())
 }
 const ARG: u32 = 1;
 const GET_SIZE: u32 = 2;
@@ -911,11 +912,13 @@ mod tests {
     }
     #[test]
     fn counters_wrap_and_panics_are_contained_inside_rust() {
-        let saved = COUNTS.with(Cell::get);
+        let saved: [[u64; 3]; 56] = COUNTS.with(|c| {
+            std::array::from_fn(|mode| std::array::from_fn(|event| c[mode][event].get()))
+        });
         COUNTS.with(|c| {
-            let mut v = c.get();
-            v[3] = [u64::MAX; 3];
-            c.set(v)
+            for slot in &c[3] {
+                slot.set(u64::MAX);
+            }
         });
         run(3, vec![g(INIT, 0), g(FINISH, 0)], 0);
         assert_eq!(star_byte_array_call_count(3, 0), 0);
@@ -923,7 +926,13 @@ mod tests {
         run(3, vec![(INIT, 0, 0, 0, 0, 1)], 1);
         assert_eq!(star_byte_array_call_count(3, 2), 0);
         assert_eq!(contained(3, || panic!("internal Rust panic")), 3);
-        COUNTS.with(|c| c.set(saved));
+        COUNTS.with(|c| {
+            for (row, values) in c.iter().zip(saved) {
+                for (slot, value) in row.iter().zip(values) {
+                    slot.set(value);
+                }
+            }
+        });
     }
     struct Reentry {
         size: u64,
