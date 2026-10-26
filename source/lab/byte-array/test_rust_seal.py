@@ -167,6 +167,14 @@ class RustSealTests(unittest.TestCase):
                 text = seal.branches(text, i == 1)[1]
                 if i == 0:
                     text = text.replace(seal.NATIVE_FILL_EDIT[1], seal.NATIVE_FILL_EDIT[0])
+                else:
+                    text = text.replace(seal.NATIVE_COPY_EDIT[1], seal.NATIVE_COPY_EDIT[0])
+                    # Build the exact proposed OFF header without requiring a
+                    # concurrent production write or consulting git in fixtures.
+                    on, _ = seal.branches(p.read_text(), True)
+                    repaired = seal.exact_edit(text, seal.NATIVE_COPY_EDIT)
+                    p.write_text('#pragma once\n#ifdef STAR_USE_RUST_BYTE_ARRAY\n' + on
+                                 + '#else\n' + repaired.removeprefix('#pragma once\n') + '#endif\n')
             elif i == 2:
                 for token in ('option(STAR_USE_RUST_BYTE_ARRAY "Use experimental Rust ByteArray controllers" OFF)\n',
                               'if(STAR_USE_RUST_BYTE_ARRAY)\n  add_compile_definitions(STAR_USE_RUST_BYTE_ARRAY)\nendif()\n\n',
@@ -181,6 +189,15 @@ class RustSealTests(unittest.TestCase):
             for digest in ('0' * 64, False):
                 with self.assertRaisesRegex(ValueError, 'original identity'):
                     seal.check_owned(dict(hashes, **{str(paths[0]): digest}))
+            header = paths[1].read_text()
+            before, after = seal.NATIVE_COPY_EDIT
+            for bad in (header.replace(after, before), header.replace(after, after + '\n' + after),
+                        header + '// unrelated\n', header.replace(after, after.replace('len != 0', 'len > 1'))):
+                with self.subTest(header=bad[-100:]):
+                    paths[1].write_text(bad)
+                    with self.assertRaises(ValueError):
+                        seal.check_owned(hashes)
+            paths[1].write_text(header)
             paths[0].write_text(paths[0].read_text().replace(seal.NATIVE_FILL_EDIT[1], seal.NATIVE_FILL_EDIT[0]))
             with self.assertRaisesRegex(ValueError, 'repaired native OFF'):
                 seal.check_owned(hashes)
@@ -188,15 +205,27 @@ class RustSealTests(unittest.TestCase):
                                 .replace('  if (m_size != 0)', '  if (m_size > 1)'))
             with self.assertRaisesRegex(ValueError, 'repaired native OFF'):
                 seal.check_owned(hashes)
-        with self.assertRaisesRegex(ValueError, 'unique empty fill'):
+        with self.assertRaisesRegex(ValueError, 'unique exact repair'):
             seal.exact_edit(seal.NATIVE_FILL_EDIT[0] * 2, seal.NATIVE_FILL_EDIT)
 
     def test_exact_host_repair(self):
         p = self.root / 'host.hpp'
         p.write_bytes(seal.NEW[0].read_bytes())
-        old = p.read_text().replace(seal.HOST_FILL_EDIT[1], seal.HOST_FILL_EDIT[0]).encode()
+        old = p.read_text().replace(seal.HOST_FILL_EDIT[1], seal.HOST_FILL_EDIT[0]).replace(
+            seal.HOST_COPY_EDIT[1], seal.HOST_COPY_EDIT[0]).encode()
+        repaired = seal.exact_edit(seal.exact_edit(old.decode(), seal.HOST_FILL_EDIT), seal.HOST_COPY_EDIT)
+        p.write_text(repaired)
         with patch.object(seal, 'NEW', [p]), patch.object(seal, 'revision_source', return_value=old):
             seal.check_host()
+            before, after = seal.HOST_COPY_EDIT
+            for bad in (repaired.replace(after, before), repaired.replace(after, after + '\n' + after),
+                        repaired + '// unrelated\n', repaired.replace('if(d==0)', 'if(d<=1)'),
+                        repaired.replace('need(b<=ByteArrayNativeAccess::size(o));', ''),
+                        repaired.replace('std::memcpy(ByteArrayNativeAccess::data(o)+b,c.input,d)',
+                                         'std::memcpy(ByteArrayNativeAccess::data(o),c.input,d)')):
+                p.write_text(bad)
+                with self.assertRaisesRegex(ValueError, 'only host empty fill'):
+                    seal.check_host()
             p.write_bytes(old)
             with self.assertRaisesRegex(ValueError, 'only host empty fill'):
                 seal.check_host()
@@ -206,6 +235,12 @@ class RustSealTests(unittest.TestCase):
         with patch.object(seal, 'NEW', [p]), patch.object(seal, 'revision_source', return_value=old + b'bad'):
             with self.assertRaisesRegex(ValueError, 'original host identity'):
                 seal.check_host()
+
+    def test_copy_repair_sites_are_unique(self):
+        for edit in (seal.NATIVE_COPY_EDIT, seal.HOST_COPY_EDIT):
+            for old in ('', edit[0] * 2):
+                with self.assertRaisesRegex(ValueError, 'unique exact repair'):
+                    seal.exact_edit(old, edit)
 
     def test_fixture_receipts_historical_and_fresh(self):
         p = self.root / 'fixture.cpp'
@@ -232,7 +267,7 @@ class RustSealTests(unittest.TestCase):
                 seal.check_fixtures({str(p): seal.sha(p)})
 
     def test_build_fixture_exact_profile_delta(self):
-        current = seal.BUILD_FIXTURE.read_bytes()
+        current = seal.BUILD_FIXTURE.read_bytes().replace(b'then base="$base-r4"; fi', b'then base="$base-r5"; fi')
         accepted = current.decode().replace(seal.BUILD_FIXTURE_EDIT[1], seal.BUILD_FIXTURE_EDIT[0]).encode()
         p = self.root / 'build.sh'; p.write_bytes(current)
         old = b'historical build fixture\n'

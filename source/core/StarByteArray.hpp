@@ -365,7 +365,7 @@ inline void ByteArray::append(ByteArray const& b) {
 
 inline void ByteArray::append(const char* data, size_t len) {
   resize(m_size + len);
-  std::memcpy(m_data + m_size - len, data, len);
+  if (len != 0) std::memcpy(m_data + m_size - len, data, len);
 }
 
 inline void ByteArray::appendByte(char b) {

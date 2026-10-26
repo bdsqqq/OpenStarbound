@@ -3,7 +3,7 @@
 
 The accepted pre-mutation closure is immutable except four explicitly reconstructed
 production files, one inventory test and pinned consumer/build fixtures.
-Empty fill is a new defined no-op contract; earlier native seals are historical.
+Empty fill and empty copy are new defined no-op contracts; earlier native seals are historical.
 SDK .tbd map entries are checked by path only, not SDK contents.
 """
 import argparse
@@ -39,12 +39,17 @@ NATIVE_FILL_EDIT = ('  memset(m_data, c, m_size);',
 HOST_FILL_EDIT = (
     '   case SB_BA_FILL_BYTES:{need(b<=255&&!d);auto& o=role(c,a);span(ByteArrayNativeAccess::data(o),ByteArrayNativeAccess::capacity(o),0,ByteArrayNativeAccess::size(o));std::memset(ByteArrayNativeAccess::data(o),static_cast<unsigned char>(b),ByteArrayNativeAccess::size(o));break;}',
     '   case SB_BA_FILL_BYTES:{need(b<=255&&!d);auto& o=role(c,a);auto n=ByteArrayNativeAccess::size(o);if(n!=0){span(ByteArrayNativeAccess::data(o),ByteArrayNativeAccess::capacity(o),0,n);std::memset(ByteArrayNativeAccess::data(o),static_cast<unsigned char>(b),n);}break;}')
+NATIVE_COPY_EDIT = ('  std::memcpy(m_data + m_size - len, data, len);',
+                    '  if (len != 0) std::memcpy(m_data + m_size - len, data, len);')
+HOST_COPY_EDIT = (
+    '   case SB_BA_COPY_IN:{auto& o=role(c,a);span(ByteArrayNativeAccess::data(o),ByteArrayNativeAccess::size(o),b,d);need(ByteArrayNativeAccess::size(o)<=ByteArrayNativeAccess::capacity(o));span(c.input,c.inputCount,0,d);std::memcpy(ByteArrayNativeAccess::data(o)+b,c.input,d);break;}',
+    '   case SB_BA_COPY_IN:{auto& o=role(c,a);if(d==0){need(b<=ByteArrayNativeAccess::size(o));need(ByteArrayNativeAccess::size(o)<=ByteArrayNativeAccess::capacity(o));break;}span(ByteArrayNativeAccess::data(o),ByteArrayNativeAccess::size(o),b,d);need(ByteArrayNativeAccess::size(o)<=ByteArrayNativeAccess::capacity(o));span(c.input,c.inputCount,0,d);std::memcpy(ByteArrayNativeAccess::data(o)+b,c.input,d);break;}')
 BUILD_FIXTURE = ROOT / 'scripts/build-behavior-lab.sh'
-BUILD_FIXTURE_EDIT = ('then base="$base-r3"; fi', 'then base="$base-r4"; fi')
+BUILD_FIXTURE_EDIT = ('then base="$base-r3"; fi', 'then base="$base-r5"; fi')
 FIXTURES = {
     BUILD_FIXTURE: (
         'dd0733d02d82b429eccf2127aa7ba27db0db9d32f61463452aea9db855f6f632',
-        '01c42277c2347854385196572ad3513e739b5252f3061f45e3e3e6035866578b'),
+        'df9e44984d65915db86c67f0e256cc25b6da7286923db4ef7474279bdbf2082d'),
     ROOT / 'source/base/StarBufferLab.hpp': (
         'bba48e74a2490b204ef3982869d10abbf9bee7134710cbfd0ecbc84389fc160f',
         'e9f3bacab586e425bc3ddd0bc65af3817029a9538c69a5fd8c5cc4348dc8aa8c'),
@@ -60,7 +65,7 @@ def revision_source(path, revision):
 
 def exact_edit(text, edit):
     before, after = edit
-    need(text.count(before) == 1, 'unique empty fill repair site')
+    need(text.count(before) == 1, 'unique exact repair site')
     return text.replace(before, after, 1)
 
 
@@ -68,7 +73,8 @@ def check_host():
     old = revision_source(NEW[0], '135d6e03')
     equal(hashlib.sha256(old).hexdigest(),
           '48366f6df8e9fc08b9d96f8a50771979d6ce8a01014adf50b2df6af1936042c9', 'original host identity')
-    equal(NEW[0].read_bytes(), exact_edit(old.decode(), HOST_FILL_EDIT).encode(), 'only host empty fill repair')
+    expected = exact_edit(exact_edit(old.decode(), HOST_FILL_EDIT), HOST_COPY_EDIT)
+    equal(NEW[0].read_bytes(), expected.encode(), 'only host empty fill and copy repairs')
 
 
 def check_fixtures(bindings, fresh=False, required=False):
@@ -118,7 +124,7 @@ def check_owned(old):
     selected = []
     for p in OWNED[:2]:
         on, off = branches(p.read_text(), p.suffix == '.hpp')
-        expected = exact_edit(originals[p], NATIVE_FILL_EDIT) if p == OWNED[0] else originals[p]
+        expected = exact_edit(originals[p], NATIVE_FILL_EDIT) if p == OWNED[0] else exact_edit(originals[p], NATIVE_COPY_EDIT)
         equal(off, expected, 'exact repaired native OFF source')
         selected.append(on)
     equal(sorted(map(int, re.findall(r'execute\((\d+),', ''.join(selected)))), list(range(56)), '56 production source routes')
