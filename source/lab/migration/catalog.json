@@ -27778,7 +27778,7 @@
     },
     {
       "path": "source/core/StarBufferHost.hpp",
-      "sha256": "fc27f1058c4da1d2329402d7aa7f723c173d95f63c69f4485d1ce969d5d51186"
+      "sha256": "44654b0cb2e470da0395eecfec1f251603539e7b618ccc79259fdcaa8394cf77"
     },
     {
       "path": "source/core/StarByteArray.cpp",
@@ -31938,7 +31938,7 @@
     },
     {
       "path": "source/lab/byte-array/rust_seal.py",
-      "sha256": "d3254bdd5448050fc7d4c8afdd2206bf171d23fba6c7ea7aae53d3f1d36b5a4f"
+      "sha256": "c14312326789d3fd6be756d4f56a36ffb422b399a22a6fb62c578160fb9bda54"
     },
     {
       "path": "source/lab/byte-array/stage.py",
@@ -31982,7 +31982,7 @@
     },
     {
       "path": "source/lab/byte-array/test_rust_seal.py",
-      "sha256": "1ee0650e96025b3ad5acd464c23e70e9baceec11829b5c1fda978b8bf592cd42"
+      "sha256": "4c9950e0c8314836e70aa95d16549930f391a5491b4593b1523d019242c73748"
     },
     {
       "path": "source/lab/bytes/StarBytes.original.hpp",

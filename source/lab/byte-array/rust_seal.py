@@ -2,7 +2,7 @@
 """Finite candidate compiler seal; no execution, signed attestation or SDK claim.
 
 The accepted pre-mutation closure is immutable except four explicitly reconstructed
-production files, one inventory test and pinned consumer/build fixtures.
+production files, an exact Buffer guard delta, one inventory test and pinned consumer/build fixtures.
 Empty fill and empty copy are new defined no-op contracts; earlier native seals are historical.
 SDK .tbd map entries are checked by path only, not SDK contents.
 """
@@ -45,11 +45,11 @@ HOST_COPY_EDIT = (
     '   case SB_BA_COPY_IN:{auto& o=role(c,a);span(ByteArrayNativeAccess::data(o),ByteArrayNativeAccess::size(o),b,d);need(ByteArrayNativeAccess::size(o)<=ByteArrayNativeAccess::capacity(o));span(c.input,c.inputCount,0,d);std::memcpy(ByteArrayNativeAccess::data(o)+b,c.input,d);break;}',
     '   case SB_BA_COPY_IN:{auto& o=role(c,a);if(d==0){need(b<=ByteArrayNativeAccess::size(o));need(ByteArrayNativeAccess::size(o)<=ByteArrayNativeAccess::capacity(o));break;}span(ByteArrayNativeAccess::data(o),ByteArrayNativeAccess::size(o),b,d);need(ByteArrayNativeAccess::size(o)<=ByteArrayNativeAccess::capacity(o));span(c.input,c.inputCount,0,d);std::memcpy(ByteArrayNativeAccess::data(o)+b,c.input,d);break;}')
 BUILD_FIXTURE = ROOT / 'scripts/build-behavior-lab.sh'
-BUILD_FIXTURE_EDIT = ('then base="$base-r3"; fi', 'then base="$base-r6"; fi')
+BUILD_FIXTURE_EDIT = ('then base="$base-r3"; fi', 'then base="$base-r7"; fi')
 FIXTURES = {
     BUILD_FIXTURE: (
         'dd0733d02d82b429eccf2127aa7ba27db0db9d32f61463452aea9db855f6f632',
-        '10e9cf370464ff11e9434b78ebb9cbc91073fb2e928ff0557f312a4924b087e6'),
+        '834d0d26c329385e583cbe402c518ec80432f88386aff476a4ee51b80e7ca3fc'),
     ROOT / 'source/base/StarBufferLab.hpp': (
         'bba48e74a2490b204ef3982869d10abbf9bee7134710cbfd0ecbc84389fc160f',
         'e9f3bacab586e425bc3ddd0bc65af3817029a9538c69a5fd8c5cc4348dc8aa8c'),
@@ -67,6 +67,34 @@ def exact_edit(text, edit):
     before, after = edit
     need(text.count(before) == 1, 'unique exact repair site')
     return text.replace(before, after, 1)
+
+
+BUFFER_HOST = CORE / 'StarBufferHost.hpp'
+BUFFER_HOST_HASHES = (
+    'fc27f1058c4da1d2329402d7aa7f723c173d95f63c69f4485d1ce969d5d51186',
+    '44654b0cb2e470da0395eecfec1f251603539e7b618ccc79259fdcaa8394cf77',
+)
+BUFFER_GUARD_EDIT = (
+    '  if(c.constBytes&&overlaps(out,c.constBytes->ptr(),c.constBytes->size()))return false;\n  if(c.sourceBytes&&overlaps(out,c.sourceBytes->ptr(),c.sourceBytes->size()))return false;\n  if(c.param&&overlaps(out,c.param->ptr(),c.param->size()))return false;\n  if(overlaps(out,c.value.ptr(),c.value.size()))return false;\n',
+    '  // Guard bookkeeping reads current native fields; it must not recursively run\n  // public controllers. No snapshot survives mutation or a foreign callback.\n  auto arrayOverlaps=[&](ByteArray const& bytes){\n#ifdef STAR_USE_RUST_BYTE_ARRAY\n    auto& live=const_cast<ByteArray&>(bytes);\n    return overlaps(out,ByteArrayNativeAccess::data(live),ByteArrayNativeAccess::size(live));\n#else\n    return overlaps(out,bytes.ptr(),bytes.size());\n#endif\n  };\n  if(c.constBytes&&arrayOverlaps(*c.constBytes))return false;\n  if(c.sourceBytes&&arrayOverlaps(*c.sourceBytes))return false;\n  if(c.param&&arrayOverlaps(*c.param))return false;\n  if(arrayOverlaps(c.value))return false;\n')
+
+
+def check_buffer_host(bindings, fresh=False, required=False):
+    """Keep historical receipts immutable; authenticate the complete guard delta.
+
+    Fresh compilation must bind current bytes. Logical size and all other guards
+    remain byte-exact; accepting a historical hash never exempts current source.
+    """
+    if str(BUFFER_HOST) not in bindings and not required:
+        return
+    old = revision_source(BUFFER_HOST, '67ed3547')
+    equal(hashlib.sha256(old).hexdigest(), BUFFER_HOST_HASHES[0], 'original Buffer host identity')
+    current = exact_edit(old.decode(), BUFFER_GUARD_EDIT).encode()
+    equal(hashlib.sha256(current).hexdigest(), BUFFER_HOST_HASHES[1], 'reconstructed Buffer host identity')
+    equal(BUFFER_HOST.read_bytes(), current, 'only Buffer safeOutput guard bookkeeping delta')
+    digest = bindings.get(str(BUFFER_HOST))
+    need(type(digest) is str and digest in (BUFFER_HOST_HASHES[1:] if fresh else BUFFER_HOST_HASHES),
+         'recorded Buffer host identity')
 
 
 def check_host():
@@ -170,10 +198,11 @@ def check_inventory_test(bindings):
 
 
 def rehash_compiler_bindings(bindings, fresh=False):
-    exceptions = {str(INVENTORY_TEST), *(str(p) for p in FIXTURES)}
+    exceptions = {str(BUFFER_HOST), str(INVENTORY_TEST), *(str(p) for p in FIXTURES)}
     rehash({p: h for p, h in bindings.items() if p not in exceptions})
     check_inventory_test(bindings)
     check_fixtures(bindings, fresh=fresh)
+    check_buffer_host(bindings, fresh=fresh)
 
 
 def check_baseline(baseline, bindings):
@@ -184,7 +213,9 @@ def check_baseline(baseline, bindings):
     check_inventory_test(bindings)
     check_fixtures(unchanged, required=True)
     check_fixtures(bindings, fresh=True, required=True)
-    exceptions = {str(INVENTORY_TEST), *(str(p) for p in FIXTURES)}
+    check_buffer_host(unchanged, required=True)
+    check_buffer_host(bindings, fresh=True, required=True)
+    exceptions = {str(BUFFER_HOST), str(INVENTORY_TEST), *(str(p) for p in FIXTURES)}
     subset({p: h for p, h in unchanged.items() if p not in exceptions}, bindings, 'unchanged accepted host closure')
     for p in OWNED + NEW:
         need(str(p) in bindings and bindings[str(p)] == sha(p), 'current owned source binding: ' + str(p))
@@ -293,6 +324,7 @@ def verifier_bindings():
     paths += [Path(stage.artifacts.__file__), Path(stage.provenance.__file__)]
     paths.append(INVENTORY_TEST)
     paths.extend(FIXTURES)
+    paths.append(BUFFER_HOST)
     return {str(p.resolve()): sha(p) for p in paths}
 
 

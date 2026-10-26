@@ -50,7 +50,7 @@ for backend in reference candidate; do
   # All modes share the identical all-C++ reference; candidates stay isolated.
   base="$root/build/behavior"
   if [[ "$mode" == io-device-combined || "$mode" == byte-array-combined ]]; then base="$base/$mode"; fi
-  if [[ "$mode" == byte-array-combined ]]; then base="$base-r6"; fi
+  if [[ "$mode" == byte-array-combined ]]; then base="$base-r7"; fi
   if [[ "$backend" == candidate ]]; then
     case "$mode" in
       lighting) rust=ON ;;

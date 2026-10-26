@@ -267,7 +267,7 @@ class RustSealTests(unittest.TestCase):
                 seal.check_fixtures({str(p): seal.sha(p)})
 
     def test_build_fixture_exact_profile_delta(self):
-        current = seal.BUILD_FIXTURE.read_bytes().replace(b'then base="$base-r4"; fi', b'then base="$base-r5"; fi')
+        current = seal.BUILD_FIXTURE.read_bytes()
         accepted = current.decode().replace(seal.BUILD_FIXTURE_EDIT[1], seal.BUILD_FIXTURE_EDIT[0]).encode()
         p = self.root / 'build.sh'; p.write_bytes(current)
         old = b'historical build fixture\n'
@@ -279,6 +279,77 @@ class RustSealTests(unittest.TestCase):
             p.write_bytes(current + b'\n# unrelated\n')
             with self.assertRaisesRegex(ValueError, 'accepted fixture bytes'):
                 seal.check_fixtures({str(p): seal.sha(p)}, fresh=True, required=True)
+
+    def buffer_fixture(self):
+        current = seal.BUFFER_HOST.read_bytes()
+        before, after = seal.BUFFER_GUARD_EDIT
+        old = current.decode().replace(after, before).encode()
+        self.assertEqual(seal.hashlib.sha256(old).hexdigest(), seal.BUFFER_HOST_HASHES[0])
+        p = self.root / 'StarBufferHost.hpp'
+        p.write_bytes(current)
+        return p, old, current
+
+    def test_buffer_historical_and_fresh_exact_receipts(self):
+        p, old, current = self.buffer_fixture()
+        with patch.object(seal, 'BUFFER_HOST', p), patch.object(seal, 'revision_source', return_value=old) as source:
+            for digest in seal.BUFFER_HOST_HASHES:
+                seal.check_buffer_host({str(p): digest}, required=True)
+            seal.check_buffer_host({str(p): seal.sha(p)}, fresh=True, required=True)
+            source.assert_called_with(p, '67ed3547')
+            for digest in (seal.BUFFER_HOST_HASHES[0], '0' * 64, False):
+                with self.assertRaisesRegex(ValueError, 'recorded Buffer host'):
+                    seal.check_buffer_host({str(p): digest}, fresh=True, required=True)
+            with self.assertRaisesRegex(ValueError, 'recorded Buffer host'):
+                seal.check_buffer_host({str(p): '0' * 64})
+            with self.assertRaisesRegex(ValueError, 'recorded Buffer host'):
+                seal.check_buffer_host({}, required=True)
+        with patch.object(seal, 'BUFFER_HOST', p), patch.object(seal, 'revision_source', return_value=old + b'// unrelated'):
+            with self.assertRaisesRegex(ValueError, 'original Buffer host'):
+                seal.check_buffer_host({str(p): seal.sha(p)})
+
+    def test_buffer_rejects_header_drift_even_with_matching_receipt(self):
+        p, old, current = self.buffer_fixture()
+        text = current.decode()
+        mutants = [text + '// unrelated header edit\n',
+                   text.replace('ByteArrayNativeAccess::size(live)', 'ByteArrayNativeAccess::capacity(live)'),
+                   text.replace('  if(c.param&&arrayOverlaps(*c.param))return false;\n', ''),
+                   text.replace('  if(!out||a%alignof(uint64_t)||a>UINTPTR_MAX-sizeof(uint64_t))return false;\n', '')]
+        with patch.object(seal, 'BUFFER_HOST', p), patch.object(seal, 'revision_source', return_value=old):
+            for mutant in mutants:
+                self.assertNotEqual(mutant, text)
+                p.write_text(mutant)
+                with self.subTest(mutant=mutant[-80:]), self.assertRaisesRegex(ValueError, 'only Buffer safeOutput'):
+                    seal.check_buffer_host({str(p): seal.sha(p)}, fresh=True)
+
+    def test_buffer_baseline_delta_preserves_other_input_rejection(self):
+        p, old, current = self.buffer_fixture()
+        other = self.root / 'other.hpp'
+        other.write_text('unchanged')
+        owned = [self.root / 'owned.cpp']
+        owned[0].write_text('owned')
+        baseline = dict(status='ACCEPTED_NATIVE_BEFORE_PRODUCTION_MUTATION',
+                        owned_before={str(owned[0]): 'original'},
+                        bindings={str(p): seal.BUFFER_HOST_HASHES[0], str(other): seal.sha(other)})
+        fresh = {str(p): seal.sha(p), str(other): seal.sha(other), str(owned[0]): seal.sha(owned[0])}
+        # Isolate unrelated existing contracts; exercise real rehash/subset and
+        # guard reconstruction against temporary files, without any native tool.
+        with patch.object(seal, 'BUFFER_HOST', p), patch.object(seal, 'revision_source', return_value=old), \
+             patch.object(seal, 'OWNED', owned), patch.object(seal, 'NEW', []), \
+             patch.object(seal, 'check_inventory_test'), patch.object(seal, 'check_fixtures'), \
+             patch.object(seal, 'check_owned'), patch.object(seal, 'check_host'):
+            seal.check_baseline(baseline, fresh)
+            seal.rehash_compiler_bindings(fresh, fresh=True)
+            with self.assertRaisesRegex(ValueError, 'recorded Buffer host'):
+                seal.check_baseline(baseline, dict(fresh, **{str(p): seal.BUFFER_HOST_HASHES[0]}))
+            with self.assertRaisesRegex(ValueError, 'recorded Buffer host'):
+                seal.check_baseline(dict(baseline, bindings=dict(baseline['bindings'], **{str(p): '0' * 64})), fresh)
+            with self.assertRaises(ValueError):
+                seal.check_baseline(baseline, dict(fresh, **{str(other): '0' * 64}))
+            other.write_text('drift')
+            with self.assertRaisesRegex(ValueError, 'binding drift'):
+                seal.check_baseline(baseline, fresh)
+            with self.assertRaisesRegex(ValueError, 'binding drift'):
+                seal.rehash_compiler_bindings(fresh, fresh=True)
 
     def test_own_source_and_test_bindings(self):
         code = seal.verifier_bindings()

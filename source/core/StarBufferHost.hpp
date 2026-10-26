@@ -45,10 +45,20 @@ inline bool safeOutput(NativeCtx& c,uint64_t* out) {
   if(overlaps(out,&c,sizeof c)||overlaps(out,c.constOwner,sizeof(Buffer))||overlaps(out,c.constExternal,sizeof(ExternalBuffer))||overlaps(out,c.source,sizeof(Buffer))||overlaps(out,c.param,sizeof(ByteArray)))return false;
   if(overlaps(out,c.constPosition,sizeof(size_t))||overlaps(out,c.sourcePosition,sizeof(size_t))||overlaps(out,c.constExternalSize,sizeof(size_t))||overlaps(out,c.constBorrowed,sizeof(char const*)))return false;
   if(overlaps(out,c.constBytes,sizeof(ByteArray))||overlaps(out,c.sourceBytes,sizeof(ByteArray)))return false;
-  if(c.constBytes&&overlaps(out,c.constBytes->ptr(),c.constBytes->size()))return false;
-  if(c.sourceBytes&&overlaps(out,c.sourceBytes->ptr(),c.sourceBytes->size()))return false;
-  if(c.param&&overlaps(out,c.param->ptr(),c.param->size()))return false;
-  if(overlaps(out,c.value.ptr(),c.value.size()))return false;
+  // Guard bookkeeping reads current native fields; it must not recursively run
+  // public controllers. No snapshot survives mutation or a foreign callback.
+  auto arrayOverlaps=[&](ByteArray const& bytes){
+#ifdef STAR_USE_RUST_BYTE_ARRAY
+    auto& live=const_cast<ByteArray&>(bytes);
+    return overlaps(out,ByteArrayNativeAccess::data(live),ByteArrayNativeAccess::size(live));
+#else
+    return overlaps(out,bytes.ptr(),bytes.size());
+#endif
+  };
+  if(c.constBytes&&arrayOverlaps(*c.constBytes))return false;
+  if(c.sourceBytes&&arrayOverlaps(*c.sourceBytes))return false;
+  if(c.param&&arrayOverlaps(*c.param))return false;
+  if(arrayOverlaps(c.value))return false;
   if(overlaps(out,c.name.utf8().data(),c.name.utf8().size()))return false;
   // Requested read length is not caller capacity: SIZE_MAX may copy just 8
   // bytes. Borrowed logical sizes also need not denote accessible storage until
