@@ -228,3 +228,6 @@ pub use data_stream::{star_data_stream_call_count, star_data_stream_run, StarDat
 
 mod buffer;
 pub use buffer::{star_buffer_call_count, star_buffer_run, StarBufferHost};
+
+mod io_device;
+pub use io_device::{star_io_device_call_count, star_io_device_run, StarIODeviceHost};

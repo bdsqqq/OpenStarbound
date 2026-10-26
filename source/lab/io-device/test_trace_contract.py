@@ -66,7 +66,17 @@ class TraceContractTests(unittest.TestCase):
         self.assertEqual((r['mode'],r['outcome']),(4,'IO/new'))
     def test_source_map_and_actual_definitions(self):
         source=pathlib.Path(__file__).parents[2]/'core'/'StarIODevice.cpp'
-        lines=source.read_text().splitlines()
+        current=source.read_text()
+        original=(pathlib.Path(__file__).parent/'StarIODevice.original.cpp').read_text()
+        # Coordinates belong to the frozen native source, not selector-envelope
+        # line numbers. Require the current OFF body to remain byte-exact first.
+        if '#ifdef STAR_USE_RUST_IO_DEVICE\n' in current:
+            prefix=original.split('namespace Star {',1)[0]
+            self.assertTrue(current.startswith(prefix+'#ifdef STAR_USE_RUST_IO_DEVICE\n'))
+            self.assertTrue(current.endswith('#endif\n'))
+            current=prefix+current.split('\n#else\n',1)[1][:-len('#endif\n')]
+        self.assertEqual(current,original)
+        lines=current.splitlines()
         m=t.source_map(); self.assertEqual(len(m),22)
         for line,entry in m.items():
             self.assertIn('IODevice::',lines[int(line)-1])
