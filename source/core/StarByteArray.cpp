@@ -259,7 +259,7 @@ void ByteArray::fill(size_t s, char c) {
   if (s != NPos)
     resize(s);
 
-  memset(m_data, c, m_size);
+  if (m_size != 0) memset(m_data, c, m_size);
 }
 
 void ByteArray::fill(char c) {

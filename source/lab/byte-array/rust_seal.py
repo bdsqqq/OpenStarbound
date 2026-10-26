@@ -2,7 +2,8 @@
 """Finite candidate compiler seal; no execution, signed attestation or SDK claim.
 
 The accepted pre-mutation closure is immutable except four explicitly reconstructed
-production files and one exactly reconstructed noncompiler inventory test.
+production files, one inventory test and pinned consumer/build fixtures.
+Empty fill is a new defined no-op contract; earlier native seals are historical.
 SDK .tbd map entries are checked by path only, not SDK contents.
 """
 import argparse
@@ -33,6 +34,63 @@ def original(path):
     return subprocess.check_output(['git', 'show', '84f27041:' + str(path.relative_to(ROOT))], cwd=ROOT).decode()
 
 
+NATIVE_FILL_EDIT = ('  memset(m_data, c, m_size);',
+                    '  if (m_size != 0) memset(m_data, c, m_size);')
+HOST_FILL_EDIT = (
+    '   case SB_BA_FILL_BYTES:{need(b<=255&&!d);auto& o=role(c,a);span(ByteArrayNativeAccess::data(o),ByteArrayNativeAccess::capacity(o),0,ByteArrayNativeAccess::size(o));std::memset(ByteArrayNativeAccess::data(o),static_cast<unsigned char>(b),ByteArrayNativeAccess::size(o));break;}',
+    '   case SB_BA_FILL_BYTES:{need(b<=255&&!d);auto& o=role(c,a);auto n=ByteArrayNativeAccess::size(o);if(n!=0){span(ByteArrayNativeAccess::data(o),ByteArrayNativeAccess::capacity(o),0,n);std::memset(ByteArrayNativeAccess::data(o),static_cast<unsigned char>(b),n);}break;}')
+BUILD_FIXTURE = ROOT / 'scripts/build-behavior-lab.sh'
+BUILD_FIXTURE_EDIT = ('then base="$base-r3"; fi', 'then base="$base-r4"; fi')
+FIXTURES = {
+    BUILD_FIXTURE: (
+        'dd0733d02d82b429eccf2127aa7ba27db0db9d32f61463452aea9db855f6f632',
+        '01c42277c2347854385196572ad3513e739b5252f3061f45e3e3e6035866578b'),
+    ROOT / 'source/base/StarBufferLab.hpp': (
+        'bba48e74a2490b204ef3982869d10abbf9bee7134710cbfd0ecbc84389fc160f',
+        'e9f3bacab586e425bc3ddd0bc65af3817029a9538c69a5fd8c5cc4348dc8aa8c'),
+    ROOT / 'source/client/StarClientApplication.cpp': (
+        'fc6c57806bbbc3c8976915d5b23783e7a1a327035e782aefda63b6193a409a8d',
+        '8bcaf396ca0feef064148a34000112b4ff71092f3b4545c54c2e914f8276d113'),
+}
+
+
+def revision_source(path, revision):
+    return subprocess.check_output(['git', 'show', revision + ':' + str(path.relative_to(ROOT))], cwd=ROOT)
+
+
+def exact_edit(text, edit):
+    before, after = edit
+    need(text.count(before) == 1, 'unique empty fill repair site')
+    return text.replace(before, after, 1)
+
+
+def check_host():
+    old = revision_source(NEW[0], '135d6e03')
+    equal(hashlib.sha256(old).hexdigest(),
+          '48366f6df8e9fc08b9d96f8a50771979d6ce8a01014adf50b2df6af1936042c9', 'original host identity')
+    equal(NEW[0].read_bytes(), exact_edit(old.decode(), HOST_FILL_EDIT).encode(), 'only host empty fill repair')
+
+
+def check_fixtures(bindings, fresh=False, required=False):
+    # Historical closure receipts may retain old hashes. Fresh compiler inputs
+    # must bind the entire accepted instrumented fixture, never its predecessor.
+    for p, (old_hash, current_hash) in FIXTURES.items():
+        if str(p) not in bindings and not required:
+            continue
+        old = original(p).encode()
+        current = revision_source(p, '968993b4')
+        if p == BUILD_FIXTURE:
+            equal(hashlib.sha256(current).hexdigest(),
+                  '737c6d89a92bfcdfea27546796b1c4d0edb16ebeb0d8bc267698fc12c6d29874', 'accepted build fixture identity')
+            current = exact_edit(current.decode(), BUILD_FIXTURE_EDIT).encode()
+        equal(hashlib.sha256(old).hexdigest(), old_hash, 'original fixture identity')
+        equal(hashlib.sha256(current).hexdigest(), current_hash, 'accepted fixture identity')
+        equal(p.read_bytes(), current, 'only accepted fixture bytes')
+        digest = bindings.get(str(p))
+        need(type(digest) is str and digest in ((current_hash,) if fresh else (old_hash, current_hash)),
+             'recorded fixture identity')
+
+
 def branches(text, header=False):
     prefix = '#pragma once\n' if header else ''
     marker = prefix + '#ifdef STAR_USE_RUST_BYTE_ARRAY\n'
@@ -60,7 +118,8 @@ def check_owned(old):
     selected = []
     for p in OWNED[:2]:
         on, off = branches(p.read_text(), p.suffix == '.hpp')
-        equal(off, originals[p], 'exact original native OFF source')
+        expected = exact_edit(originals[p], NATIVE_FILL_EDIT) if p == OWNED[0] else originals[p]
+        equal(off, expected, 'exact repaired native OFF source')
         selected.append(on)
     equal(sorted(map(int, re.findall(r'execute\((\d+),', ''.join(selected)))), list(range(56)), '56 production source routes')
     equal(host.host_diagnostic.class_declaration(selected[1]),
@@ -104,9 +163,11 @@ def check_inventory_test(bindings):
     need(bindings.get(str(INVENTORY_TEST)) in (old_hash, sha(INVENTORY_TEST)), 'recorded inventory test identity')
 
 
-def rehash_compiler_bindings(bindings):
-    rehash({p: h for p, h in bindings.items() if p != str(INVENTORY_TEST)})
+def rehash_compiler_bindings(bindings, fresh=False):
+    exceptions = {str(INVENTORY_TEST), *(str(p) for p in FIXTURES)}
+    rehash({p: h for p, h in bindings.items() if p not in exceptions})
     check_inventory_test(bindings)
+    check_fixtures(bindings, fresh=fresh)
 
 
 def check_baseline(baseline, bindings):
@@ -115,10 +176,14 @@ def check_baseline(baseline, bindings):
     unchanged = {p: h for p, h in baseline['bindings'].items() if p not in baseline['owned_before']}
     rehash_compiler_bindings(unchanged)
     check_inventory_test(bindings)
-    subset({p: h for p, h in unchanged.items() if p != str(INVENTORY_TEST)}, bindings, 'unchanged accepted host closure')
+    check_fixtures(unchanged, required=True)
+    check_fixtures(bindings, fresh=True, required=True)
+    exceptions = {str(INVENTORY_TEST), *(str(p) for p in FIXTURES)}
+    subset({p: h for p, h in unchanged.items() if p not in exceptions}, bindings, 'unchanged accepted host closure')
     for p in OWNED + NEW:
         need(str(p) in bindings and bindings[str(p)] == sha(p), 'current owned source binding: ' + str(p))
     check_owned(baseline['owned_before'])
+    check_host()
 
 
 def jobs_and_commands(root, recipes, backend, archive):
@@ -221,6 +286,7 @@ def verifier_bindings():
              'stage.py', 'audit.py', 'contract.py', 'callback_contract.py')]
     paths += [Path(stage.artifacts.__file__), Path(stage.provenance.__file__)]
     paths.append(INVENTORY_TEST)
+    paths.extend(FIXTURES)
     return {str(p.resolve()): sha(p) for p in paths}
 
 
@@ -233,7 +299,7 @@ def validate_build(path):
     archive = Path(q['archive'])
     need(archive.is_absolute() and sha(archive) == q['archive_sha256'], 'aggregate Rust archive hash')
     equal(q['before'], q['after'], 'source before/after freeze')
-    rehash_compiler_bindings(q['before'])
+    rehash_compiler_bindings(q['before'], fresh=True)
     # Independent verifier/executor code is frozen by the seal before native
     # execution, not misclassified as an input to the earlier C++ compilation.
     subset({str(BEFORE): sha(BEFORE), str(archive): sha(archive)}, q['before'], 'archive and baseline compiler freeze')

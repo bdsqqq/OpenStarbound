@@ -8,7 +8,9 @@ application/game qualification is still OPEN; this is not full-engine completion
 
 ## contracts retained
 
-native-off cpp/header reconstruct byte-for-byte to the pre-integration source.
+the original native-off cpp/header reconstructed byte-for-byte before the
+explicit empty-fill UB repair. the current cpp differs only by its zero-size
+memset guard; header reconstruction remains exact. see `EMPTY_FILL.md`.
 selected native code is directly adapted from the accepted opaque blueprint,
 including constructor readiness, allocation-range exclusion updates, per-context
 busy handling, first exception identity and no borrowed-owner refresh on FINISH.

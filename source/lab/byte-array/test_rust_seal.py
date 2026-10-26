@@ -156,6 +156,95 @@ class RustSealTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'binding drift'):
                 seal.rehash_compiler_bindings(bindings)
 
+    def test_exact_native_repair_and_owned_authentication(self):
+        paths, originals = [], {}
+        for i, source in enumerate(seal.OWNED):
+            p = self.root / source.name
+            p.write_bytes(source.read_bytes())
+            paths.append(p)
+            text = p.read_text()
+            if i < 2:
+                text = seal.branches(text, i == 1)[1]
+                if i == 0:
+                    text = text.replace(seal.NATIVE_FILL_EDIT[1], seal.NATIVE_FILL_EDIT[0])
+            elif i == 2:
+                for token in ('option(STAR_USE_RUST_BYTE_ARRAY "Use experimental Rust ByteArray controllers" OFF)\n',
+                              'if(STAR_USE_RUST_BYTE_ARRAY)\n  add_compile_definitions(STAR_USE_RUST_BYTE_ARRAY)\nendif()\n\n',
+                              ' OR STAR_USE_RUST_BYTE_ARRAY'):
+                    text = text.replace(token, '')
+            else:
+                text = text.removesuffix('\nmod byte_array;\npub use byte_array::{star_byte_array_call_count, star_byte_array_run, StarByteArrayHost};\n')
+            originals[p] = text
+        hashes = {str(p): seal.hashlib.sha256(t.encode()).hexdigest() for p, t in originals.items()}
+        with patch.object(seal, 'OWNED', paths), patch.object(seal, 'original', side_effect=originals.__getitem__):
+            seal.check_owned(hashes)
+            for digest in ('0' * 64, False):
+                with self.assertRaisesRegex(ValueError, 'original identity'):
+                    seal.check_owned(dict(hashes, **{str(paths[0]): digest}))
+            paths[0].write_text(paths[0].read_text().replace(seal.NATIVE_FILL_EDIT[1], seal.NATIVE_FILL_EDIT[0]))
+            with self.assertRaisesRegex(ValueError, 'repaired native OFF'):
+                seal.check_owned(hashes)
+            paths[0].write_text(paths[0].read_text().replace(seal.NATIVE_FILL_EDIT[0], seal.NATIVE_FILL_EDIT[1])
+                                .replace('  if (m_size != 0)', '  if (m_size > 1)'))
+            with self.assertRaisesRegex(ValueError, 'repaired native OFF'):
+                seal.check_owned(hashes)
+        with self.assertRaisesRegex(ValueError, 'unique empty fill'):
+            seal.exact_edit(seal.NATIVE_FILL_EDIT[0] * 2, seal.NATIVE_FILL_EDIT)
+
+    def test_exact_host_repair(self):
+        p = self.root / 'host.hpp'
+        p.write_bytes(seal.NEW[0].read_bytes())
+        old = p.read_text().replace(seal.HOST_FILL_EDIT[1], seal.HOST_FILL_EDIT[0]).encode()
+        with patch.object(seal, 'NEW', [p]), patch.object(seal, 'revision_source', return_value=old):
+            seal.check_host()
+            p.write_bytes(old)
+            with self.assertRaisesRegex(ValueError, 'only host empty fill'):
+                seal.check_host()
+            p.write_text(seal.exact_edit(old.decode(), seal.HOST_FILL_EDIT) + '// unrelated\n')
+            with self.assertRaisesRegex(ValueError, 'only host empty fill'):
+                seal.check_host()
+        with patch.object(seal, 'NEW', [p]), patch.object(seal, 'revision_source', return_value=old + b'bad'):
+            with self.assertRaisesRegex(ValueError, 'original host identity'):
+                seal.check_host()
+
+    def test_fixture_receipts_historical_and_fresh(self):
+        p = self.root / 'fixture.cpp'
+        old, current = b'old fixture\n', b'complete accepted fixture\n'
+        hashes = tuple(seal.hashlib.sha256(x).hexdigest() for x in (old, current))
+        p.write_bytes(current)
+        with patch.object(seal, 'FIXTURES', {p: hashes}), \
+             patch.object(seal, 'original', return_value=old.decode()), \
+             patch.object(seal, 'revision_source', return_value=current):
+            for digest in hashes:
+                seal.check_fixtures({str(p): digest}, required=True)
+            seal.check_fixtures({str(p): hashes[1]}, fresh=True, required=True)
+            for digest in (hashes[0], '0' * 64, False):
+                with self.assertRaisesRegex(ValueError, 'recorded fixture'):
+                    seal.check_fixtures({str(p): digest}, fresh=True, required=True)
+            for digest in ('0' * 64, False):
+                with self.assertRaisesRegex(ValueError, 'recorded fixture'):
+                    seal.check_fixtures({str(p): digest})
+            seal.check_fixtures({})
+            with self.assertRaisesRegex(ValueError, 'recorded fixture'):
+                seal.check_fixtures({}, required=True)
+            p.write_bytes(current + b'// unrelated')
+            with self.assertRaisesRegex(ValueError, 'accepted fixture bytes'):
+                seal.check_fixtures({str(p): seal.sha(p)})
+
+    def test_build_fixture_exact_profile_delta(self):
+        current = seal.BUILD_FIXTURE.read_bytes()
+        accepted = current.decode().replace(seal.BUILD_FIXTURE_EDIT[1], seal.BUILD_FIXTURE_EDIT[0]).encode()
+        p = self.root / 'build.sh'; p.write_bytes(current)
+        old = b'historical build fixture\n'
+        hashes = (seal.hashlib.sha256(old).hexdigest(), seal.sha(p))
+        with patch.object(seal, 'BUILD_FIXTURE', p), patch.object(seal, 'FIXTURES', {p: hashes}), \
+             patch.object(seal, 'original', return_value=old.decode()), \
+             patch.object(seal, 'revision_source', return_value=accepted):
+            seal.check_fixtures({str(p): hashes[1]}, fresh=True, required=True)
+            p.write_bytes(current + b'\n# unrelated\n')
+            with self.assertRaisesRegex(ValueError, 'accepted fixture bytes'):
+                seal.check_fixtures({str(p): seal.sha(p)}, fresh=True, required=True)
+
     def test_own_source_and_test_bindings(self):
         code = seal.verifier_bindings()
         self.assertIn(str(Path(__file__).resolve()), code)

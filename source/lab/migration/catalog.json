@@ -20832,6 +20832,36 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/byte-array/empty_fill.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/byte-array/empty_fill_leaf.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/byte-array/empty_fill_run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/byte-array/host_api.h",
       "rule": "laboratories"
     },
@@ -27702,7 +27732,7 @@
     },
     {
       "path": "source/core/StarByteArray.cpp",
-      "sha256": "51a873a5f1324a5d7d8c01f361bcb34bf33210a71543302e62877e4ae2d8b087"
+      "sha256": "97ec850751ff474f6e79fcdcbf25d072c6d9f9a85a8fa8e2f105ced9cc04bb3a"
     },
     {
       "path": "source/core/StarByteArray.hpp",
@@ -27710,7 +27740,7 @@
     },
     {
       "path": "source/core/StarByteArrayHost.hpp",
-      "sha256": "48366f6df8e9fc08b9d96f8a50771979d6ce8a01014adf50b2df6af1936042c9"
+      "sha256": "6c305a9f27f8e943011861360f7a5581e270e49258eeb5de4616163283e7143f"
     },
     {
       "path": "source/core/StarBytes.hpp",
@@ -31765,6 +31795,18 @@
       "sha256": "8cd31d5380e4c8716dbcf327a220c71469b2aa4760f1f4b0f2adf82f33dcbd00"
     },
     {
+      "path": "source/lab/byte-array/empty_fill.cpp",
+      "sha256": "a856182c53ebbaadaccd0fc15574c32ed7b8141a89e433a86f0fd5560836d252"
+    },
+    {
+      "path": "source/lab/byte-array/empty_fill_leaf.cpp",
+      "sha256": "808e50e3d15d909bdbcb6a530e0346cde2715d835802a5e5feed366e6998c966"
+    },
+    {
+      "path": "source/lab/byte-array/empty_fill_run.py",
+      "sha256": "83bbfe4a5ddf76da10da909191c20f1ef4bc35c8b39a731c2dd676e7bd25174b"
+    },
+    {
       "path": "source/lab/byte-array/host_api.h",
       "sha256": "0d7c42bfbd4f39275eaa52cf304e7bc1bdf50de53261b442af32ed98a50a49cd"
     },
@@ -31826,7 +31868,7 @@
     },
     {
       "path": "source/lab/byte-array/rust_seal.py",
-      "sha256": "cbdae6760b4301b0d6a510535e253bf44dd760e1f942b9022278335117957f7b"
+      "sha256": "7ebb78a79eb29c1620aa831da5b949e4d78173dcb3ff546da3693fcb09f1231c"
     },
     {
       "path": "source/lab/byte-array/stage.py",
@@ -31870,7 +31912,7 @@
     },
     {
       "path": "source/lab/byte-array/test_rust_seal.py",
-      "sha256": "9c62474d7ff8f70521821880dd6fee38f27bca80d7b1695d63c8f8bfb1c216ab"
+      "sha256": "6ac8459916d447c3f6610a48c982387ef0b4e9214ec570b173268286ec9f12f2"
     },
     {
       "path": "source/lab/bytes/StarBytes.original.hpp",
@@ -33643,7 +33685,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 283,
+      "oracle/harness": 286,
       "retain-tooling": 20,
       "retained-third-party": 296,
       "rust-candidate": 22,
@@ -33684,14 +33726,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 35,
-      "validation.oracles-harness": 307,
+      "validation.oracles-harness": 310,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1738,
+    "files": 1741,
     "modules": 39,
-    "no_direct_target": 632
+    "no_direct_target": 635
   }
 }

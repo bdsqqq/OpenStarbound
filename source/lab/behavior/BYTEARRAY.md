@@ -1,7 +1,10 @@
 # bytearray application gate — OPEN
 
-implementation: `135d6e03`, default OFF. current actual candidate aborts during
+implementation: `135d6e03`, default OFF. the original r3 candidate aborted during
 asset startup: `ByteArray host protocol failure`, exit -6, before fixture frames.
+a coherent diagnostic traced it to moved-from empty fill (mode14/op15). the
+source-defined no-op repair in `../byte-array/EMPTY_FILL.md` gets r4 through asset
+and database loading; a later title-world protocol rejection is still open.
 `build/behavior/byte-array-actual-r1/candidate/process.log` is authoritative.
 no application qualification or candidate screenshot equivalence is claimed.
 
