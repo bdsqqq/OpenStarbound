@@ -28,7 +28,9 @@ spec.loader.exec_module(removal)
 ROOT = native.ROOT
 BASE = ROOT/'build/file-rust/runner-worker-r1'
 ARCHIVE = ROOT/'build/file-rust/aggregate-r1/release/libstar_engine_ffi.a'
-ARCHIVES = (ARCHIVE, ROOT/'build/behavior/file-combined-r1/candidate/cmake/rust-engine-ffi/aarch64-apple-darwin/release/libstar_engine_ffi.a')
+ARCHIVES = (ARCHIVE,
+    ROOT/'build/behavior/file-combined-r1/candidate/cmake/rust-engine-ffi/aarch64-apple-darwin/release/libstar_engine_ffi.a',
+    ROOT/'build/behavior/file-combined-r2/candidate/cmake/rust-engine-ffi/aarch64-apple-darwin/release/libstar_engine_ffi.a')
 QUALIFIED = ROOT/'build/file-lab/host-worker-r1/final-r4'
 PIN = '3b12952507e944bf7520a7014b23409aede621c1a6a74082badeb41e920ded4e'
 STATUS = 'FINITE_CURRENT_PRODUCTION_FILE_RUST_PASS'
@@ -213,10 +215,16 @@ def hashes(paths):
     return {str(p):sha(p) for p in sorted(paths)}
 
 def dependencies(out,rs):
-    paths = set()
+    paths, resolved = set(), {}
     for name,_,_,source in jobs(out,rs):
         words = shlex.split((out/(name+'.d')).read_text().replace('\\\n',' ').split(':',1)[1])
-        found = {(Path(w) if Path(w).is_absolute() else native.CM/w).resolve() for w in words}
+        # Repeated SDK paths describe one immutable input, not another proof.
+        # Keep this cache scan-local so each independent verification starts fresh.
+        for word in words:
+            if word not in resolved:
+                p = Path(word)
+                resolved[word] = (p if p.is_absolute() else native.CM/p).resolve()
+        found = {resolved[word] for word in words}
         need(source.resolve() in found, 'dependency source membership '+name)
         paths.update(found)
     return paths
@@ -329,19 +337,24 @@ def validate(q,out,archive):
     need(q['bindings']==required==load(out/'before.json')==load(out/'after.json'),'complete before/after closure')
     artifacts=required_artifacts(out,rs,libs,archive,old)
     need(set(q['artifacts'])==set(map(str,artifacts)),'required artifact membership')
-    need(q['artifacts']==hashes(artifacts),'artifact bytes')
+    artifact_bytes = hashes(artifacts)
+    need(q['artifacts']==artifact_bytes,'artifact bytes')
     pre=base_artifacts(out,rs,libs,archive,old)
     need(load(out/'preexecute.json')==hashes(pre),'complete preexecute membership/bytes')
     expected=plan(out,rs,libs,archive)
     need([(c['name'],c['command']) for c in q['commands']]==expected,'complete ordered argv')
     need(q['commands']==load(out/'commands.json'),'commands mirror')
     stdin={'kind':'pipe','size':0,'sha256':hashlib.sha256(b'').hexdigest()}
+    # Every planned executable is already in the independently reconstructed
+    # source/artifact closure. Use those current bytes instead of rehashing the
+    # same compiler hundreds of times; acquisition still hashes each invocation.
+    current_bytes = {**required, **artifact_bytes}
     for c in q['commands']:
         n=c['name'];need(c==load(out/(n+'.command.json')),'command mirror '+n)
         need(type(c['returncode']) is int and c['returncode']==0,'normal exit')
         need(c['stdin']==stdin,'owned empty stdin')
         exe=Path(c['command'][0]).resolve()
-        need(c['executable']==str(exe) and c['before']==c['after']==sha(exe),'command executable')
+        need(str(exe) in current_bytes and c['executable']==str(exe) and c['before']==c['after']==current_bytes[str(exe)],'command executable')
         for stream in ('stdout','stderr'):need(c[stream]==sha(out/(n+'.'+stream)),'stream bytes')
     link_membership(out,expected,archive);observations(out,rs)
     return q

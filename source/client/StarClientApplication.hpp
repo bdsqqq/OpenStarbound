@@ -148,6 +148,7 @@ private:
   Json m_behaviorHostAddressProof;
   bool m_behaviorZstdRoom = false;
   Json m_behaviorZstdProof;
+  ImageConstPtr m_behaviorZstdImage;
   bool m_behaviorCompressionRoom = false;
   Json m_behaviorCompressionProof;
   bool m_behaviorRandomMwcRoom = false;

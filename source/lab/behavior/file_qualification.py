@@ -23,12 +23,12 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[3]
 BASE = ROOT / 'build/behavior'
 OWN = BASE / 'file-qualification-tools-r1'
-BUILD = BASE / 'file-combined-r1'
+BUILD = BASE / 'file-combined-r2'
 ARCHIVE = BUILD / 'candidate/cmake/rust-engine-ffi/aarch64-apple-darwin/release/libstar_engine_ffi.a'
-KERNEL = ROOT / 'build/file-rust/runner-worker-r1/cmake-production-r1/report.json'
+KERNEL = ROOT / 'build/file-rust/runner-worker-r1/cmake-production-r2/report.json'
 RUNNER = ROOT / 'source/lab/file/production/runner.py'
-ACTUAL = BASE / 'file-actual-report.json'
-AUX = BASE / 'file-auxiliary-r1'
+ACTUAL = BASE / 'file-actual-report-r2.json'
+AUX = BASE / 'file-auxiliary-r2'
 HISTORY = BASE / 'string-view-actual-report.json'
 ACCEPTED = BASE / 'string-view-qualification-tools-r1/full-replay-r1/qualification.json'
 ACCEPTED_SHA = '2b3143774f57a38b7b08c40b0349a7fe5b74e97f7ead0d657252d5c9305d5c6c'
@@ -121,7 +121,7 @@ def stages(scene):
 
 
 def matrix_root(scene):
-    return BASE / ('file-actual-r1' if scene == 'buffer-room' else 'file-combined-' + scene + '-r1')
+    return BASE / ('file-actual-r2' if scene == 'buffer-room' else 'file-combined-' + scene + '-r2')
 
 
 def rgba(path):

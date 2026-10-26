@@ -3298,6 +3298,10 @@ void ClientApplication::prepareBehaviorZstdFrame() {
     round(a.get(), b.get(), String(bulk), "a-to-b");
     ZstdLabActive = nullptr;
     auto image = m_root->assets()->image(receivedPath);
+    // The one-decode fixture must own its original image through consumption.
+    // Otherwise ordinary cache cleanup may evict it before the centered drawable
+    // asks for dimensions/texture and the unchanged repeated-decode guard fires.
+    m_behaviorZstdImage = image;
     auto imageProof = zstdLabImageProof();
     if (!imageProof.contains("decode") || !imageProof.contains("rgbaHex") || image->size() != Vec2U(16, 16))
       throw StarException("BehaviorLab: Zstd normal Assets decode missing");

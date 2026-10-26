@@ -53,7 +53,12 @@ for backend in reference candidate; do
   base="$root/build/behavior"
   if [[ "$mode" == io-device-combined || "$mode" == byte-array-combined || "$mode" == string-view-combined || "$mode" == file-combined ]]; then base="$base/$mode"; fi
   if [[ "$mode" == byte-array-combined ]]; then base="$base-r7"; fi
-  if [[ "$mode" == string-view-combined || "$mode" == file-combined ]]; then base="$base-r1"; fi
+  if [[ "$mode" == string-view-combined ]]; then base="$base-r1"; fi
+  if [[ "$mode" == file-combined ]]; then
+    generation="${STAR_BEHAVIOR_FILE_GENERATION:-1}"
+    [[ "$generation" =~ ^[1-9][0-9]*$ ]] || { printf '%s\n' 'invalid File build generation' >&2; exit 2; }
+    base="$base-r$generation"
+  fi
   if [[ "$backend" == candidate ]]; then
     case "$mode" in
       lighting) rust=ON ;;

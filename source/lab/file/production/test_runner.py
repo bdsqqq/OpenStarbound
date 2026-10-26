@@ -12,6 +12,19 @@ class RunnerContracts(unittest.TestCase):
         cls.old=r.authenticate();cls.rs,cls.libs=r.recipes()
         cls.out=r.BASE/'test-plan-only'
 
+    def test_dependency_resolution_is_unique_per_scan_not_across_scans(self):
+        source, header = Path('/frozen/source.cpp'), Path('/frozen/shared.hpp')
+        jobs = [('a', None, [], source), ('b', None, [], source)]
+        data = 'object: /frozen/source.cpp /frozen/shared.hpp /frozen/shared.hpp\n'
+        for _ in range(2):
+            with patch.object(r, 'jobs', return_value=jobs), patch.object(Path, 'read_text', return_value=data), \
+                    patch.object(Path, 'resolve', autospec=True, side_effect=lambda p: p) as resolve:
+                self.assertEqual(r.dependencies(self.out, self.rs), {source, header})
+                self.assertEqual(sum(call.args == (header,) for call in resolve.call_args_list), 1)
+        with patch.object(r, 'jobs', return_value=jobs), patch.object(Path, 'read_text', return_value='object: /frozen/shared.hpp\n'):
+            with self.assertRaisesRegex(ValueError, 'dependency source membership'):
+                r.dependencies(self.out, self.rs)
+
     def test_exact_foreign_throw_omission(self):
         g=r.generated(self.old)
         self.assertEqual(g['protocol-rust.cpp'],r.rename(self.old['protocol.cpp'].replace(r.OMITTED,'')))
