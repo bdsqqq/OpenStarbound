@@ -12,7 +12,7 @@ def gate(ext,raw,ref):
  frozen=subprocess.check_output(['git','show',REV+':source/core/StarIODevice.'+ext],cwd=ROOT).decode()
  current=(ROOT/f'source/core/StarIODevice.{ext}').read_bytes().decode()
  if (HERE/f'StarIODevice.original.{ext}').read_bytes().decode()!=frozen or (HERE/f'StarIODevice.reference.{ext}').read_bytes().decode()!=adapt(frozen,ext):raise ValueError('raw/reference byte provenance')
- 
+
  if current!=frozen or raw!=frozen or ref!=adapt(frozen,ext):raise ValueError('source provenance')
 
 from model import check as anchors

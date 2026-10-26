@@ -31320,7 +31320,7 @@
     },
     {
       "path": "source/lab/io-device/run.py",
-      "sha256": "8b20fe628c5f5c8f647746eaa7da32a447ed2a3127c7bc05bb23bd0fc4b1bce0"
+      "sha256": "19a9cb72ca5450916b8fa133791818995f0558c65015a934487f036efb956efd"
     },
     {
       "path": "source/lab/io-device/verify_receipts.py",
