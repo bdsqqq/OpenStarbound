@@ -37,29 +37,94 @@ def mask_cpp(text):
     return ''.join(result)
 
 
+def digest(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+ORIGINAL_SHA='401858755ca3694e6ac4f07e44808a268c4b9caa2a75cec7d8db32f2176086c2'
+HEADER_SHA='fa034ae7c45748377a00775ac3b4390b4f21d54835e8eac063e44a4e8289e9af'
+WRAPPER_SHA='00e312e46575079e8e997b870e74544e7558b84c7b6badd68c4bc53eff7ee8f3'
+SELECTED_RENAMES=(('FilePrototype','FileRust'), ('"native.hpp"','"StarFileHost.hpp"'),
+                  ('file_host_run','star_file_run'), ('file_host_count','star_file_call_count'),
+                  ('file_host_fn','StarFileHost'))
+
+
+def definitions(text):
+    """Column-zero File definitions only; lexical masking preserves offsets."""
+    masked=mask_cpp(text)
+    lines=text.splitlines(keepends=True);masked_lines=masked.splitlines(keepends=True)
+    offsets=[];offset=0
+    for line in lines:offsets.append(offset);offset+=len(line)
+    rows=[];consumed=0
+    for i,line in enumerate(masked_lines):
+        if offsets[i]<consumed:continue
+        if not re.match(r'^(?!\s)(?:[^\n]*\s)?File::~?\w+\(',line):continue
+        opening=masked.find('{',offsets[i]);semicolon=masked.find(';',offsets[i])
+        if opening<0 or 0<=semicolon<opening:continue
+        depth=1;end=opening+1
+        while end<len(masked) and depth:
+            depth+=(masked[end]=='{')-(masked[end]=='}');end+=1
+        if depth:raise ValueError('unclosed definition')
+        consumed=end
+        j=text.count('\n',0,end-1)
+        body=''.join(lines[i:j+1])
+        rows.append(dict(line=i+1,endLine=j+1,signature=lines[i].strip(),sha256=digest(body.encode())))
+    return rows
+
+
+def conditional(text,root):
+    # This is an explicit production envelope, not a general preprocessor.
+    # Reject other selectors/nesting rather than granting a source-drift waiver.
+    directives=list(re.finditer(r'^\s*#\s*(if\w*|else|elif|endif)\b[^\n]*',mask_cpp(text),re.M))
+    if not directives:return None
+    expected=['#ifdef STAR_USE_RUST_FILE','#else','#endif']
+    if [m.group().strip() for m in directives]!=expected:
+        raise ValueError('unsupported File selector branches')
+    if not text.startswith(expected[0]+'\n') or not text.endswith('\n#endif\n'):
+        raise ValueError('invalid outer File selector')
+    # Exactly one separator newline belongs to the envelope, not either input.
+    selected,native=text[len(expected[0])+1:-len('#endif\n')].split('#else\n')
+    if not selected.endswith('\n') or not native.endswith('\n'):
+        raise ValueError('missing branch separator')
+    selected=selected[:-1];native=native[:-1]
+    lab=root/'source/lab/file'
+    original=(lab/'StarFile.original.cpp').read_bytes()
+    wrappers=(lab/'host/wrappers.cpp').read_bytes()
+    header=(root/'source/core/StarFile.hpp').read_bytes()
+    for label,data,pin in [('original',original,ORIGINAL_SHA),('header',header,HEADER_SHA),('qualified wrappers',wrappers,WRAPPER_SHA)]:
+        if digest(data)!=pin:raise ValueError(label+' fidelity drift')
+    if native.encode()!=original:raise ValueError('native fallback fidelity drift')
+    renamed=wrappers.decode()
+    for old,new in SELECTED_RENAMES:renamed=renamed.replace(old,new)
+    if selected!=renamed:raise ValueError('selected wrapper fidelity drift')
+    logical=definitions(original.decode());physical=definitions(text)
+    selected_rows=definitions(selected);native_rows=definitions(native)
+    if (len(logical),len(physical),len(selected_rows),len(native_rows))!=(34,68,34,34):
+        raise ValueError('missing File alternative')
+    if [r['signature'] for r in selected_rows]!=[r['signature'] for r in logical]:
+        raise ValueError('File mode order drift')
+    return logical,dict(
+        schemaVersion=1,selector='STAR_USE_RUST_FILE',
+        logicalSource='source/lab/file/StarFile.original.cpp',logicalSourceSha256=ORIGINAL_SHA,
+        physicalSource='source/core/StarFile.cpp',physicalSourceSha256=digest(text.encode()),
+        headerSource='source/core/StarFile.hpp',headerSha256=HEADER_SHA,
+        qualifiedWrapperSource='source/lab/file/host/wrappers.cpp',qualifiedWrapperSha256=WRAPPER_SHA,
+        physicalDefinitions=68,logicalDefinitions=34,selectedAlternatives=34,
+        alternatives=[dict(mode=i,selected=physical[i],native=physical[i+34]) for i in range(34)])
+
+
 def generate(root=ROOT):
-    result={}
+    result={};branches=None
     for name,count in COUNTS.items():
-        text=(root/'source/core'/name).read_text();masked=mask_cpp(text)
-        lines=text.splitlines(keepends=True);masked_lines=masked.splitlines(keepends=True)
-        offsets=[];offset=0
-        for line in lines:offsets.append(offset);offset+=len(line)
-        rows=[]
-        # These frozen TUs use column-zero, non-template File definitions. The
-        # compiler-symbol check independently challenges this bounded grammar.
-        for i,line in enumerate(masked_lines):
-            if not re.match(r'^(?!\s)(?:[^\n]*\s)?File::~?\w+\(',line):continue
-            opening=masked.find('{',offsets[i]);semicolon=masked.find(';',offsets[i])
-            if opening<0 or 0<=semicolon<opening:continue
-            depth=1;end=opening+1
-            while end<len(masked) and depth:
-                depth+=(masked[end]=='{')-(masked[end]=='}');end+=1
-            if depth:raise ValueError('unclosed definition')
-            j=text.count('\n',0,end-1)
-            body=''.join(lines[i:j+1])
-            rows.append(dict(line=i+1,endLine=j+1,signature=lines[i].strip(),sha256=hashlib.sha256(body.encode()).hexdigest()))
+        text=(root/'source/core'/name).read_bytes().decode()
+        branch=conditional(text,root) if name=='StarFile.cpp' else None
+        if branch:rows,branches=branch
+        else:rows=definitions(text)
         if len(rows)!=count:raise ValueError((name,len(rows),count))
         result[name]=rows
+    # Legacy keys remain frozen-original coordinates: host/generate.py slices
+    # StarFile.original.cpp with them. Physical alternatives must never replace them.
+    if branches:result['_conditional']=branches
     return result
 
 

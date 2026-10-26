@@ -568,5 +568,532 @@
       "signature": "void File::resize(void* f, StreamOffset size) {",
       "sha256": "4388461cbf511030cf7a5ef506641971f225ee3c0b2275831b4d954348022bfa"
     }
-  ]
+  ],
+  "_conditional": {
+    "schemaVersion": 1,
+    "selector": "STAR_USE_RUST_FILE",
+    "logicalSource": "source/lab/file/StarFile.original.cpp",
+    "logicalSourceSha256": "401858755ca3694e6ac4f07e44808a268c4b9caa2a75cec7d8db32f2176086c2",
+    "physicalSource": "source/core/StarFile.cpp",
+    "physicalSourceSha256": "6ec1c03f0c505991e9e1e17a33af86dfd6f0ffc1fc766f324fb3478a603fdca4",
+    "headerSource": "source/core/StarFile.hpp",
+    "headerSha256": "fa034ae7c45748377a00775ac3b4390b4f21d54835e8eac063e44a4e8289e9af",
+    "qualifiedWrapperSource": "source/lab/file/host/wrappers.cpp",
+    "qualifiedWrapperSha256": "00e312e46575079e8e997b870e74544e7558b84c7b6badd68c4bc53eff7ee8f3",
+    "physicalDefinitions": 68,
+    "logicalDefinitions": 34,
+    "selectedAlternatives": 34,
+    "alternatives": [
+      {
+        "mode": 0,
+        "selected": {
+          "line": 8,
+          "endLine": 20,
+          "signature": "void File::makeDirectoryRecursive(String const& fileName) {",
+          "sha256": "4056916186e2bd76c96382b09d0c50f52eb801362bd1af4487f9eab3141f01ba"
+        },
+        "native": {
+          "line": 460,
+          "endLine": 466,
+          "signature": "void File::makeDirectoryRecursive(String const& fileName) {",
+          "sha256": "280450347475f6c17bddba3a9452b0bb487f9512fc0e6db32c9f7d94b2f3ec5b"
+        }
+      },
+      {
+        "mode": 1,
+        "selected": {
+          "line": 22,
+          "endLine": 45,
+          "signature": "void File::removeDirectoryRecursive(String const& fileName) {",
+          "sha256": "aa76519d1db21119056805b472f73f6a69f44341747ed05dd0f3565ffdc183de"
+        },
+        "native": {
+          "line": 468,
+          "endLine": 486,
+          "signature": "void File::removeDirectoryRecursive(String const& fileName) {",
+          "sha256": "38da3d6607f1d33c1b2666e2399389c6c9966d0d8463b8a6f28d934a979aba55"
+        }
+      },
+      {
+        "mode": 2,
+        "selected": {
+          "line": 47,
+          "endLine": 59,
+          "signature": "void File::copy(String const& source, String const& target) {",
+          "sha256": "fbedb2431e6555b9682ed1454036c49e15f29e0a4f53feb55b112e3475e34dc0"
+        },
+        "native": {
+          "line": 488,
+          "endLine": 499,
+          "signature": "void File::copy(String const& source, String const& target) {",
+          "sha256": "cc1899269252336abf47ec0289150bbc6887196bc2dac4a2b95e77779bffc53b"
+        }
+      },
+      {
+        "mode": 3,
+        "selected": {
+          "line": 61,
+          "endLine": 70,
+          "signature": "FilePtr File::open(const String& filename, IOMode mode) {",
+          "sha256": "648be2c80de8bc980a2c734101331041d06a94235d6c0135dd468cbbbe65157d"
+        },
+        "native": {
+          "line": 501,
+          "endLine": 505,
+          "signature": "FilePtr File::open(const String& filename, IOMode mode) {",
+          "sha256": "d906b8035ec98f007d80f0f19d0a2e1999a077f3a03d6d736d4593de07abdd1b"
+        }
+      },
+      {
+        "mode": 4,
+        "selected": {
+          "line": 72,
+          "endLine": 83,
+          "signature": "ByteArray File::readFile(String const& filename) {",
+          "sha256": "240037f7b53498c5840325f5f7e8c7882af65db951dc8e1303fed3b4941cb335"
+        },
+        "native": {
+          "line": 507,
+          "endLine": 517,
+          "signature": "ByteArray File::readFile(String const& filename) {",
+          "sha256": "cefd7c759f7935e6b96110197ca70275227354f1d3b477acd02f155dc387ca15"
+        }
+      },
+      {
+        "mode": 5,
+        "selected": {
+          "line": 85,
+          "endLine": 96,
+          "signature": "String File::readFileString(String const& filename) {",
+          "sha256": "5570e2c9d16e04e7cc31fa0e5a09e2d6de0171005f7de2f591f4149a3dbc4521"
+        },
+        "native": {
+          "line": 519,
+          "endLine": 530,
+          "signature": "String File::readFileString(String const& filename) {",
+          "sha256": "de6cfea01b6288b9d4c87b42685d5a3cfea680314c1e20b8bb1b687b4487eac5"
+        }
+      },
+      {
+        "mode": 6,
+        "selected": {
+          "line": 98,
+          "endLine": 107,
+          "signature": "StreamOffset File::fileSize(String const& filename) {",
+          "sha256": "27b91cc9d8c2c5123597244b363888572bc211ef20f1d186c28b2c7252260d8b"
+        },
+        "native": {
+          "line": 532,
+          "endLine": 534,
+          "signature": "StreamOffset File::fileSize(String const& filename) {",
+          "sha256": "6f67c53b98cdcaf3faf70301662f5f159052a467d82abb6621b5d18272d2b2e0"
+        }
+      },
+      {
+        "mode": 7,
+        "selected": {
+          "line": 109,
+          "endLine": 118,
+          "signature": "void File::writeFile(char const* data, size_t len, String const& filename) {",
+          "sha256": "36ba7464d04153ec542a08be2c26df6173ef12def5478961f1fe12451461e550"
+        },
+        "native": {
+          "line": 536,
+          "endLine": 539,
+          "signature": "void File::writeFile(char const* data, size_t len, String const& filename) {",
+          "sha256": "9f708d921cc4d81f4bba675a1ddf8a0bb674b4254e3c9850a3739c7e78421b84"
+        }
+      },
+      {
+        "mode": 8,
+        "selected": {
+          "line": 120,
+          "endLine": 129,
+          "signature": "void File::writeFile(ByteArray const& data, String const& filename) {",
+          "sha256": "dbba2cb817465f28c7207adcabf09970d67d6c1be5cb4847f5391b2bd9e673df"
+        },
+        "native": {
+          "line": 541,
+          "endLine": 543,
+          "signature": "void File::writeFile(ByteArray const& data, String const& filename) {",
+          "sha256": "de926f9b194f9466564a4654ebb282b838fb4e89cdc9a0ffc5f16b5475bffcef"
+        }
+      },
+      {
+        "mode": 9,
+        "selected": {
+          "line": 131,
+          "endLine": 140,
+          "signature": "void File::writeFile(String const& data, String const& filename) {",
+          "sha256": "a81d77f439c5eb154b40c3d93b9bd2fe74e6290d286ee1ac9668d2f27869628b"
+        },
+        "native": {
+          "line": 545,
+          "endLine": 547,
+          "signature": "void File::writeFile(String const& data, String const& filename) {",
+          "sha256": "3f4e190aaf8711f1592f01d453f6d8fb3721b1ddc4bcab7252423b00d9cd1c4d"
+        }
+      },
+      {
+        "mode": 10,
+        "selected": {
+          "line": 142,
+          "endLine": 151,
+          "signature": "void File::overwriteFileWithRename(ByteArray const& data, String const& filename, String const& newSuffix) {",
+          "sha256": "d80a8ff532e91559a8791318dde3a045aca85b3084912df442e45220c73fd8e6"
+        },
+        "native": {
+          "line": 549,
+          "endLine": 551,
+          "signature": "void File::overwriteFileWithRename(ByteArray const& data, String const& filename, String const& newSuffix) {",
+          "sha256": "da9dcedce4848d68c5dc563b57a1bb5cb8be743aa46c9cad8a2b94bf3e794275"
+        }
+      },
+      {
+        "mode": 11,
+        "selected": {
+          "line": 153,
+          "endLine": 162,
+          "signature": "void File::overwriteFileWithRename(String const& data, String const& filename, String const& newSuffix) {",
+          "sha256": "ebf0677224dceda16a5c62d48ecaaf01be8668d1f8ba49e09dc5151e8db588a5"
+        },
+        "native": {
+          "line": 553,
+          "endLine": 555,
+          "signature": "void File::overwriteFileWithRename(String const& data, String const& filename, String const& newSuffix) {",
+          "sha256": "f981bd283c91f676fc8c165ca541e958fdb1413f75b7576d625545c3ee8c9434"
+        }
+      },
+      {
+        "mode": 12,
+        "selected": {
+          "line": 164,
+          "endLine": 181,
+          "signature": "void File::backupFileInSequence(String const& initialFile, String const& targetFile, unsigned maximumBackups, String const& backupExtensionPrefix) {",
+          "sha256": "e30edbb857a527625ed8a50179f728933b9af2cdc700db14d29bc7634dbac205"
+        },
+        "native": {
+          "line": 557,
+          "endLine": 567,
+          "signature": "void File::backupFileInSequence(String const& initialFile, String const& targetFile, unsigned maximumBackups, String const& backupExtensionPrefix) {",
+          "sha256": "d1416845e322c3e54012e56d911705015d5d107be5011824dc33d1b90ea6818b"
+        }
+      },
+      {
+        "mode": 13,
+        "selected": {
+          "line": 183,
+          "endLine": 192,
+          "signature": "void File::backupFileInSequence(String const& targetFile, unsigned maximumBackups, String const& backupExtensionPrefix) {",
+          "sha256": "a52e2813365ae1ea19d251763510eddabc429d8671b052e301f54219c6e93f15"
+        },
+        "native": {
+          "line": 569,
+          "endLine": 571,
+          "signature": "void File::backupFileInSequence(String const& targetFile, unsigned maximumBackups, String const& backupExtensionPrefix) {",
+          "sha256": "af7d4093fab659aac135373cee4f473e28cbc582b35a48bd3d2b3eee43263233"
+        }
+      },
+      {
+        "mode": 14,
+        "selected": {
+          "line": 194,
+          "endLine": 204,
+          "signature": "File::File()",
+          "sha256": "fb33f029ac53b0113c21884e375259c034ce1ab1ef230e8d40d93f5da3b9a0f8"
+        },
+        "native": {
+          "line": 573,
+          "endLine": 576,
+          "signature": "File::File()",
+          "sha256": "471eee3b5d58d7dac30fb8313eebce2edad12d9d444c917898d9a9afedd89a71"
+        }
+      },
+      {
+        "mode": 15,
+        "selected": {
+          "line": 206,
+          "endLine": 216,
+          "signature": "File::File(String filename)",
+          "sha256": "0beddf69bfc3ee317a57a2372e9373043d22cb343fbcb585a2c5afff4ee518d3"
+        },
+        "native": {
+          "line": 578,
+          "endLine": 579,
+          "signature": "File::File(String filename)",
+          "sha256": "1f8835296ee8567929af1cce12a2b582f5a6c0fde09e31892feb8b028a75e304"
+        }
+      },
+      {
+        "mode": 16,
+        "selected": {
+          "line": 218,
+          "endLine": 227,
+          "signature": "File::~File() {",
+          "sha256": "9b4fbd48e965aec0e58513bc0270006b2b4968741bed20dfa415060795843c76"
+        },
+        "native": {
+          "line": 581,
+          "endLine": 583,
+          "signature": "File::~File() {",
+          "sha256": "5e300bf067395dfe1215916605cd97b33a3e7164e91e2a989a5d23dc1fecd2fa"
+        }
+      },
+      {
+        "mode": 17,
+        "selected": {
+          "line": 229,
+          "endLine": 240,
+          "signature": "StreamOffset File::pos() {",
+          "sha256": "be265a787f26cd12714256791dadbccc99dab71a7c1b8e3d2359fc5043197acd"
+        },
+        "native": {
+          "line": 585,
+          "endLine": 590,
+          "signature": "StreamOffset File::pos() {",
+          "sha256": "56503fe191eb05b2c6b222953c215aa98b3705a2f4467a967eaa59795bfa3742"
+        }
+      },
+      {
+        "mode": 18,
+        "selected": {
+          "line": 242,
+          "endLine": 253,
+          "signature": "void File::seek(StreamOffset offset, IOSeek seekMode) {",
+          "sha256": "79c224b0d676281ad4d7184ec203140a21ddc97e6a9fb326cc590b02c08d89b1"
+        },
+        "native": {
+          "line": 592,
+          "endLine": 597,
+          "signature": "void File::seek(StreamOffset offset, IOSeek seekMode) {",
+          "sha256": "7fec171567d5179f949d38c2652a5526749df7db7ac79efc95deeecc2b10f183"
+        }
+      },
+      {
+        "mode": 19,
+        "selected": {
+          "line": 255,
+          "endLine": 264,
+          "signature": "StreamOffset File::size() {",
+          "sha256": "d6de6e7b436c82433c66232f2d2e25ba9cb8e8229ba002325c21f5dd70bb75b3"
+        },
+        "native": {
+          "line": 599,
+          "endLine": 601,
+          "signature": "StreamOffset File::size() {",
+          "sha256": "c2979ac60a5ae17eba19a8c25b70ef4efbe5b5e7853582bf4693f369cef10583"
+        }
+      },
+      {
+        "mode": 20,
+        "selected": {
+          "line": 266,
+          "endLine": 277,
+          "signature": "bool File::atEnd() {",
+          "sha256": "8d2fe1abde65c79f17f07c3f45ae0dbf36526456a89e674059bd3134b2e1cedc"
+        },
+        "native": {
+          "line": 603,
+          "endLine": 608,
+          "signature": "bool File::atEnd() {",
+          "sha256": "4ea02b8a860c13b62fca2ad58b54bfbae43876f5e90038e466152533b8865feb"
+        }
+      },
+      {
+        "mode": 21,
+        "selected": {
+          "line": 279,
+          "endLine": 292,
+          "signature": "size_t File::read(char* data, size_t len) {",
+          "sha256": "a532921344bfaf40c3b569b747b6b40790dcc68b875367d984390ee4fe2c4fac"
+        },
+        "native": {
+          "line": 610,
+          "endLine": 618,
+          "signature": "size_t File::read(char* data, size_t len) {",
+          "sha256": "b89119335f0373b283381c1b176157c381d100d170309507f41641fbbb8df77d"
+        }
+      },
+      {
+        "mode": 22,
+        "selected": {
+          "line": 294,
+          "endLine": 307,
+          "signature": "size_t File::write(const char* data, size_t len) {",
+          "sha256": "2d4fb2655edfe3475ec722678854affd3d0d879bb5284de5d4e6d26b9423d609"
+        },
+        "native": {
+          "line": 620,
+          "endLine": 628,
+          "signature": "size_t File::write(const char* data, size_t len) {",
+          "sha256": "f247be8310d5a88ec4514a2906c218b54214b963ed63d4d81199e7d2de32d73b"
+        }
+      },
+      {
+        "mode": 23,
+        "selected": {
+          "line": 309,
+          "endLine": 318,
+          "signature": "size_t File::readAbsolute(StreamOffset readPosition, char* data, size_t len) {",
+          "sha256": "41b252d8ed2f1d96fcf29ff3c3298281c1080e698832c15c8ce0ae9656e5f065"
+        },
+        "native": {
+          "line": 630,
+          "endLine": 632,
+          "signature": "size_t File::readAbsolute(StreamOffset readPosition, char* data, size_t len) {",
+          "sha256": "10155a977b7aa71e041cdb8fbd1c064df1724114bb86b2b2342a21670aecc8fc"
+        }
+      },
+      {
+        "mode": 24,
+        "selected": {
+          "line": 320,
+          "endLine": 329,
+          "signature": "size_t File::writeAbsolute(StreamOffset writePosition, char const* data, size_t len) {",
+          "sha256": "ffc62390e628493c05c28eb90031097d748cc4f45f84c39be4f395cd5032f29c"
+        },
+        "native": {
+          "line": 634,
+          "endLine": 636,
+          "signature": "size_t File::writeAbsolute(StreamOffset writePosition, char const* data, size_t len) {",
+          "sha256": "2c64052b3e6ae58ce9aa0af790ba4aaf61c7246c0fde86e57530870b81398987"
+        }
+      },
+      {
+        "mode": 25,
+        "selected": {
+          "line": 331,
+          "endLine": 340,
+          "signature": "String File::fileName() const {",
+          "sha256": "baf3751b05f12c7247dc1c66a907339fb5025d287f6586df4a0f2e5f24531b47"
+        },
+        "native": {
+          "line": 638,
+          "endLine": 640,
+          "signature": "String File::fileName() const {",
+          "sha256": "5e9a2608a71dfb0fa3e09aa7a29add9cb24e3f9e581f7e56e8329ccb22325fd6"
+        }
+      },
+      {
+        "mode": 26,
+        "selected": {
+          "line": 342,
+          "endLine": 353,
+          "signature": "void File::setFilename(String filename) {",
+          "sha256": "cae5aeb4cb36cc76b7d257a922636d653417644c80fcd04a82c911a849089acc"
+        },
+        "native": {
+          "line": 642,
+          "endLine": 646,
+          "signature": "void File::setFilename(String filename) {",
+          "sha256": "6b5c1ff88154c3ebdd3278c8ffc5543a8725fc20f4e76594e7dca7209e8b88cc"
+        }
+      },
+      {
+        "mode": 27,
+        "selected": {
+          "line": 355,
+          "endLine": 367,
+          "signature": "void File::remove() {",
+          "sha256": "153947f974ade7cc941e490bcfe33ad19c64c9e03a6926d03d56b9dc263b0d7c"
+        },
+        "native": {
+          "line": 648,
+          "endLine": 653,
+          "signature": "void File::remove() {",
+          "sha256": "9a750808e69d7a4077b419c8b231c5a88a44e0fa26e87c0304ce1dc9407678a2"
+        }
+      },
+      {
+        "mode": 28,
+        "selected": {
+          "line": 369,
+          "endLine": 381,
+          "signature": "void File::resize(StreamOffset s) {",
+          "sha256": "018d51afad1cdb8b0f59d896d523333eae9d5476f951243cca987f977dbf2de3"
+        },
+        "native": {
+          "line": 655,
+          "endLine": 666,
+          "signature": "void File::resize(StreamOffset s) {",
+          "sha256": "7da6861d751d2abdf52d1905258e047bccba17fd79e2b648df89f2012a8e62c8"
+        }
+      },
+      {
+        "mode": 29,
+        "selected": {
+          "line": 383,
+          "endLine": 394,
+          "signature": "void File::sync() {",
+          "sha256": "6d0b04e34d14820b38ff5f130245f08e82bbe67e51f1668f0de6583c723dd984"
+        },
+        "native": {
+          "line": 668,
+          "endLine": 673,
+          "signature": "void File::sync() {",
+          "sha256": "89df98705635defd6fb586b8a8398d1a03e178bc85e16593f27985b6ae25ac46"
+        }
+      },
+      {
+        "mode": 30,
+        "selected": {
+          "line": 396,
+          "endLine": 409,
+          "signature": "void File::open(IOMode m) {",
+          "sha256": "754c4d6761cb61850610db3f2a1f3a150eecdfba35dfc84ae4821af585a6da25"
+        },
+        "native": {
+          "line": 675,
+          "endLine": 682,
+          "signature": "void File::open(IOMode m) {",
+          "sha256": "ad974b5f2b445bf36b5b0cf3da7811c7b1faf1f20d363d97c06802997510c330"
+        }
+      },
+      {
+        "mode": 31,
+        "selected": {
+          "line": 411,
+          "endLine": 423,
+          "signature": "void File::close() {",
+          "sha256": "7bcaab0fead3de9417e8f5e3f4e98ac9af7ca88628984c67e4172e286955b49e"
+        },
+        "native": {
+          "line": 684,
+          "endLine": 689,
+          "signature": "void File::close() {",
+          "sha256": "39ba62df6b12e5db7b30fade5c07755fdb52ac06b95f9784a9c826fe4b2d814f"
+        }
+      },
+      {
+        "mode": 32,
+        "selected": {
+          "line": 425,
+          "endLine": 436,
+          "signature": "String File::deviceName() const {",
+          "sha256": "383a06c12a5ece6a06436f80002d116131cb3e755c800016774b7fcc09203371"
+        },
+        "native": {
+          "line": 691,
+          "endLine": 696,
+          "signature": "String File::deviceName() const {",
+          "sha256": "edc7837c39242fda8353881eef2ce7344cfb27443cec01892fb4d6dd8d490fd0"
+        }
+      },
+      {
+        "mode": 33,
+        "selected": {
+          "line": 438,
+          "endLine": 449,
+          "signature": "IODevicePtr File::clone() {",
+          "sha256": "4c89c9c38966e3d37552fbe4c3c45fb5d06ada6799977a1ed38214201adb7a4c"
+        },
+        "native": {
+          "line": 698,
+          "endLine": 707,
+          "signature": "IODevicePtr File::clone() {",
+          "sha256": "b4688daa7a3842e79d71386199e902c465ce25fa050e85766cf8f40483958150"
+        }
+      }
+    ]
+  }
 }
