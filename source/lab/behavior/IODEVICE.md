@@ -1,6 +1,6 @@
 # actual IODevice consumer qualification
 
-implementation: `45aaaba9`, default OFF. finite 22-controller evidence lives in `source/lab/io-device/RUST.md`; it is not this application gate. the migration-plan handoff records current completion status.
+status: **finite application PASS**, 2026-10-26. implementation `45aaaba9`, actual-consumer fixture `e0f60d24`, default OFF. `build/behavior/io-device-actual-r1/qualification.json` independently binds 19 current matrices, 19 historical sequences / 57 unchanged RGBA frames, 528 inputs/artifacts, the game-linked archive, PCM/12 CLI executions and actual-receipt controls. all 19 current baseline/repeat and baseline/candidate pairs were replayed independently. parent inspected the three IODevice/Buffer frames and six HostAddress/DataStream frames. finite 22-controller evidence lives in `source/lab/io-device/RUST.md`.
 
 ## exercised pipeline
 
