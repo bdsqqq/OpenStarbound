@@ -8,3 +8,5 @@ source/lab/text-scan/StarText.original.cpp -whitespace
 source/lab/text-scan/StarText.reference.cpp -whitespace
 source/lab/zstd/StarZSTDCompression.original.cpp -whitespace
 source/lab/zstd/StarZSTDCompression.reference.cpp -whitespace
+source/lab/path-embed/original/StarPathEmbed.cpp -whitespace
+source/lab/path-embed/original/StarPathEmbed.hpp -whitespace

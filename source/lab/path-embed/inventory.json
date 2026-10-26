@@ -1,0 +1,22 @@
+{
+  "definitions": [
+    {
+      "name": "embedAndCompressData",
+      "line": 12
+    },
+    {
+      "name": "embedEscapeText",
+      "line": 24
+    }
+  ],
+  "enum_values": {
+    "None": 0,
+    "Gzip": 1,
+    "Zlib": 2,
+    "Zstd": 3
+  },
+  "sources": {
+    "StarPathEmbed.cpp": "4ac003690deacb5d18e4fed72d990326b02214bd7a84d84998925614cbfbc84d",
+    "StarPathEmbed.hpp": "18b21e801abe3a6211a8e1ef03d0344f04b07c2f2252aa5996db16beb207993b"
+  }
+}

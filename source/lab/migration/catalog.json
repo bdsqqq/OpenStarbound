@@ -22904,6 +22904,86 @@
     {
       "cmake_membership": [],
       "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/path-embed/closure.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/path-embed/contract.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/path-embed/inventory.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/path-embed/lab.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/path-embed/original/StarPathEmbed.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/path-embed/original/StarPathEmbed.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/path-embed/run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/path-embed/test_publication.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
       "language": "c/c++",
       "line": 1,
       "membership_status": "no-direct-target-found",
@@ -33335,6 +33415,38 @@
       "sha256": "4fb71573cdef774a674d035c39d056e8b22bf76c82cfc695fe42e56b556be301"
     },
     {
+      "path": "source/lab/path-embed/closure.py",
+      "sha256": "d6f86186113d1103dfbf13672debc7d80d15d6b68be0ee702730216b73f7c8a4"
+    },
+    {
+      "path": "source/lab/path-embed/contract.py",
+      "sha256": "31a9c41d4c24706c90a0f04a9e0b662908d02ae2077980e2126aa4603f106886"
+    },
+    {
+      "path": "source/lab/path-embed/inventory.py",
+      "sha256": "a6a128b7f91324f7d842018055d38bf51572cd54ba8dffd5b2ded42191d98ceb"
+    },
+    {
+      "path": "source/lab/path-embed/lab.cpp",
+      "sha256": "0522d1555c1d5a3760f27e08323853d7721f7b0d321cbec1e646f8f0a4709df0"
+    },
+    {
+      "path": "source/lab/path-embed/original/StarPathEmbed.cpp",
+      "sha256": "4ac003690deacb5d18e4fed72d990326b02214bd7a84d84998925614cbfbc84d"
+    },
+    {
+      "path": "source/lab/path-embed/original/StarPathEmbed.hpp",
+      "sha256": "18b21e801abe3a6211a8e1ef03d0344f04b07c2f2252aa5996db16beb207993b"
+    },
+    {
+      "path": "source/lab/path-embed/run.py",
+      "sha256": "19326be45ac9201580b2bd54b86b368b0835e5810d4cbb3b3f2005aba082f8c6"
+    },
+    {
+      "path": "source/lab/path-embed/test_publication.py",
+      "sha256": "bedba3653671501ae214f7c02d59e4e9ee1d7a1c80cbfc3ac9548b3a21e88d40"
+    },
+    {
       "path": "source/lab/random-mwc/StarRandom.original.cpp",
       "sha256": "762620f9ce3c15bd19f49a915f1749534dc4dca5c5356c41aeb6432f41f40454"
     },
@@ -34693,7 +34805,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 350,
+      "oracle/harness": 358,
       "retain-tooling": 20,
       "retained-third-party": 296,
       "rust-candidate": 24,
@@ -34734,14 +34846,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 35,
-      "validation.oracles-harness": 376,
+      "validation.oracles-harness": 384,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1813,
+    "files": 1821,
     "modules": 39,
-    "no_direct_target": 707
+    "no_direct_target": 715
   }
 }
