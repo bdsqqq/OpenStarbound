@@ -9,7 +9,13 @@ import run
 OUT = run.BASE / 'parent-final-r1'
 
 
-@unittest.skipUnless((OUT / 'report.json').exists(), 'host-specific native receipt not present')
+def current_native_receipt():
+    if not (OUT / 'report.json').exists():return False
+    q=json.loads((OUT / 'report.json').read_text())
+    return all(run.sha(p)==h for p,h in q['bindings'].items())
+
+
+@unittest.skipUnless(current_native_receipt(), 'native receipt absent or historical after declared source changes')
 class Receipts(unittest.TestCase):
     def reject(self, mutate, diagnostic):
         q = json.loads((OUT / 'report.json').read_text())

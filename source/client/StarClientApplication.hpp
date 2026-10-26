@@ -1,5 +1,7 @@
 #pragma once
 
+#include <thread>
+
 #include "StarUniverseServer.hpp"
 #include "StarUniverseClient.hpp"
 #include "StarWorldPainter.hpp"
@@ -97,6 +99,7 @@ private:
   void updateBehaviorScenario();
   void renderBehaviorScenario();
   void renderBehaviorTextScanFrame();
+  void renderBehaviorStringViewFrame();
   void prepareBehaviorRaycastFrame();
   void prepareBehaviorEncodingFrame();
   void prepareBehaviorSha256Frame();
@@ -125,6 +128,9 @@ private:
   bool m_behaviorSha256Room = false;
   bool m_behaviorVlqRoom = false;
   bool m_behaviorBytesRoom = false;
+  bool m_behaviorStringViewRoom = false;
+  Json m_behaviorStringViewProof;
+  std::thread::id m_behaviorMainThread;
   bool m_behaviorTextScanRoom = false;
   Json m_behaviorTextScanProof;
   bool m_behaviorJsonPatchRoom = false;

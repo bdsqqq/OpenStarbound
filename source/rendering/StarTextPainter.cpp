@@ -1,8 +1,20 @@
 #include "StarTextPainter.hpp"
 #include "StarJsonExtra.hpp"
 #include "StarTextProcessLab.hpp"
+#include "StarStringViewLab.hpp"
 
 namespace Star {
+
+namespace {
+thread_local StringViewLab::Scope* stringViewCommandScope = nullptr;
+
+// Only the actual render callback installs this observer, never measurement.
+struct StringViewCommandObservation {
+  StringViewLab::Scope scope{1};
+  StringViewCommandObservation() { stringViewCommandScope = &scope; }
+  ~StringViewCommandObservation() { stringViewCommandScope = nullptr; }
+};
+}
 
 TextPositioning::TextPositioning() {
   pos = Vec2F();
@@ -348,12 +360,19 @@ void TextPainter::applyCommands(StringView unsplitCommands) {
       } else if (command == "set") {
         m_savedRenderSettings = m_renderSettings;
       } else if (command.beginsWith("shadow")) {
-        if (command.utf8Size() == 6)
+        if (command.utf8Size() == 6) {
           m_renderSettings.shadow = Color::Black.toRgba();
-        else if (command.utf8()[6] == '=')
+          if (stringViewCommandScope)
+            stringViewCommandScope->shadow(m_renderSettings.shadow);
+        } else if (command.utf8()[6] == '=') {
           m_renderSettings.shadow = Color(command.substr(7)).toRgba();
+          if (stringViewCommandScope)
+            stringViewCommandScope->shadow(m_renderSettings.shadow);
+        }
       } else if (command == "noshadow") {
         m_renderSettings.shadow = Color::Clear.toRgba();
+        if (stringViewCommandScope)
+          stringViewCommandScope->shadow(m_renderSettings.shadow);
       } else if (command.beginsWith("font=")) {
         setFont(m_renderSettings.font = command.substr(5));
       } else if (command.beginsWith("directives=")) {
@@ -449,7 +468,16 @@ RectF TextPainter::doRenderLine(StringView text, TextPositioning const& position
   Text::CommandsCallback commandsCallback = [&](StringView commands) {
     if (reallyRender)
       TextProcessLab::event(1, commands);
-    applyCommands(commands);
+    // Matching and the text observer stay outside the measured source call.
+    auto recorder = StringViewLab::current;
+    if (reallyRender && recorder && recorder->armed && !recorder->scopes[1].started
+        && commands == "shadow=#123456,noshadow") {
+      StringViewCommandObservation observation;
+      applyCommands(commands);
+      observation.scope.complete();
+    } else {
+      applyCommands(commands);
+    }
     return true;
   };
 

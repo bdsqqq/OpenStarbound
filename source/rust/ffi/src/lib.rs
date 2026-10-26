@@ -1,5 +1,8 @@
 //! The engine's single Rust static archive owns the unmangled C ABI exports.
 //! Kernels remain rlibs so linking another kernel cannot add another Rust runtime.
+mod string_view;
+pub use string_view::{star_string_view_call_count, star_string_view_run, StarStringViewHost};
+
 mod host_address;
 pub use host_address::{star_host_address_call_count, star_host_address_run, StarHostAddressHost};
 

@@ -30,6 +30,7 @@ import unicode_proof
 import shell_proof
 import jsonpath_proof
 import assetpath_proof
+import string_view_proof
 import random_mwc_proof
 import json_patch_proof
 import text_scan_proof
@@ -48,7 +49,7 @@ ASSET_OVERLAYS = {
     "behavior-fixture": ROOT / "source/lab/behavior/assets",
 }
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,95}\Z")
-SCENARIOS = ("lighting-room", "raycast-room", "encoding-room", "sha256-room", "vlq-room", "bytes-room", "unicode-room", "shell-room", "jsonpath-room", "assetpath-room", "random-room", "jsonpatch-room", "text-room", "compression-room", "zstd-room", "option-parser-room", "host-address-room", "datastream-room", "buffer-room")
+SCENARIOS = ("lighting-room", "raycast-room", "encoding-room", "sha256-room", "vlq-room", "bytes-room", "unicode-room", "shell-room", "jsonpath-room", "assetpath-room", "random-room", "jsonpatch-room", "text-room", "compression-room", "zstd-room", "option-parser-room", "host-address-room", "datastream-room", "buffer-room", "stringview-room")
 MAX_PIXELS = 16_777_216
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
 
@@ -212,6 +213,11 @@ def semantic_world_state(receipt: dict) -> dict:
     if receipt.get("scenario") == "jsonpatch-room":
         try:
             native["jsonPatchProof"] = json_patch_proof.validate(receipt)
+        except ValueError as error:
+            raise LabError(str(error)) from error
+    if receipt.get("scenario") == "stringview-room":
+        try:
+            native["stringViewProof"] = string_view_proof.validate(receipt)
         except ValueError as error:
             raise LabError(str(error)) from error
     if receipt.get("scenario") == "text-room":
@@ -385,7 +391,7 @@ def captures(directory: Path) -> dict:
         result[name] = {"receipt": receipt, "png": pngs[name], "dimensions": list(frame.size),
                         "pngSha256": sha(pngs[name]), "receiptSha256": sha(receipts[name]),
                         "pixelsSha256": hashlib.sha256(frame.tobytes()).hexdigest()}
-    if scenarios in ({"lighting-room"}, {"encoding-room"}, {"sha256-room"}, {"vlq-room"}, {"bytes-room"}, {"unicode-room"}, {"shell-room"}, {"jsonpath-room"}, {"assetpath-room"}, {"random-room"}, {"jsonpatch-room"}, {"text-room"}, {"compression-room"}, {"zstd-room"}, {"option-parser-room"}, {"host-address-room"}, {"datastream-room"}, {"buffer-room"}):
+    if scenarios in ({"lighting-room"}, {"encoding-room"}, {"sha256-room"}, {"vlq-room"}, {"bytes-room"}, {"unicode-room"}, {"shell-room"}, {"jsonpath-room"}, {"assetpath-room"}, {"random-room"}, {"jsonpatch-room"}, {"text-room"}, {"compression-room"}, {"zstd-room"}, {"option-parser-room"}, {"host-address-room"}, {"datastream-room"}, {"buffer-room"}, {"stringview-room"}):
         validate_lighting_sequence(result)
         if scenarios == {"encoding-room"}:
             proofs = [encoding_proof.validate(frame["receipt"]) for frame in result.values()]
@@ -427,6 +433,10 @@ def captures(directory: Path) -> dict:
             proofs = [json_patch_proof.validate(frame["receipt"]) for frame in result.values()]
             if any(proof != proofs[0] for proof in proofs[1:]):
                 raise LabError("JSON patch actual handler/rollback observations changed across stages")
+        if scenarios == {"stringview-room"}:
+            proofs = [string_view_proof.validate(frame["receipt"]) for frame in result.values()]
+            if any(proof != proofs[0] for proof in proofs[1:]):
+                raise LabError("StringView consumer observations changed across stages")
         if scenarios == {"text-room"}:
             proofs = [text_scan_proof.validate(frame["receipt"]) for frame in result.values()]
             if any(proof != proofs[0] for proof in proofs[1:]):
@@ -748,6 +758,12 @@ def pair_compare(reference: Path, candidate: Path, output: Path, same_backend=Fa
                     row["errors"].append("expected C++ reference and correct compression backend")
                 if ref_meta["lightingBackend"] != "cpp" or (same_backend and cand_meta["lightingBackend"] != "cpp"):
                     row["errors"].append("expected C++ reference lighting")
+            elif ref_meta["scenario"] == "stringview-room":
+                wanted = "cpp" if same_backend else "rust"
+                if ref_meta["stringViewProof"]["backend"] != "cpp" or cand_meta["stringViewProof"]["backend"] != wanted:
+                    row["errors"].append("expected C++ reference and correct StringView backend")
+                if ref_meta["lightingBackend"] != "cpp" or (same_backend and cand_meta["lightingBackend"] != "cpp"):
+                    row["errors"].append("expected C++ reference lighting")
             elif ref_meta["scenario"] == "text-room":
                 wanted = "cpp" if same_backend else "rust"
                 if ref_meta["textScanProof"]["backend"] != "cpp" or cand_meta["textScanProof"]["backend"] != wanted:
@@ -898,6 +914,8 @@ def asset_overlays(scenario="lighting-room") -> dict:
         overlays["shell-fixture"] = ROOT / "source/lab/behavior/shell-assets"
     if scenario == "jsonpath-room":
         overlays["jsonpath-fixture"] = ROOT / "source/lab/behavior/jsonpath-assets"
+    if scenario == "stringview-room":
+        overlays["string-view-fixture"] = ROOT / "source/lab/behavior/string-view-assets"
     if scenario == "assetpath-room":
         overlays["assetpath-fixture"] = ROOT / "source/lab/behavior/assetpath-assets"
     if scenario == "random-room":
