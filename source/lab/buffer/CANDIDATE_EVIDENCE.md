@@ -85,7 +85,9 @@ Ogg, or a new Buffer-specific audio receipt claim.
 583-record replays, 21 actual-receipt synthetic corruptions, PCM and 12 CLI exits.
 `check_qualification.py` independently replayed every current baseline/baseline
 and baseline/candidate frame/state gate and all historical pixels before sealing;
-its historical-count and artifact-binding corruptions reject. the previously
+its historical-count, artifact-binding and capture-input-identity corruptions
+reject. current binary/assets/boot/config identities and overlays are checked
+before/after; the earlier report/script remain archived beside the qualification. the previously
 interrupted host-address-r1 remains unaccepted; fresh host-address-r2 and
 DataStream-r1 pass. the six resumed Rust PNGs were inspected: green numeric-host
 and orange STREAM consumers remain visible across occlusion/restoration.

@@ -1,0 +1,94 @@
+{
+  "revision": "c233825b",
+  "count": 22,
+  "definitions": [
+    {
+      "definition": "IODevice::IODevice(IOMode mode) {",
+      "line": 7
+    },
+    {
+      "definition": "IODevice::~IODevice() {",
+      "line": 11
+    },
+    {
+      "definition": "void IODevice::resize(StreamOffset) {",
+      "line": 15
+    },
+    {
+      "definition": "void IODevice::readFull(char* data, size_t len) {",
+      "line": 19
+    },
+    {
+      "definition": "void IODevice::writeFull(char const* data, size_t len) {",
+      "line": 31
+    },
+    {
+      "definition": "void IODevice::open(IOMode mode) {",
+      "line": 43
+    },
+    {
+      "definition": "void IODevice::close() {",
+      "line": 48
+    },
+    {
+      "definition": "void IODevice::sync() {}",
+      "line": 52
+    },
+    {
+      "definition": "String IODevice::deviceName() const {",
+      "line": 54
+    },
+    {
+      "definition": "bool IODevice::atEnd() {",
+      "line": 58
+    },
+    {
+      "definition": "StreamOffset IODevice::size() {",
+      "line": 62
+    },
+    {
+      "definition": "size_t IODevice::readAbsolute(StreamOffset readPosition, char* data, size_t len) {",
+      "line": 74
+    },
+    {
+      "definition": "size_t IODevice::writeAbsolute(StreamOffset writePosition, char const* data, size_t len) {",
+      "line": 82
+    },
+    {
+      "definition": "void IODevice::readFullAbsolute(StreamOffset readPosition, char* data, size_t len) {",
+      "line": 90
+    },
+    {
+      "definition": "void IODevice::writeFullAbsolute(StreamOffset writePosition, char const* data, size_t len) {",
+      "line": 101
+    },
+    {
+      "definition": "ByteArray IODevice::readBytes(size_t size) {",
+      "line": 112
+    },
+    {
+      "definition": "void IODevice::writeBytes(ByteArray const& p) {",
+      "line": 122
+    },
+    {
+      "definition": "ByteArray IODevice::readBytesAbsolute(StreamOffset readPosition, size_t size) {",
+      "line": 126
+    },
+    {
+      "definition": "void IODevice::writeBytesAbsolute(StreamOffset writePosition, ByteArray const& p) {",
+      "line": 136
+    },
+    {
+      "definition": "void IODevice::setMode(IOMode m) {",
+      "line": 140
+    },
+    {
+      "definition": "IODevice::IODevice(IODevice const& rhs) {",
+      "line": 144
+    },
+    {
+      "definition": "IODevice& IODevice::operator=(IODevice const& rhs) {",
+      "line": 148
+    }
+  ]
+}
