@@ -45,12 +45,30 @@ header. isolated controls reject capacity-for-size substitution, removed guards,
 unrelated header edits, unknown identities and other input drift. the build
 fixture similarly reconstructs only r3→r7. there is no broad source exemption.
 
-## application gate stays open
+## finite application gate qualified on r7
 
-prototype compression's three inspected frames show the lit room, added wall
-and exact restoration; decoded pixels match the preserved native reference.
-its diagnostic binary has no ordinary acceptance sidecar and is not application
-qualification. fresh ordinary r7 matrices are recorded separately. retain all r6
-failures. all19 matrices,57 historical RGBA frames, actual save/network scopes,
-PCM/CLI and an exact-current independent verifier are still required; a partial
-replay or a successful kernel must not close ByteArray's application gate.
+production `8ac00aef`, unchanged aggregate732..., passes all19 real-game
+native/repeat/candidate matrices and57 historical decodedRGBA frames at
+`build/behavior/byte-array-actual-r5/qualification.json`. all14 actual TCP/save/
+BTree/PNG scopes, literal PCM/seek/EOF/corrupt-expectation and12 CLI executions
+are bound alongside current kernel/Buffer/guard/empty-fill/copy evidence.
+3906 bindings were independently rehashed. all57 candidate frames were inspected
+in labeled state triplets; raw-frame/page hashes and limitations are retained in
+`build/behavior/byte-array-visual-inspection-r7-final/inspected-19.json`.
+
+encoding's original native/repeat captures were retained byte-for-byte. a
+symlink reuse attempt was correctly refused before candidate execution and is
+preserved as r2; r3 uses exact plain copies with original manifests/identities,
+then a fresh candidate capture. no reference rerun or receipt rebinding.
+
+oracle review found that identical pixels could mask a wrong outer scene label.
+the qualifier now requires every receipt's scenario to match its matrix row in
+both qualification and existing-result verification. the isolated lighting-as-
+SHA256 negative rejects;14 verifier tests pass. source-frozen verifier and
+repair evidence live in `byte-array-qualification-tools-r7`; the final freeze is
+`verifier-freeze-parent-r3.json`. retain the superseded freezes and all r6 failures.
+
+the prototype still has no ordinary acceptance sidecar and contributes no
+application pass. qualification is finite macOS evidence, not full-engine,
+arbitrary-pointer/lifetime/OOM/platform/sanitizer/performance, audible mixer or
+complete Universe-handshake proof. defaultOFF/native ownership remain intact.
