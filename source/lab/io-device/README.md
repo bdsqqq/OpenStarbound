@@ -1,8 +1,18 @@
-# native iodevice calibration — draft, unaccepted
+# iodevice migration lab
+
+current finite Rust-controller checkpoint: **45aaaba9**, default OFF; actual-game qualification remains open.
+
+- [TRACE.md](TRACE.md): accepted independent 8,021-case / 22-definition native calibration.
+- [HOST.md](HOST.md): native-owned opaque controller blueprint and retained lifetime/alias reviews.
+- [RUST.md](RUST.md): Rust integration, two qualified aggregate artifacts, replay commands and limits.
+
+## closed legacy calibration — historical draft, unaccepted
+
+this section describes the earlier rejected approach, not the current checkpoint. its failed-attempt budget stays closed.
 
 all 22 compiled definitions and the full header are frozen from `c233825b`.
 reference adaptation changes only namespace open/close and the cpp header include.
-production sources, public header, rust, cmake and selectors are untouched.
+production sources, public header, rust, cmake and selectors were untouched during that attempt.
 
 full calibration exhausted two attempts; do not rerun the same repair approach.
 see EVIDENCE.md. no report claims FINITE_NATIVE_CALIBRATION_PASS.
