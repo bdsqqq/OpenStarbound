@@ -45,6 +45,12 @@ inline void captureBorrowed(NativeCtx& c){
  ByteArray const* objects[2]={c.ready?c.owner:nullptr,c.other};
  for(size_t i=0;i<2;++i)if(objects[i]){auto& o=*const_cast<ByteArray*>(objects[i]);c.borrowedBase[i]=reinterpret_cast<uintptr_t>(ByteArrayNativeAccess::data(o));c.borrowedCapacity[i]=ByteArrayNativeAccess::capacity(o);}
 }
+// A leaf already knows its live target and new storage. Update numeric
+// exclusions there, never by refreshing borrowed objects after user code.
+inline void trackStorage(NativeCtx& c,ByteArray const* target,char const* data,size_t capacity){
+ if(target==c.owner){c.borrowedBase[0]=reinterpret_cast<uintptr_t>(data);c.borrowedCapacity[0]=capacity;}
+ if(target==c.other){c.borrowedBase[1]=reinterpret_cast<uintptr_t>(data);c.borrowedCapacity[1]=capacity;}
+}
 inline void span(char const* p,size_t capacity,size_t offset,size_t count){
  need(p&&offset<=capacity&&count<=capacity-offset);
  auto base=reinterpret_cast<uintptr_t>(p);need(offset<=UINTPTR_MAX-base&&count<=UINTPTR_MAX-(base+offset));
@@ -75,17 +81,18 @@ inline uint32_t nativeHost(void* opaque,uint32_t op,uint64_t a,uint64_t b,uint64
    case SB_BA_GET_CAPACITY:need(!b&&!d);r=ByteArrayNativeAccess::capacity(role(c,a));break;
    case SB_BA_HAS_DATA:need(!b&&!d);r=ByteArrayNativeAccess::data(role(c,a))!=nullptr;break;
    case SB_BA_INIT:{need(!b&&!d&&a==0&&c.owner);auto& o=*const_cast<ByteArray*>(c.owner);
-    ByteArrayNativeAccess::data(o)=nullptr;ByteArrayNativeAccess::capacity(o)=0;ByteArrayNativeAccess::size(o)=0;c.ready=true;break;}
+    ByteArrayNativeAccess::data(o)=nullptr;ByteArrayNativeAccess::capacity(o)=0;ByteArrayNativeAccess::size(o)=0;c.ready=true;trackStorage(c,&o,nullptr,0);break;}
    case SB_BA_SET_SIZE:need(!d);need(b<=ByteArrayNativeAccess::capacity(role(c,a)));ByteArrayNativeAccess::size(role(c,a))=b;break;
    case SB_BA_ALLOC:{need(d<=1);auto& o=role(c,a);auto& ptr=ByteArrayNativeAccess::data(o);
     need((ptr!=nullptr)==bool(d));auto mem=static_cast<char*>(d?Star::realloc(ptr,b):Star::malloc(b));
     if(!mem)throw MemoryException::format("Could not set new ByteArray capacity {}\n",b);
-    ptr=mem;ByteArrayNativeAccess::capacity(o)=b;break;}
+    ptr=mem;ByteArrayNativeAccess::capacity(o)=b;trackStorage(c,&o,mem,b);break;}
    case SB_BA_FREE:{need(!b&&!d);auto& o=role(c,a);Star::free(ByteArrayNativeAccess::data(o),ByteArrayNativeAccess::capacity(o));break;}
    case SB_BA_TAKE:{none();auto& o=role(c,0);auto& s=role(c,1);
     ByteArrayNativeAccess::data(o)=std::exchange(ByteArrayNativeAccess::data(s),nullptr);
     ByteArrayNativeAccess::capacity(o)=std::exchange(ByteArrayNativeAccess::capacity(s),size_t{});
-    ByteArrayNativeAccess::size(o)=std::exchange(ByteArrayNativeAccess::size(s),size_t{});break;}
+    ByteArrayNativeAccess::size(o)=std::exchange(ByteArrayNativeAccess::size(s),size_t{});
+    trackStorage(c,&o,ByteArrayNativeAccess::data(o),ByteArrayNativeAccess::capacity(o));trackStorage(c,&s,nullptr,0);break;}
    case SB_BA_SAME:none();need(c.owner&&c.other);r=c.owner==c.other;break;
    case SB_BA_CAPTURE:{need(!d);auto& o=role(c,a);need(b<=ByteArrayNativeAccess::capacity(o));c.input=ByteArrayNativeAccess::data(o);c.inputCount=ByteArrayNativeAccess::capacity(o)-b;if(b){span(c.input,ByteArrayNativeAccess::capacity(o),b,0);c.input+=b;}r=ByteArrayNativeAccess::size(o);break;}
    case SB_BA_COPY_IN:{auto& o=role(c,a);span(ByteArrayNativeAccess::data(o),ByteArrayNativeAccess::size(o),b,d);need(ByteArrayNativeAccess::size(o)<=ByteArrayNativeAccess::capacity(o));span(c.input,c.inputCount,0,d);std::memcpy(ByteArrayNativeAccess::data(o)+b,c.input,d);break;}

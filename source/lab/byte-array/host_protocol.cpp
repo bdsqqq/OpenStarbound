@@ -73,6 +73,21 @@ int main(int argc,char**){
  CHECK(nativeHost(&backingCtx,SB_BA_ARG,0,0,0,reinterpret_cast<uint64_t*>(backing.ptr()))==2);
  guarded.value.emplace(32,9);
  CHECK(nativeHost(&guarded,SB_BA_ARG,0,0,0,reinterpret_cast<uint64_t*>(guarded.value->ptr()))==2);
+ // Storage allocated after entry capture must be excluded without rereading
+ // borrowed owners on later calls (including FINISH after legal deletion).
+ ByteArray allocated;NativeCtx allocationCtx;allocationCtx.owner=&allocated;captureBorrowed(allocationCtx);
+ CHECK(nativeHost(&allocationCtx,SB_BA_ALLOC,0,64,0,&out)==0);
+ allocated.fill(64,7);unsigned char expected[64];std::memset(expected,7,sizeof expected);
+ CHECK(nativeHost(&allocationCtx,SB_BA_ARG,0,0,0,reinterpret_cast<uint64_t*>(allocated.ptr()))==2);
+ CHECK(std::memcmp(allocated.ptr(),expected,sizeof expected)==0);
+ CHECK(nativeHost(&allocationCtx,SB_BA_ALLOC,0,128,1,&out)==0);
+ allocated.fill(128,9);unsigned char expectedGrowth[128];std::memset(expectedGrowth,9,sizeof expectedGrowth);
+ CHECK(nativeHost(&allocationCtx,SB_BA_ARG,0,0,0,reinterpret_cast<uint64_t*>(allocated.ptr()+120))==2);
+ CHECK(std::memcmp(allocated.ptr(),expectedGrowth,sizeof expectedGrowth)==0);
+ ByteArray transfer;NativeCtx transferCtx;transferCtx.owner=&transfer;transferCtx.other=&allocated;captureBorrowed(transferCtx);
+ CHECK(nativeHost(&transferCtx,SB_BA_TAKE,0,0,0,&out)==0);
+ CHECK(nativeHost(&transferCtx,SB_BA_ARG,0,0,0,reinterpret_cast<uint64_t*>(transfer.ptr()))==2);
+ CHECK(std::memcmp(transfer.ptr(),expectedGrowth,sizeof expectedGrowth)==0);
  int token=0;
  bool caught=false;
  try{a.combineWith([&](char,char)->char{a[0]=11;throw &token;},b);}
