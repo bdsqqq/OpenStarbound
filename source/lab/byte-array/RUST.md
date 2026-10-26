@@ -9,8 +9,10 @@ application/game qualification is still OPEN; this is not full-engine completion
 ## contracts retained
 
 the original native-off cpp/header reconstructed byte-for-byte before the
-explicit empty-fill UB repair. the current cpp differs only by its zero-size
-memset guard; header reconstruction remains exact. see `EMPTY_FILL.md`.
+explicit empty-memory repairs. the current cpp adds only its zero-size memset
+guard; the header adds only its zero-length append memcpy guard. both define
+formerly undefined null-memory behavior, not equivalence on that old domain.
+see `EMPTY_FILL.md` and `EMPTY_COPY.md`.
 selected native code is directly adapted from the accepted opaque blueprint,
 including constructor readiness, allocation-range exclusion updates, per-context
 busy handling, first exception identity and no borrowed-owner refresh on FINISH.
@@ -24,7 +26,23 @@ no C++ exception is tested unwinding through Rust; only Rust-internal panic
 containment is tested. the prototype-only foreign-throw callback and invocation
 are the only two removed protocol lines, alongside naming/include adaptation.
 
-## finite compiled evidence
+## current qualification
+
+production `67ed3547` replaces whole-matrix receipt copies with per-slot cells;
+controller branches, wrapping/TLS/reentry receipts and native ownership are
+unchanged. current CMake aggregate sha256:
+`732775f07a3689656dc4e500f8cb72ab6de9fa0677dd996211fcdf6c82a64cb5`.
+`counter-{native,rust}-compile-r1`, `{native,rust}-seal-counter-r1` and
+`counter-run-r2/report.json` qualify that aggregate through fresh113-object
+OFF/ON builds and unchanged987+14/repeat/protocol/all56/native-bypass gates.
+only this aggregate is current for the counter change; no new two-archive claim.
+
+actual primary buffer-room passes all three frame/state comparisons and14scopes.
+text-room and compression-room later hit unchanged scenario frame limits before
+candidate frames; full19-matrix qualification remains OPEN. see
+`../behavior/BYTEARRAY.md` and `COUNTERS.md` for artifacts and limits.
+
+## historical finite compiled evidence
 
 under `build/byte-array-rust/`:
 
