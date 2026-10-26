@@ -31,6 +31,7 @@ import shell_proof
 import jsonpath_proof
 import assetpath_proof
 import string_view_proof
+import file_proof
 import random_mwc_proof
 import json_patch_proof
 import text_scan_proof
@@ -253,6 +254,8 @@ def semantic_world_state(receipt: dict) -> dict:
     if receipt.get("scenario") == "buffer-room":
         try:
             native["bufferProof"] = buffer_proof.validate(receipt)
+            if "fileProof" in receipt:
+                native["fileProof"] = file_proof.validate(receipt)
         except ValueError as error:
             raise LabError(str(error)) from error
     # A native declared object supplements, rather than weakens, the frozen
@@ -465,9 +468,20 @@ def captures(directory: Path) -> dict:
             proofs = [buffer_proof.validate(frame["receipt"]) for frame in result.values()]
             if any(proof != proofs[0] for proof in proofs[1:]):
                 raise LabError("actual Buffer fragmented TCP/save/database consumer changed across stages")
+            validate_file_sequence(result)
     else:
         validate_raycast_sequence(result)
     return result
+
+
+def validate_file_sequence(frames: dict) -> None:
+    """Older profiles may omit File proof; present proof must freeze all three frames."""
+    if not any("fileProof" in frame["receipt"] for frame in frames.values()):
+        return
+    try:
+        file_proof.validate_snapshots([frame["receipt"].get("fileProof") for frame in frames.values()])
+    except ValueError as error:
+        raise LabError(str(error)) from error
 
 
 def validate_lighting_sequence(frames: dict) -> None:
@@ -717,6 +731,13 @@ def pair_compare(reference: Path, candidate: Path, output: Path, same_backend=Fa
                 if ref_io is not None or cand_io is not None:
                     if ref_io is None or cand_io is None or ref_io["backend"] != "cpp" or cand_io["backend"] != wanted:
                         row["errors"].append("expected C++ reference and correct IODevice backend")
+                ref_file, cand_file = ref_meta.get("fileProof"), cand_meta.get("fileProof")
+                if ref_file is not None or cand_file is not None:
+                    if (ref_file is None or cand_file is None or ref_file["backend"] != "cpp"
+                            or (same_backend and cand_file["backend"] != "cpp")):
+                        row["errors"].append("expected C++ reference and consistent File repeat backend")
+                    # Earlier combined profiles leave File OFF. The File-specific
+                    # qualifier separately requires its ON selector and Rust scopes.
                 ref_ba = ref_meta["bufferProof"].get("byteArray")
                 cand_ba = cand_meta["bufferProof"].get("byteArray")
                 if ref_ba is not None or cand_ba is not None:

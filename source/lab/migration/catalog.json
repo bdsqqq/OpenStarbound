@@ -20318,6 +20318,16 @@
     {
       "cmake_membership": [],
       "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/file_qualification.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
       "language": "c/c++",
       "line": 1,
       "membership_status": "no-direct-target-found",
@@ -20543,6 +20553,16 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/behavior/test_file_proof.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/test_file_qualification.py",
       "rule": "laboratories"
     },
     {
@@ -28346,11 +28366,11 @@
     },
     {
       "path": "source/client/StarClientApplication.cpp",
-      "sha256": "709985a6c53a94be5827f40fade7276a641c8de299abf1b4e37ba10083056cc6"
+      "sha256": "1735d6bf8f596fe6698023430e6a46d57912fb8597f49006a6f8f5297a6ae44b"
     },
     {
       "path": "source/client/StarClientApplication.hpp",
-      "sha256": "2edb03d2f51328cebe153a4e1271b712a3e11c7deb957de1f4f4a3076b07bea4"
+      "sha256": "17f1bcf0dcb81373d01fefe7e6af97cbf8672668a284fb0c925a8e16d12f9f06"
     },
     {
       "path": "source/client/StarRenderingLuaBindings.cpp",
@@ -32242,7 +32262,7 @@
     },
     {
       "path": "source/lab/behavior/behavior_lab.py",
-      "sha256": "4016fff5764a1440d9a56572c29ea3b81dc748b8b17c1ec369e250f5dd48ee0d"
+      "sha256": "b7f5f3eb188923c87fa9b5ca2516df601fe36b500f17866b9420981481ff8879"
     },
     {
       "path": "source/lab/behavior/btree_padding.py",
@@ -32279,6 +32299,10 @@
     {
       "path": "source/lab/behavior/file_proof.py",
       "sha256": "f4e6f0989d27ead35bb977623995089a55337d7230898a5d2842f5d53bbc0120"
+    },
+    {
+      "path": "source/lab/behavior/file_qualification.py",
+      "sha256": "513f12039a3f34d30b535bce04fc99642a3089b0c8563350f73d52f429422601"
     },
     {
       "path": "source/lab/behavior/file_scope_probe.cpp",
@@ -32370,7 +32394,11 @@
     },
     {
       "path": "source/lab/behavior/test_file_proof.py",
-      "sha256": "ad9a07dd56e102fc406e17ee361fd2c0f8ad06e9f6f6581ac4fa38f9a384d1f7"
+      "sha256": "946e374a1e7c0b8a1fe3657aafbbb30af2c7fe799a0ab7e9c73bbc5a1e36b32a"
+    },
+    {
+      "path": "source/lab/behavior/test_file_qualification.py",
+      "sha256": "d2d5bc83e0b8f94fb6e8b837a54c7380482b85361b46932d6ccfd59f14368e67"
     },
     {
       "path": "source/lab/behavior/test_host_address_proof.py",
@@ -34651,7 +34679,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 347,
+      "oracle/harness": 349,
       "retain-tooling": 20,
       "retained-third-party": 296,
       "rust-candidate": 24,
@@ -34692,14 +34720,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 35,
-      "validation.oracles-harness": 373,
+      "validation.oracles-harness": 375,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1810,
+    "files": 1812,
     "modules": 39,
-    "no_direct_target": 704
+    "no_direct_target": 706
   }
 }

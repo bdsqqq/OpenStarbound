@@ -24,6 +24,7 @@
 #include "StarHostAddressLab.hpp"
 #include "StarDataStreamLab.hpp"
 #include "StarBufferLab.hpp"
+#include "StarFileLab.hpp"
 #include "StarIODeviceLab.hpp"
 #include "StarByteArrayLab.hpp"
 #include "StarBTreeLab.hpp"
@@ -2626,10 +2627,21 @@ void ClientApplication::prepareBehaviorBufferFrame() {
     for (unsigned i = 0; i != 1537; ++i) payload += char('a' + i % 26);
     auto value = VersionedJson::fromJson(JsonObject{{"id", "bufferlab"}, {"version", 1},
         {"content", JsonArray{64, 144, 224, 255, String(payload)}}, {"subVersions", JsonObject{}}});
-    observed("VersionedJson::writeFile", [&] { VersionedJson::writeFile(value, savePath); });
+    FileLab::Recorder recorder;
+    observed("VersionedJson::writeFile", [&] {
+      FileLab::Scope scope(recorder, 0, std::this_thread::get_id() == m_behaviorMainThread);
+      VersionedJson::writeFile(value, savePath);
+      scope.complete();
+    });
     VersionedJson decoded;
-    observed("VersionedJson::readFile", [&] { decoded = VersionedJson::readFile(savePath); });
+    observed("VersionedJson::readFile", [&] {
+      FileLab::Scope scope(recorder, 1, std::this_thread::get_id() == m_behaviorMainThread);
+      decoded = VersionedJson::readFile(savePath);
+      scope.complete();
+    });
+    FileLab::Scope saveReadScope(recorder, 2, std::this_thread::get_id() == m_behaviorMainThread);
     auto saveBytes = File::readFile(savePath);
+    saveReadScope.complete();
     // Single-key trailer and integer-array content have a fixed source-derived
     // encoding: SBVJ01, id, Maybe<u32>, Json array, u32 trailer version,
     // one-entry subVersions map containing an empty Json object.
@@ -2681,20 +2693,29 @@ void ClientApplication::prepareBehaviorBufferFrame() {
     // BTree uses its real file device, commits, closes, then reopens independently.
     ByteArray found;
     observed("BTreeSha256Database::open/insert/commit/close(file)", [&] {
-      auto device = File::open(databasePath, IOMode::ReadWrite | IOMode::Truncate);
-      BTreeSha256Database db("bufferlab");
-      db.setIODevice(device); db.setBlockSize(512); db.setAutoCommit(false);
-      if (!db.open() || db.insert(String("buffer-payload"), saveBytes))
-        throw StarException("BehaviorLab: Buffer database initial state mismatch");
-      db.commit(); db.close(true);
+      FileLab::Scope scope(recorder, 3, std::this_thread::get_id() == m_behaviorMainThread);
+      // Include native database/device destruction before freezing File counts.
+      {
+        auto device = File::open(databasePath, IOMode::ReadWrite | IOMode::Truncate);
+        BTreeSha256Database db("bufferlab");
+        db.setIODevice(device); db.setBlockSize(512); db.setAutoCommit(false);
+        if (!db.open() || db.insert(String("buffer-payload"), saveBytes))
+          throw StarException("BehaviorLab: Buffer database initial state mismatch");
+        db.commit(); db.close(true);
+      }
+      scope.complete();
     });
     observed("BTreeSha256Database::open/find/close(file)", [&] {
-      BTreeSha256Database db("bufferlab");
-      db.setIODevice(File::open(databasePath, IOMode::ReadWrite));
-      if (db.open()) throw StarException("BehaviorLab: Buffer database lost committed file");
-      auto result = db.find(String("buffer-payload"));
-      if (!result) throw StarException("BehaviorLab: Buffer database missing key");
-      found = *result; db.close(true);
+      FileLab::Scope scope(recorder, 4, std::this_thread::get_id() == m_behaviorMainThread);
+      {
+        BTreeSha256Database db("bufferlab");
+        db.setIODevice(File::open(databasePath, IOMode::ReadWrite));
+        if (db.open()) throw StarException("BehaviorLab: Buffer database lost committed file");
+        auto result = db.find(String("buffer-payload"));
+        if (!result) throw StarException("BehaviorLab: Buffer database missing key");
+        found = *result; db.close(true);
+      }
+      scope.complete();
     });
     if (found != saveBytes) throw StarException("BehaviorLab: Buffer database value mismatch");
     DataStreamBuffer colorReader(found);
@@ -2747,6 +2768,9 @@ void ClientApplication::prepareBehaviorBufferFrame() {
     // Freeze consumer counts before frame capture writes its evidence PNG.
     auto ioCalls = IODeviceLabCounts::snapshot().delta(ioBefore);
     auto byteCalls = byteArrayConsumerSnapshot().delta(byteBefore);
+    // All five File scopes are complete; serialize outside every consumer
+    // measurement and retain this snapshot for all three acknowledged frames.
+    m_behaviorFileProof = recorder.toJson(hexEncode(saveBytes), hexEncode(found));
     // Keep the original consumers and receipts intact; only the saved raw
     // main-thread intervals contribute to the new per-operation proof.
     JsonArray byteScopeProof;
@@ -4004,6 +4028,8 @@ void ClientApplication::renderBehaviorScenario() {
   if (m_behaviorBufferRoom) {
     if (m_behaviorBufferProof.isNull()) throw StarException("BehaviorLab: missing Buffer proof");
     metadata = metadata.set("bufferProof", m_behaviorBufferProof);
+    if (m_behaviorFileProof.isNull()) throw StarException("BehaviorLab: missing File proof");
+    metadata = metadata.set("fileProof", m_behaviorFileProof);
   }
   if (m_behaviorDataStreamRoom) {
     if (m_behaviorDataStreamProof.isNull())

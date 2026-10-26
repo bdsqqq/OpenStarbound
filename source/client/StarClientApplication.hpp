@@ -141,6 +141,7 @@ private:
   Json m_behaviorOptionParserProof;
   bool m_behaviorBufferRoom = false;
   Json m_behaviorBufferProof;
+  Json m_behaviorFileProof;
   bool m_behaviorDataStreamRoom = false;
   Json m_behaviorDataStreamProof;
   bool m_behaviorHostAddressRoom = false;

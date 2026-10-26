@@ -96,5 +96,47 @@ class SyntheticFileProofTests(unittest.TestCase):
         with self.assertRaises(ValueError): f.validate_snapshots([p, q, p])
 
 
+class FilePipelineTests(unittest.TestCase):
+    def receipt(self, backend='rust'):
+        import behavior_lab as lab
+        from test_buffer_proof import fixture
+        value = dict.fromkeys(lab.SCENE_FIELDS, 0)
+        for key in ('playerOutsideView', 'uiHidden', 'lightingCompleted', 'lightEntityReplicated'):
+            value[key] = True
+        value.update(fullbright=False, replicatedSettledUpdates=90, scenario='buffer-room')
+        value.update(fixture(backend))
+        value['fileProof'] = synthetic(backend)
+        return value
+
+    def test_semantic_pipeline_checks_before_projection(self):
+        import behavior_lab as lab
+        receipt = self.receipt()
+        self.assertEqual(lab.semantic_world_state(receipt)['fileProof'], f.validate(receipt))
+        receipt['fileProof']['captureExcluded'] = False
+        with self.assertRaises(lab.LabError): lab.semantic_world_state(receipt)
+
+    def test_legacy_absence_and_explicit_null_differ(self):
+        import behavior_lab as lab
+        receipt = self.receipt('cpp'); del receipt['fileProof']
+        self.assertNotIn('fileProof', lab.semantic_world_state(receipt))
+        lab.validate_file_sequence({str(i): {'receipt': deepcopy(receipt)} for i in range(3)})
+        receipt['fileProof'] = None
+        with self.assertRaises(lab.LabError): lab.semantic_world_state(receipt)
+        with self.assertRaises(lab.LabError):
+            lab.validate_file_sequence({str(i): {'receipt': deepcopy(receipt)} for i in range(3)})
+
+    def test_frozen_sequence_pipeline_rejects_partial_and_valid_drift(self):
+        import behavior_lab as lab
+        frames = {str(i): {'receipt': self.receipt()} for i in range(3)}
+        lab.validate_file_sequence(frames)
+        del frames['1']['receipt']['fileProof']
+        with self.assertRaises(lab.LabError): lab.validate_file_sequence(frames)
+        frames['1']['receipt']['fileProof'] = synthetic('rust')
+        p = frames['1']['receipt']['fileProof']
+        p['scopes'][0]['calls']['attempt'][0] = p['scopes'][0]['calls']['success'][0] = 1
+        totals(p); f.validate_fields(p)
+        with self.assertRaises(lab.LabError): lab.validate_file_sequence(frames)
+
+
 if __name__ == '__main__':
     unittest.main()
