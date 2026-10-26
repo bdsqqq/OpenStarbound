@@ -1,3 +1,149 @@
+#ifdef STAR_USE_RUST_BYTE_ARRAY
+#include "StarByteArray.hpp"
+#include "StarEncode.hpp"
+
+namespace Star {
+
+ByteArray ByteArray::fromCString(char const* str) {
+  ByteArrayRust::NativeCtx c; c.input=str; ByteArrayRust::execute(0,c); return std::move(*c.value);
+}
+
+ByteArray ByteArray::fromCStringWithNull(char const* str) {
+  ByteArrayRust::NativeCtx c; c.input=str; ByteArrayRust::execute(1,c); return std::move(*c.value);
+}
+
+ByteArray ByteArray::withReserve(size_t capacity) {
+  ByteArrayRust::NativeCtx c; c.args[0]=capacity; ByteArrayRust::execute(2,c); return std::move(*c.value);
+}
+
+ByteArray::ByteArray() {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.ready=false; ByteArrayRust::execute(3,c);
+}
+
+ByteArray::ByteArray(size_t dataSize, char c)
+  : ByteArray() {
+  ByteArrayRust::NativeCtx ctx; ctx.owner=this; ctx.args[0]=dataSize; ctx.args[1]=static_cast<unsigned char>(c); ByteArrayRust::execute(4,ctx);
+}
+
+ByteArray::ByteArray(const char* data, size_t dataSize)
+  : ByteArray() {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.input=data; c.inputCount=dataSize; c.args[0]=dataSize; ByteArrayRust::execute(5,c);
+}
+
+ByteArray::ByteArray(ByteArray const& b)
+  : ByteArray() {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.other=&b; ByteArrayRust::execute(6,c);
+}
+
+ByteArray::ByteArray(ByteArray&& b) noexcept
+  : ByteArray() {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.other=&b; ByteArrayRust::execute(7,c);
+}
+
+ByteArray::~ByteArray() {
+  ByteArrayRust::NativeCtx c; c.owner=this; ByteArrayRust::execute(8,c);
+}
+
+ByteArray& ByteArray::operator=(ByteArray const& b) {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.other=&b; ByteArrayRust::execute(9,c); return *this;
+}
+
+ByteArray& ByteArray::operator=(ByteArray&& b) noexcept {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.other=&b; ByteArrayRust::execute(10,c); return *this;
+}
+
+void ByteArray::reset() {
+  ByteArrayRust::NativeCtx c; c.owner=this; ByteArrayRust::execute(11,c);
+}
+
+void ByteArray::reserve(size_t newCapacity) {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.args[0]=newCapacity; ByteArrayRust::execute(12,c);
+}
+
+void ByteArray::resize(size_t size, char f) {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.args[0]=size; c.args[1]=static_cast<unsigned char>(f); ByteArrayRust::execute(13,c);
+}
+
+void ByteArray::fill(size_t s, char c) {
+  ByteArrayRust::NativeCtx ctx; ctx.owner=this; ctx.args[0]=s; ctx.args[1]=static_cast<unsigned char>(c); ByteArrayRust::execute(14,ctx);
+}
+
+void ByteArray::fill(char c) {
+  ByteArrayRust::NativeCtx ctx; ctx.owner=this; ctx.args[0]=static_cast<unsigned char>(c); ByteArrayRust::execute(15,ctx);
+}
+
+ByteArray ByteArray::sub(size_t b, size_t s) const {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.args[0]=b; c.args[1]=s; ByteArrayRust::execute(16,c); return std::move(*c.value);
+}
+
+ByteArray ByteArray::left(size_t s) const {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.args[0]=s; ByteArrayRust::execute(17,c); return std::move(*c.value);
+}
+
+ByteArray ByteArray::right(size_t s) const {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.args[0]=s; ByteArrayRust::execute(18,c); return std::move(*c.value);
+}
+
+void ByteArray::trimLeft(size_t s) {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.args[0]=s; ByteArrayRust::execute(19,c);
+}
+
+void ByteArray::trimRight(size_t s) {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.args[0]=s; ByteArrayRust::execute(20,c);
+}
+
+size_t ByteArray::diffChar(const ByteArray& b) const {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.other=&b; ByteArrayRust::execute(21,c); return c.result;
+}
+
+int ByteArray::compare(const ByteArray& b) const {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.other=&b; ByteArrayRust::execute(22,c); return c.result==UINT64_MAX?-1:static_cast<int>(c.result);
+}
+
+ByteArray ByteArray::andWith(ByteArray const& rhs, bool extend) {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.other=&rhs; c.args[0]=extend; ByteArrayRust::execute(23,c); return std::move(*c.value);
+}
+
+ByteArray ByteArray::orWith(ByteArray const& rhs, bool extend) {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.other=&rhs; c.args[0]=extend; ByteArrayRust::execute(24,c); return std::move(*c.value);
+}
+
+ByteArray ByteArray::xorWith(ByteArray const& rhs, bool extend) {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.other=&rhs; c.args[0]=extend; ByteArrayRust::execute(25,c); return std::move(*c.value);
+}
+
+void ByteArray::insert(size_t pos, char byte) {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.args[0]=pos; c.args[1]=static_cast<unsigned char>(byte); ByteArrayRust::execute(26,c);
+}
+
+ByteArray::iterator ByteArray::insert(const_iterator pos, char byte) {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.position=pos; c.args[0]=static_cast<unsigned char>(byte); ByteArrayRust::execute(27,c); return c.pointer;
+}
+
+void ByteArray::push_back(char byte) {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.args[0]=static_cast<unsigned char>(byte); ByteArrayRust::execute(28,c);
+}
+
+bool ByteArray::operator<(const ByteArray& b) const {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.other=&b; ByteArrayRust::execute(29,c); return c.result;
+}
+
+bool ByteArray::operator==(const ByteArray& b) const {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.other=&b; ByteArrayRust::execute(30,c); return c.result;
+}
+
+bool ByteArray::operator!=(const ByteArray& b) const {
+  ByteArrayRust::NativeCtx c; c.owner=this; c.other=&b; ByteArrayRust::execute(31,c); return c.result;
+}
+
+std::ostream& operator<<(std::ostream& os, const ByteArray& b) {
+  ByteArrayRust::NativeCtx c; c.owner=&b; c.stream=&os; ByteArrayRust::execute(32,c); return os;
+}
+
+}
+
+namespace Star::ByteArrayRust { void streamHex(NativeCtx& c){ *c.stream << hexEncode(*c.owner); } }
+#else
 #include "StarByteArray.hpp"
 #include "StarEncode.hpp"
 
@@ -256,3 +402,4 @@ std::ostream& operator<<(std::ostream& os, const ByteArray& b) {
 }
 
 }
+#endif

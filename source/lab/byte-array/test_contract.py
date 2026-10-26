@@ -5,6 +5,7 @@ import json
 import pathlib
 import unittest
 import contract as c
+from rust_seal import branches
 
 class ContractTests(unittest.TestCase):
     def rows(self,op): return [r for r in c.expected() if r['options']['action']==op]
@@ -17,8 +18,8 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(hashlib.sha256(c.canonical(rows)).hexdigest(), EXPECTED_SHA256)
     def test_full_definition_inventory(self):
         root=pathlib.Path(__file__).resolve().parents[3]
-        cpp=(root/'source/core/StarByteArray.cpp').read_text().splitlines()
-        hpp=(root/'source/core/StarByteArray.hpp').read_text().splitlines()
+        cpp=branches((root/'source/core/StarByteArray.cpp').read_text())[1].splitlines()
+        hpp=branches((root/'source/core/StarByteArray.hpp').read_text(), True)[1].splitlines()
         compiled=[i for i,s in enumerate(cpp,1) if not s[:1].isspace() and ('ByteArray::' in s or s.startswith('std::ostream& operator<<'))]
         header=[i for i,s in enumerate(hpp,1) if (s.startswith('inline ') or s.startswith('ByteArray ByteArray::combineWith')) and s.endswith('{')]
         self.assertEqual(compiled,[x[0] for x in c.CPP])
