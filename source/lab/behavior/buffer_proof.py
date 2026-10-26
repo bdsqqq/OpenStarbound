@@ -134,6 +134,12 @@ def parser_events(events):
 
 def validate(receipt):
     p = receipt.get('bufferProof')
+    io = None
+    if type(p) is dict and 'ioDevice' in p:
+        from io_device_proof import validate_fields
+        io = validate_fields(p['ioDevice'])
+        p = deepcopy(p)
+        p.pop('ioDevice')
     keys(p, 'version backend nativeObservedCalls scopes calls network save database visual')
     require(type(p['version']) is int and p['version']==1 and p['backend'] in ('cpp','rust'), 'version/backend')
     backend = p['backend']
@@ -196,6 +202,8 @@ def validate(receipt):
     out['network']['acceptedPeerPort']='<accepted-ephemeral-port>'
     out['save']['filename']='<owned-storage>/buffer-save.sbvj'
     out['database']['filename']='<owned-storage>/buffer-payload.btree'
+    if io is not None:
+        out['ioDevice'] = io
     return out
 
 

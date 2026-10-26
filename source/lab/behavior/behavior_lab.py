@@ -702,6 +702,11 @@ def pair_compare(reference: Path, candidate: Path, output: Path, same_backend=Fa
                 wanted = "cpp" if same_backend else "rust"
                 if ref_meta["bufferProof"]["backend"] != "cpp" or cand_meta["bufferProof"]["backend"] != wanted:
                     row["errors"].append("expected C++ reference and correct Buffer backend")
+                ref_io = ref_meta["bufferProof"].get("ioDevice")
+                cand_io = cand_meta["bufferProof"].get("ioDevice")
+                if ref_io is not None or cand_io is not None:
+                    if ref_io is None or cand_io is None or ref_io["backend"] != "cpp" or cand_io["backend"] != wanted:
+                        row["errors"].append("expected C++ reference and correct IODevice backend")
                 if ref_meta["lightingBackend"] != "cpp" or (same_backend and cand_meta["lightingBackend"] != "cpp"):
                     row["errors"].append("expected C++ reference lighting")
             elif ref_meta["scenario"] == "datastream-room":

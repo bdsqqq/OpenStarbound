@@ -2976,6 +2976,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/base/StarIODeviceLab.hpp",
+      "rule": "io-device-lab-contract"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/base/StarJsonPatchLab.hpp",
       "rule": "json-patch-lab-contract"
     },
@@ -20212,6 +20222,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/io_device_proof.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/behavior/json_patch_proof.py",
       "rule": "laboratories"
     },
@@ -20383,6 +20403,16 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/behavior/test_host_address_proof.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/test_io_device_proof.py",
       "rule": "laboratories"
     },
     {
@@ -27089,6 +27119,10 @@
       "sha256": "fadd40c0f0e37dd5a7c353928c2166e163d85662da43edf0b1a250e87bf89dc8"
     },
     {
+      "path": "source/base/StarIODeviceLab.hpp",
+      "sha256": "e1b2ef7a473ec19bbf8d5ca4dd16298fe04588765ff601fc4a123b8bc5114db6"
+    },
+    {
       "path": "source/base/StarJsonPatchLab.hpp",
       "sha256": "a392b86897b07edc737a12890d628239ee56ccdd22983e71ca7e75ed49cc49ef"
     },
@@ -27190,7 +27224,7 @@
     },
     {
       "path": "source/client/StarClientApplication.cpp",
-      "sha256": "ac0eb33a826e6d8855db32f70b30dd769bf5f01a2180de3dbe3f8911ff3d7257"
+      "sha256": "fc6c57806bbbc3c8976915d5b23783e7a1a327035e782aefda63b6193a409a8d"
     },
     {
       "path": "source/client/StarClientApplication.hpp",
@@ -31062,7 +31096,7 @@
     },
     {
       "path": "source/lab/behavior/behavior_lab.py",
-      "sha256": "df8f9e62888bca5efbdc3f6e93d1ade7d6a80ef17788c2b37a554000b05b66b2"
+      "sha256": "29325a3771ee12d5f34fa107dc66eee6ed88710169a34d6c31e85a7673a50ef1"
     },
     {
       "path": "source/lab/behavior/btree_padding.py",
@@ -31070,7 +31104,7 @@
     },
     {
       "path": "source/lab/behavior/buffer_proof.py",
-      "sha256": "db18d2ed0a5a3e6c1ad00587de8ea884b08a2a4a1b17c989fcdc9d2730522379"
+      "sha256": "84cf867ba72001cf8098788d9ab81cef2eec2344ec97f730a43c5e97f282f2a2"
     },
     {
       "path": "source/lab/behavior/build_provenance.py",
@@ -31095,6 +31129,10 @@
     {
       "path": "source/lab/behavior/host_address_proof.py",
       "sha256": "b9f3953aef82c241d03487e7ab2e8bd785819b702553611d6c6d831771951f5c"
+    },
+    {
+      "path": "source/lab/behavior/io_device_proof.py",
+      "sha256": "1782a5568b59c6b3be074a7f897100b72dc60d3004392e2b6a8a835072bd51e5"
     },
     {
       "path": "source/lab/behavior/json_patch_proof.py",
@@ -31167,6 +31205,10 @@
     {
       "path": "source/lab/behavior/test_host_address_proof.py",
       "sha256": "466320b5ef84373501aeb977f3beacee3e3c33dda8d805d80058384783905c93"
+    },
+    {
+      "path": "source/lab/behavior/test_io_device_proof.py",
+      "sha256": "81796a8bf1c09fc03b24517120cbd52ee281c3b467eb9b19fdf12c0730c86174"
     },
     {
       "path": "source/lab/behavior/test_json_patch_proof.py",
@@ -31734,7 +31776,7 @@
     },
     {
       "path": "source/lab/migration/modules.json",
-      "sha256": "d47b44eba257d54ffa16dfaa0f16363e297393d55bdfa9e963de4bbe144a47dd"
+      "sha256": "17b28e744a910ee9a3027bff0bed546d55252d5a92cba689d6bb55fa5db371a1"
     },
     {
       "path": "source/lab/native_artifacts.py",
@@ -33051,11 +33093,11 @@
   "summary": {
     "by_disposition": {
       "ffi-adapter": 29,
-      "harness": 22,
+      "harness": 23,
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 246,
+      "oracle/harness": 248,
       "retain-tooling": 20,
       "retained-third-party": 296,
       "rust-candidate": 21,
@@ -33096,14 +33138,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 35,
-      "validation.oracles-harness": 268,
+      "validation.oracles-harness": 271,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1696,
+    "files": 1699,
     "modules": 39,
-    "no_direct_target": 590
+    "no_direct_target": 593
   }
 }

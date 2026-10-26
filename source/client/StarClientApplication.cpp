@@ -22,6 +22,7 @@
 #include "StarHostAddressLab.hpp"
 #include "StarDataStreamLab.hpp"
 #include "StarBufferLab.hpp"
+#include "StarIODeviceLab.hpp"
 #include "StarBTreeLab.hpp"
 #include <sstream>
 #include "StarOptionParserLab.hpp"
@@ -2471,14 +2472,19 @@ void ClientApplication::prepareBehaviorOptionParserFrame() {
 void ClientApplication::prepareBehaviorBufferFrame() {
   if (m_behaviorBufferProof.isNull()) {
     auto before = BufferLabCounts::snapshot();
+    auto ioBefore = IODeviceLabCounts::snapshot();
     JsonArray scopes;
+    JsonArray ioScopes;
     uint64_t nativeCalls = 0;
     auto observed = [&](String const& method, auto&& operation) {
       auto start = BufferLabCounts::snapshot();
+      auto ioStart = IODeviceLabCounts::snapshot();
       operation();
       ++nativeCalls;
       scopes.append(JsonObject{{"method", method}, {"completed", true},
           {"calls", BufferLabCounts::snapshot().delta(start)}});
+      ioScopes.append(JsonObject{{"method", method}, {"completed", true},
+          {"calls", IODeviceLabCounts::snapshot().delta(ioStart)}});
     };
     TcpSocketPtr listener;
     HostAddressWithPort parsed;
@@ -2670,9 +2676,39 @@ void ClientApplication::prepareBehaviorBufferFrame() {
 #ifdef STAR_USE_RUST_BUFFER
     backend = "rust";
 #endif
+    // Preserve the original Buffer aggregate: the additional PNG decoder is
+    // an IODevice consumer, outside the existing 13 Buffer scopes.
+    auto bufferCalls = BufferLabCounts::snapshot().delta(before);
+    auto assetBytes = m_root->assets()->bytes("/behaviorlab/buffer.png");
+    // Assets may load on a worker or return cached bytes. Only this explicit
+    // production decode is attributed to the main-thread PNG scope.
+    auto pngStart = IODeviceLabCounts::snapshot();
+    auto sourceImage = Image::readPng(make_shared<Buffer>(*assetBytes));
+    if (sourceImage.size() != Vec2U(16, 16))
+      throw StarException("BehaviorLab: IODevice PNG source dimensions mismatch");
+    auto sourceColor = sourceImage.getrgb(0, 0);
+    for (unsigned y = 0; y != 16; ++y)
+      for (unsigned x = 0; x != 16; ++x)
+        if (sourceImage.getrgb(x, y) != Vec4B(255, 255, 255, 255))
+          throw StarException("BehaviorLab: IODevice PNG source pixels mismatch");
+    ioScopes.append(JsonObject{{"method", "Image::readPng(owned asset bytes)"}, {"completed", true},
+        {"calls", IODeviceLabCounts::snapshot().delta(pngStart)}});
+    String ioBackend = "cpp";
+#ifdef STAR_USE_RUST_IO_DEVICE
+    ioBackend = "rust";
+#endif
+    // Freeze consumer counts before frame capture writes its evidence PNG.
+    auto ioCalls = IODeviceLabCounts::snapshot().delta(ioBefore);
     m_behaviorBufferProof = JsonObject{{"version", 1}, {"backend", backend},
         {"nativeObservedCalls", nativeCalls}, {"scopes", std::move(scopes)},
-        {"calls", BufferLabCounts::snapshot().delta(before)},
+        {"calls", std::move(bufferCalls)},
+        {"ioDevice", JsonObject{{"version", 1}, {"backend", ioBackend},
+            {"scopeThread", "main"}, {"captureExcluded", true},
+            {"calls", std::move(ioCalls)}, {"scopes", std::move(ioScopes)},
+            {"png", JsonObject{{"source", "Root::assets()->bytes(/behaviorlab/buffer.png)"},
+                {"decoder", "Image::readPng(Buffer)"},
+                {"sourceSize", JsonArray{sourceImage.width(), sourceImage.height()}},
+                {"color", JsonArray{sourceColor[0], sourceColor[1], sourceColor[2], sourceColor[3]}}}}}},
         {"network", JsonObject{{"transport", "tcp"}, {"producer", "independent-literal-raw-sender"},
             {"inputEndpoint", strf("127.0.0.1:{}", port)}, {"chosenPort", port}, {"ownedBindSucceeded", true},
             {"rulesVersion", 5}, {"streamEnabled", false}, {"universeHandshake", false},
