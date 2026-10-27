@@ -91,6 +91,52 @@ class RetentionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'exact selected product membership'):
             self.m.verify([])
 
+    def source_version(self):
+        source = self.root / 'source/current.hpp'
+        source.write_bytes(b'old source bytes')
+        certificate = json.loads(self.m.CERTIFICATE.read_bytes())
+        certificate['physicalBindings'][str(source)] = dict(kind='current-regular', canonical=str(source),
+            size=source.stat().st_size, sha256=sha(source.read_bytes()))
+        self.m.CERTIFICATE.write_text(json.dumps(certificate))
+        self.m.CERT_SHA = sha(self.m.CERTIFICATE.read_bytes())
+        manifest = self.root / 'build/versions/manifest.json'
+        copy = manifest.parent / 'bytes/source/current.hpp'
+        copy.parent.mkdir(parents=True)
+        copy.write_bytes(source.read_bytes())
+        manifest.write_text(json.dumps(dict(certificateSha256=self.m.CERT_SHA, entries={str(source):
+            dict(copy=str(copy), size=copy.stat().st_size, sha256=sha(copy.read_bytes()))})))
+        source.write_bytes(b'new source revision, deliberately not old bytes')
+        return manifest, copy
+
+    def test_changed_source_needs_exact_explicit_version_and_never_renews_origin(self):
+        manifest, copy = self.source_version()
+        with self.assertRaisesRegex(ValueError, 'current byte integrity'):
+            self.m.verify([])
+        report = self.m.verify([], (str(manifest), sha(manifest.read_bytes())))
+        self.assertFalse(report['originalCurrentOriginReplayAvailable'])
+        self.assertEqual(len(report['versionedSourceBindings']), 1)
+        copy.write_bytes(b'coherent replacement is NOT original bytes')
+        data = json.loads(manifest.read_bytes())
+        row = next(iter(data['entries'].values()))
+        row.update(size=copy.stat().st_size, sha256=sha(copy.read_bytes()))
+        manifest.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError, 'original byte contract'):
+            self.m.verify([], (str(manifest), sha(manifest.read_bytes())))
+
+    def test_source_version_pin_corruption_and_product_substitution_rejected(self):
+        manifest, copy = self.source_version()
+        with self.assertRaisesRegex(ValueError, 'source-version manifest pin'):
+            self.m.verify([], (str(manifest), '0' * 64))
+        copy.write_bytes(b'corrupt copy')
+        with self.assertRaisesRegex(ValueError, 'exact retained bytes'):
+            self.m.verify([], (str(manifest), sha(manifest.read_bytes())))
+        data = json.loads(manifest.read_bytes())
+        row = next(iter(data['entries'].values()))
+        data['entries'] = {str(self.product): row}
+        manifest.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError, 'first-party source'):
+            self.m.verify([], (str(manifest), sha(manifest.read_bytes())))
+
     def test_current_alias_cannot_replace_original_origin(self):
         target = self.root / 'another'
         target.write_bytes(self.old.read_bytes())
