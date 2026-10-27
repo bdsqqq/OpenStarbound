@@ -4,9 +4,21 @@
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mode="${1:-lighting}"
-if [[ $# -gt 1 || ! "$mode" =~ ^(lighting|traversal|combined|encode|encode-combined|sha256|sha256-combined|vlq|vlq-combined|bytes|bytes-combined|unicode|unicode-combined|shell|shell-combined|jsonpath|jsonpath-combined|assetpath|assetpath-combined|random-mwc|random-mwc-combined|jsonpatch|jsonpatch-combined|textscan|textscan-combined|compression|compression-combined|zstd-combined|option-parser-combined|host-address-combined|data-stream-combined|buffer-combined|io-device-combined|byte-array-combined|string-view-combined|file-combined|path-embed-combined|lru-cache-combined)$ ]]; then
-  printf '%s\n' 'usage: build-behavior-lab.sh [lighting|traversal|combined|encode|encode-combined|sha256|sha256-combined|vlq|vlq-combined|bytes|bytes-combined|unicode|unicode-combined|shell|shell-combined|jsonpath|jsonpath-combined|assetpath|assetpath-combined|random-mwc|random-mwc-combined|jsonpatch|jsonpatch-combined|textscan|textscan-combined|compression|compression-combined|zstd-combined|option-parser-combined|host-address-combined|data-stream-combined|buffer-combined|io-device-combined|byte-array-combined|string-view-combined|file-combined|path-embed-combined|lru-cache-combined]'    >&2
+if [[ $# -gt 1 || ! "$mode" =~ ^(lighting|traversal|combined|encode|encode-combined|sha256|sha256-combined|vlq|vlq-combined|bytes|bytes-combined|unicode|unicode-combined|shell|shell-combined|jsonpath|jsonpath-combined|assetpath|assetpath-combined|random-mwc|random-mwc-combined|jsonpatch|jsonpatch-combined|textscan|textscan-combined|compression|compression-combined|zstd-combined|option-parser-combined|host-address-combined|data-stream-combined|buffer-combined|io-device-combined|byte-array-combined|string-view-combined|file-combined|path-embed-combined|lru-cache-combined|ttl-cache-combined)$ ]]; then
+  printf '%s\n' 'usage: build-behavior-lab.sh [lighting|traversal|combined|encode|encode-combined|sha256|sha256-combined|vlq|vlq-combined|bytes|bytes-combined|unicode|unicode-combined|shell|shell-combined|jsonpath|jsonpath-combined|assetpath|assetpath-combined|random-mwc|random-mwc-combined|jsonpatch|jsonpatch-combined|textscan|textscan-combined|compression|compression-combined|zstd-combined|option-parser-combined|host-address-combined|data-stream-combined|buffer-combined|io-device-combined|byte-array-combined|string-view-combined|file-combined|path-embed-combined|lru-cache-combined|ttl-cache-combined]'    >&2
   exit 2
+fi
+if [[ "$mode" == ttl-cache-combined ]]; then
+  # A new module must not leave another runnable migration game pair behind.
+  # The coordinator archives verified bytes first; this recipe never deletes.
+  [[ ! -e "$root/build/.migration-cleanup.lock" ]] || { printf '%s\n' 'migration cleanup is active; refusing a new build' >&2; exit 2; }
+  for previous in "$root/build/behavior/reference/bin/starbound" "$root/build/behavior/candidate/bin/starbound" "$root"/build/behavior/*/reference/bin/starbound "$root"/build/behavior/*/candidate/bin/starbound; do
+    if [[ -e "$previous" || -L "$previous" ]]; then
+      printf 'retire prior owned migration game pair with verified retention before building TTL: %s\n' "$previous" >&2
+      exit 2
+    fi
+  done
+  python3 "$root/scripts/cleanup-migration-artifacts.py" budget
 fi
 if [[ "$(uname -s)" != Darwin || "$(uname -m)" != arm64 ]]; then
   printf '%s\n' 'this build recipe is verified for native apple silicon only' >&2
@@ -51,9 +63,10 @@ for backend in reference candidate; do
   file=OFF
   path_embed=OFF
   lru_cache=OFF
+  ttl_cache=OFF
   # All modes share the identical all-C++ reference; candidates stay isolated.
   base="$root/build/behavior"
-  if [[ "$mode" == io-device-combined || "$mode" == byte-array-combined || "$mode" == string-view-combined || "$mode" == file-combined || "$mode" == path-embed-combined || "$mode" == lru-cache-combined ]]; then base="$base/$mode"; fi
+  if [[ "$mode" == io-device-combined || "$mode" == byte-array-combined || "$mode" == string-view-combined || "$mode" == file-combined || "$mode" == path-embed-combined || "$mode" == lru-cache-combined || "$mode" == ttl-cache-combined ]]; then base="$base/$mode"; fi
   if [[ "$mode" == byte-array-combined ]]; then base="$base-r7"; fi
   if [[ "$mode" == string-view-combined ]]; then base="$base-r1"; fi
   if [[ "$mode" == file-combined ]]; then
@@ -61,8 +74,10 @@ for backend in reference candidate; do
     [[ "$generation" =~ ^[1-9][0-9]*$ ]] || { printf '%s\n' 'invalid File build generation' >&2; exit 2; }
     base="$base-r$generation"
   fi
-  if [[ "$mode" == path-embed-combined || "$mode" == lru-cache-combined ]]; then
-    if [[ "$mode" == lru-cache-combined ]]; then
+  if [[ "$mode" == path-embed-combined || "$mode" == lru-cache-combined || "$mode" == ttl-cache-combined ]]; then
+    if [[ "$mode" == ttl-cache-combined ]]; then
+      generation="${STAR_BEHAVIOR_TTL_GENERATION:-1}"
+    elif [[ "$mode" == lru-cache-combined ]]; then
       generation="${STAR_BEHAVIOR_LRU_GENERATION:-1}"
     else
       generation="${STAR_BEHAVIOR_PATH_EMBED_GENERATION:-1}"
@@ -111,7 +126,7 @@ for backend in reference candidate; do
       host-address-combined) rust=ON; blocks=ON; encode=ON; sha256=ON; vlq=ON; bytes=ON; unicode=ON; shell=ON; jsonpath=ON; assetpath=ON; random_mwc=ON; jsonpatch=ON; textscan=ON; compression=ON; zstd=ON; option_parser=ON; host_address=ON ;;
       data-stream-combined) rust=ON; blocks=ON; encode=ON; sha256=ON; vlq=ON; bytes=ON; unicode=ON; shell=ON; jsonpath=ON; assetpath=ON; random_mwc=ON; jsonpatch=ON; textscan=ON; compression=ON; zstd=ON; option_parser=ON; host_address=ON; data_stream=ON ;;
       buffer-combined) rust=ON; blocks=ON; encode=ON; sha256=ON; vlq=ON; bytes=ON; unicode=ON; shell=ON; jsonpath=ON; assetpath=ON; random_mwc=ON; jsonpatch=ON; textscan=ON; compression=ON; zstd=ON; option_parser=ON; host_address=ON; data_stream=ON; buffer=ON ;;
-      io-device-combined|byte-array-combined|string-view-combined|file-combined|path-embed-combined|lru-cache-combined) rust=ON; blocks=ON; encode=ON; sha256=ON; vlq=ON; bytes=ON; unicode=ON; shell=ON; jsonpath=ON; assetpath=ON; random_mwc=ON; jsonpatch=ON; textscan=ON; compression=ON; zstd=ON; option_parser=ON; host_address=ON; data_stream=ON; buffer=ON; io_device=ON ;;
+      io-device-combined|byte-array-combined|string-view-combined|file-combined|path-embed-combined|lru-cache-combined|ttl-cache-combined) rust=ON; blocks=ON; encode=ON; sha256=ON; vlq=ON; bytes=ON; unicode=ON; shell=ON; jsonpath=ON; assetpath=ON; random_mwc=ON; jsonpatch=ON; textscan=ON; compression=ON; zstd=ON; option_parser=ON; host_address=ON; data_stream=ON; buffer=ON; io_device=ON ;;
     esac
     case "$mode" in
       byte-array-combined) byte_array=ON ;;
@@ -119,15 +134,16 @@ for backend in reference candidate; do
       file-combined) byte_array=ON; string_view=ON; file=ON ;;
       path-embed-combined) byte_array=ON; string_view=ON; file=ON; path_embed=ON ;;
       lru-cache-combined) byte_array=ON; string_view=ON; file=ON; path_embed=ON; lru_cache=ON ;;
+      ttl-cache-combined) byte_array=ON; string_view=ON; file=ON; path_embed=ON; lru_cache=ON; ttl_cache=ON ;;
     esac
-    if [[ "$mode" != lighting && "$mode" != io-device-combined && "$mode" != byte-array-combined && "$mode" != string-view-combined && "$mode" != file-combined && "$mode" != path-embed-combined && "$mode" != lru-cache-combined ]]; then base="$base/$mode"; fi
+    if [[ "$mode" != lighting && "$mode" != io-device-combined && "$mode" != byte-array-combined && "$mode" != string-view-combined && "$mode" != file-combined && "$mode" != path-embed-combined && "$mode" != lru-cache-combined && "$mode" != ttl-cache-combined ]]; then base="$base/$mode"; fi
   fi
   build="$base/$backend/cmake"
   extra=()
   if [[ -d "$root/build/macos-arm-release/vcpkg_installed" ]]; then
     extra+=("-DVCPKG_INSTALLED_DIR=$root/build/macos-arm-release/vcpkg_installed")
   fi
-  if [[ "$mode" == path-embed-combined || "$mode" == lru-cache-combined ]]; then
+  if [[ "$mode" == path-embed-combined || "$mode" == lru-cache-combined || "$mode" == ttl-cache-combined ]]; then
     # This generation consumes preinstalled offline dependencies only.
     extra+=("-DVCPKG_MANIFEST_INSTALL=OFF")
   fi
@@ -144,13 +160,13 @@ for backend in reference candidate; do
     -DSTAR_BUILD_LIGHTING_LAB=OFF "-DSTAR_USE_RUST_LIGHTING=$rust" \
     "-DSTAR_USE_RUST_BLOCKS_ALONG_LINE=$blocks" \
     "-DSTAR_USE_RUST_LINE_QUERY=OFF" "-DSTAR_USE_RUST_ENCODE=$encode" \
-    "-DSTAR_USE_RUST_SHA256=$sha256" "-DSTAR_USE_RUST_VLQ=$vlq" "-DSTAR_USE_RUST_BYTES=$bytes" "-DSTAR_USE_RUST_UNICODE=$unicode" "-DSTAR_USE_RUST_SHELL=$shell" "-DSTAR_USE_RUST_JSON_PATH=$jsonpath" "-DSTAR_USE_RUST_ASSET_PATH=$assetpath" "-DSTAR_USE_RUST_RANDOM_MWC=$random_mwc" "-DSTAR_USE_RUST_JSON_PATCH=$jsonpatch" "-DSTAR_USE_RUST_TEXT_SCAN=$textscan" "-DSTAR_USE_RUST_COMPRESSION=$compression" "-DSTAR_USE_RUST_ZSTD=$zstd" "-DSTAR_USE_RUST_OPTION_PARSER=$option_parser" "-DSTAR_USE_RUST_HOST_ADDRESS=$host_address" "-DSTAR_USE_RUST_DATA_STREAM=$data_stream" "-DSTAR_USE_RUST_BUFFER=$buffer" "-DSTAR_USE_RUST_IO_DEVICE=$io_device" "-DSTAR_USE_RUST_BYTE_ARRAY=$byte_array" "-DSTAR_USE_RUST_STRING_VIEW=$string_view" "-DSTAR_USE_RUST_FILE=$file" "-DSTAR_USE_RUST_PATH_EMBED=$path_embed" "-DSTAR_USE_RUST_LRU_CACHE=$lru_cache" \
+    "-DSTAR_USE_RUST_SHA256=$sha256" "-DSTAR_USE_RUST_VLQ=$vlq" "-DSTAR_USE_RUST_BYTES=$bytes" "-DSTAR_USE_RUST_UNICODE=$unicode" "-DSTAR_USE_RUST_SHELL=$shell" "-DSTAR_USE_RUST_JSON_PATH=$jsonpath" "-DSTAR_USE_RUST_ASSET_PATH=$assetpath" "-DSTAR_USE_RUST_RANDOM_MWC=$random_mwc" "-DSTAR_USE_RUST_JSON_PATCH=$jsonpatch" "-DSTAR_USE_RUST_TEXT_SCAN=$textscan" "-DSTAR_USE_RUST_COMPRESSION=$compression" "-DSTAR_USE_RUST_ZSTD=$zstd" "-DSTAR_USE_RUST_OPTION_PARSER=$option_parser" "-DSTAR_USE_RUST_HOST_ADDRESS=$host_address" "-DSTAR_USE_RUST_DATA_STREAM=$data_stream" "-DSTAR_USE_RUST_BUFFER=$buffer" "-DSTAR_USE_RUST_IO_DEVICE=$io_device" "-DSTAR_USE_RUST_BYTE_ARRAY=$byte_array" "-DSTAR_USE_RUST_STRING_VIEW=$string_view" "-DSTAR_USE_RUST_FILE=$file" "-DSTAR_USE_RUST_PATH_EMBED=$path_embed" "-DSTAR_USE_RUST_LRU_CACHE=$lru_cache" "-DSTAR_USE_RUST_TTL_CACHE=$ttl_cache" \
     "-DSTAR_RUNTIME_OUTPUT_DIRECTORY=$base/$backend/bin" "${extra[@]}"
   # Configuration creates sources outside the repository source tree. Bind
   # them and the evaluated command database BEFORE any compilation starts.
   python3 "$provenance" configured --source-root "$root" --snapshot "$snapshot"
   jobs="${CMAKE_BUILD_PARALLEL_LEVEL:-8}"
-  if [[ "$mode" == path-embed-combined || "$mode" == lru-cache-combined ]]; then
+  if [[ "$mode" == path-embed-combined || "$mode" == lru-cache-combined || "$mode" == ttl-cache-combined ]]; then
     jobs="${CMAKE_BUILD_PARALLEL_LEVEL:-6}"
     [[ "$jobs" =~ ^[1-6]$ ]] || { printf '%s\n' 'isolated behavior build requires 1–6 jobs' >&2; exit 2; }
   fi
