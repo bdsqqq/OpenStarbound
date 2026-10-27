@@ -1,5 +1,6 @@
 #include "StarTenantDatabase.hpp"
 #include "StarJsonExtra.hpp"
+#include "StarTtlCacheLab.hpp"
 
 namespace Star {
 
@@ -32,17 +33,32 @@ TenantDatabase::TenantDatabase() {
 
 void TenantDatabase::cleanup() {
   MutexLocker locker(m_cacheMutex);
+  TtlCacheLab::Scope scope(m_tenantCache, "cleanup");
   m_tenantCache.cleanup();
+}
+
+Json TenantDatabase::ttlLabHistory(bool stopWatching) const {
+  MutexLocker locker(m_cacheMutex);
+  if (!TtlCacheLab::watching) throw StarException("BehaviorLab: missing TTL watch");
+  if (stopWatching) TtlCacheLab::stop();
+  return TtlCacheLab::history();
 }
 
 TenantPtr TenantDatabase::getTenant(String const& name) const {
   MutexLocker locker(m_cacheMutex);
-  return m_tenantCache.get(name,
-      [this](String const& name) -> TenantPtr {
-        if (auto path = m_paths.maybe(name))
-          return readTenant(*path);
-        throw TenantException::format("No such tenant named '{}'", name);
-      });
+  TtlCacheLab::Scope scope(m_tenantCache, "get", name);
+  try {
+    return m_tenantCache.get(name,
+        [this](String const& name) -> TenantPtr {
+          TtlCacheLab::producer();
+          if (auto path = m_paths.maybe(name))
+            return readTenant(*path);
+          throw TenantException::format("No such tenant named '{}'", name);
+        });
+  } catch (std::exception const& e) {
+    if (scope.active) scope.error(e.what());
+    throw;
+  }
 }
 
 List<TenantPtr> TenantDatabase::getMatchingTenants(StringMap<unsigned> const& colonyTags) const {

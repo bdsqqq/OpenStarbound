@@ -39,6 +39,7 @@ import compression_proof
 import zstd_proof
 import path_embed_proof
 import lru_proof
+import ttl_proof
 import option_parser_proof
 import host_address_proof
 import data_stream_proof
@@ -52,7 +53,7 @@ ASSET_OVERLAYS = {
     "behavior-fixture": ROOT / "source/lab/behavior/assets",
 }
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,95}\Z")
-SCENARIOS = ("lighting-room", "raycast-room", "encoding-room", "sha256-room", "vlq-room", "bytes-room", "unicode-room", "shell-room", "jsonpath-room", "assetpath-room", "random-room", "jsonpatch-room", "text-room", "compression-room", "zstd-room", "option-parser-room", "host-address-room", "datastream-room", "buffer-room", "stringview-room", "path-embed-room", "lru-room")
+SCENARIOS = ("lighting-room", "raycast-room", "encoding-room", "sha256-room", "vlq-room", "bytes-room", "unicode-room", "shell-room", "jsonpath-room", "assetpath-room", "random-room", "jsonpatch-room", "text-room", "compression-room", "zstd-room", "option-parser-room", "host-address-room", "datastream-room", "buffer-room", "stringview-room", "path-embed-room", "lru-room", "ttl-room")
 MAX_PIXELS = 16_777_216
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
 
@@ -99,6 +100,49 @@ def dump(path: Path, value) -> None:
     with path.open("x", encoding="utf-8") as stream:
         json.dump(value, stream, indent=2, sort_keys=True, allow_nan=False)
         stream.write("\n")
+
+
+def durable_dump(path: Path, value) -> None:
+    """Retain actual child identity BEFORE wait; no Popen/stdin protocol changes."""
+    with path.open("x", encoding="utf-8") as stream:
+        json.dump(value, stream, sort_keys=True, allow_nan=False)
+        stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    fd = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def process_identity(pid):
+    start = subprocess.run(["ps", "-p", str(pid), "-o", "lstart="],
+        check=True, text=True, capture_output=True).stdout.strip()
+    if not start:
+        raise LabError("actual game OS start identity unavailable")
+    return start, os.getpgid(pid)
+
+
+def validate_process_binding(directory, manifest):
+    parent = directory.parent
+    for field, filename in (("processStart", "process-start.json"), ("processExit", "process-exit.json")):
+        if manifest.get(field) != identity(parent / filename):
+            raise LabError("actual process receipt binding changed")
+    start, end = load(parent / "process-start.json"), load(parent / "process-exit.json")
+    if (type(start.get("pid")) is not int or start["pid"] <= 0
+            or type(start.get("pgid")) is not int or start["pgid"] != start["pid"]
+            or not isinstance(start.get("osStart"), str) or not start["osStart"]
+            or start.get("status") != "started" or end.get("status") != "reaped"
+            or type(end.get("exitCode")) is not int or end["exitCode"] != 0
+            or any(type(end.get(k)) is not type(start[k]) or end.get(k) != start[k]
+                   for k in ("pid", "pgid", "osStart"))
+            or end.get("startReceipt") != manifest["processStart"]
+            or start.get("binary") != manifest["binary"]
+            or start.get("configuration") != manifest["configuration"]
+            or start.get("command") != manifest["command"]
+            or start.get("launch") != identity(parent / "launch.json")):
+        raise LabError("actual process start/exit/manifest mismatch")
 
 
 def load(path: Path):
@@ -231,6 +275,11 @@ def semantic_world_state(receipt: dict) -> dict:
     if receipt.get("scenario") == "compression-room":
         try:
             native["compressionProof"] = compression_proof.validate(receipt)
+        except ValueError as error:
+            raise LabError(str(error)) from error
+    if receipt.get("scenario") == "ttl-room":
+        try:
+            native["ttlProof"] = ttl_proof.observation(receipt)
         except ValueError as error:
             raise LabError(str(error)) from error
     if receipt.get("scenario") == "lru-room":
@@ -375,6 +424,11 @@ def captures(directory: Path) -> dict:
                 compression_proof.visible(frame, receipt)
             except ValueError as error:
                 raise LabError(str(error)) from error
+        if receipt["scenario"] == "ttl-room":
+            try:
+                ttl_proof.visible(frame, receipt)
+            except ValueError as error:
+                raise LabError(str(error)) from error
         if receipt["scenario"] == "lru-room":
             try:
                 lru_proof.visible(frame, receipt)
@@ -416,7 +470,12 @@ def captures(directory: Path) -> dict:
         result[name] = {"receipt": receipt, "png": pngs[name], "dimensions": list(frame.size),
                         "pngSha256": sha(pngs[name]), "receiptSha256": sha(receipts[name]),
                         "pixelsSha256": hashlib.sha256(frame.tobytes()).hexdigest()}
-    if scenarios == {"lru-room"}:
+    if scenarios == {"ttl-room"}:
+        try:
+            ttl_proof.validate_sequence(result, SCENE_FIELDS)
+        except ValueError as error:
+            raise LabError(str(error)) from error
+    elif scenarios == {"lru-room"}:
         try:
             lru_proof.validate_sequence(result, SCENE_FIELDS)
         except ValueError as error:
@@ -720,6 +779,19 @@ def validated(directory: Path) -> tuple[dict, dict]:
             or proof.get("binary") != manifest["binary"]["path"]
             or not isinstance(proof.get("source_files"), dict) or not proof["source_files"]):
         raise LabError(f"missing source-bound build identity: {directory}")
+    if any(frame["receipt"]["scenario"] == "ttl-room" for frame in frames.values()):
+        backend = next(iter(frames.values()))["receipt"]["ttlProof"]["backend"]
+        cache = proof.get("build_identity", {}).get("cache", {})
+        if cache.get(ttl_proof.SELECTOR) != ("ON" if backend == "rust" else "OFF"):
+            raise LabError("TTL selector receipt disagrees with evaluated CMake configuration")
+        validate_process_binding(directory, manifest)
+        # Configuration spelling comes from the immutable launch identity, not a guessed file name.
+        actual_config = Path(manifest["configuration"]["path"])
+        if identity(actual_config) != manifest["configuration"]:
+            raise LabError("TTL capture configuration identity changed")
+        for frame in frames.values():
+            if not ttl_proof.same(frame["receipt"]["ttlProof"]["configuration"], load(actual_config)):
+                raise LabError("TTL source/capture configuration binding differs")
     if any(frame["receipt"]["scenario"] == "lru-room" for frame in frames.values()):
         backend = next(iter(frames.values()))["receipt"]["lruProof"]["backend"]
         cache = proof.get("build_identity", {}).get("cache", {})
@@ -802,6 +874,12 @@ def pair_compare(reference: Path, candidate: Path, output: Path, same_backend=Fa
                 wanted = "cpp" if same_backend else "rust"
                 if ref_meta["optionParserProof"]["backend"] != "cpp" or cand_meta["optionParserProof"]["backend"] != wanted:
                     row["errors"].append("expected C++ reference and correct OptionParser backend")
+                if ref_meta["lightingBackend"] != "cpp" or (same_backend and cand_meta["lightingBackend"] != "cpp"):
+                    row["errors"].append("expected C++ reference lighting")
+            elif ref_meta["scenario"] == "ttl-room":
+                wanted = "native" if same_backend else "rust"
+                if ref_meta["ttlProof"]["backend"] != "native" or cand_meta["ttlProof"]["backend"] != wanted:
+                    row["errors"].append("expected native reference and correct TTL backend")
                 if ref_meta["lightingBackend"] != "cpp" or (same_backend and cand_meta["lightingBackend"] != "cpp"):
                     row["errors"].append("expected C++ reference lighting")
             elif ref_meta["scenario"] == "lru-room":
@@ -994,6 +1072,8 @@ def asset_overlays(scenario="lighting-room") -> dict:
         overlays["jsonpatch-fixture"] = ROOT / "source/lab/behavior/jsonpatch-assets"
     if scenario == "compression-room":
         overlays["compression-fixture"] = ROOT / "source/lab/behavior/compression-assets"
+    if scenario == "ttl-room":
+        overlays["ttl-fixture"] = ROOT / "source/lab/behavior/newttl-assets"
     if scenario == "lru-room":
         overlays["lru-fixture"] = ROOT / "source/lab/behavior/lru-assets"
     if scenario == "path-embed-room":
@@ -1094,10 +1174,20 @@ def capture(executable: Path, assets: Path, directory: Path, timeout: float, sce
             process = subprocess.Popen(command, cwd=directory, env=environment, stdout=log,
                                        stderr=subprocess.STDOUT, start_new_session=True)
             try:
+                start_identity, process_group = process_identity(process.pid)
+                process_start = {"schema": 1, "pid": process.pid, "pgid": process_group,
+                    "osStart": start_identity, "status": "started", "command": command,
+                    "binary": binary_id, "configuration": configuration_id,
+                    "launch": identity(directory / "launch.json"), "wallStarted": wall_started}
+                durable_dump(directory / "process-start.json", process_start)
                 waiting = True
                 if interrupted:
                     raise LabError("capture interrupted by SIGTERM")
                 code = process.wait(timeout=timeout)
+                durable_dump(directory / "process-exit.json", {
+                    "schema": 1, "pid": process.pid, "pgid": process_start["pgid"],
+                    "osStart": start_identity, "status": "reaped", "exitCode": code,
+                    "startReceipt": identity(directory / "process-start.json")})
             except BaseException:
                 waiting = False
                 stop_process_group(process)
@@ -1147,6 +1237,8 @@ def capture(executable: Path, assets: Path, directory: Path, timeout: float, sce
          "overlayFiles": overlay, "semanticBootconfig": semantic_bootconfig,
          "semanticConfiguration": semantic_configuration, "bootconfig": boot_id,
          "configuration": configuration_id, "command": command, "exitCode": code,
+         "processStart": identity(directory / "process-start.json"),
+         "processExit": identity(directory / "process-exit.json"),
          "elapsedSeconds": time.monotonic() - started, "frames": inventory(captured)})
     return frames
 

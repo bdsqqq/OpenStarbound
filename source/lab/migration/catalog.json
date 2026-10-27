@@ -3310,6 +3310,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/base/StarTtlCacheLab.hpp",
+      "rule": "ttl-cache-lab-contract"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/base/StarUnicodeLab.hpp",
       "rule": "unicode-lab-contract"
     },
@@ -7414,6 +7424,16 @@
       "module": "foundation.storage",
       "path": "source/core/StarTtlCache.hpp",
       "rule": "core-storage"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "ffi-adapter",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "foundation.storage",
+      "path": "source/core/StarTtlCacheHost.hpp",
+      "rule": "rust-ttl-cache-host"
     },
     {
       "cmake_membership": [
@@ -20842,6 +20862,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/test_ttl_proof.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/behavior/test_unicode_proof.py",
       "rule": "laboratories"
     },
@@ -20873,6 +20903,16 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/behavior/text_scan_proof.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/ttl_proof.py",
       "rule": "laboratories"
     },
     {
@@ -24709,6 +24749,56 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/ttl-cache/verify.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-production/game_syntax.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-production/probe.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-production/refresh.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-production/run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-production/verify.py",
       "rule": "laboratories"
     },
     {
@@ -29382,7 +29472,7 @@
     },
     {
       "path": "source/CMakeLists.txt",
-      "sha256": "f537432c6d0f9a40f4a0aa225dc19c54f30b86fda801e62e3459c1cd505af820"
+      "sha256": "f8ca245661297d1ee3f6423bc07d01f918a301de0945910eb8cd33b55235ad01"
     },
     {
       "path": "source/application/CMakeLists.txt",
@@ -29406,7 +29496,7 @@
     },
     {
       "path": "source/application/StarBehaviorLab.hpp",
-      "sha256": "d3d0cb294cf536ffc9d85a7337ee44548fa8367dde29b79ea56aebd63fbd8b94"
+      "sha256": "9ba40d6c235cb973164d430b124187c299e3a59a1f7524d3c7c36bf0c55f5365"
     },
     {
       "path": "source/application/StarDesktopService_pc_steam.cpp",
@@ -29777,6 +29867,10 @@
       "sha256": "956354c45c82b122950a107a787f067d4dbf058dad85481c16d256b3329faba9"
     },
     {
+      "path": "source/base/StarTtlCacheLab.hpp",
+      "sha256": "24346ab66cf6a86afae2de6b08447f3cbb581f4d476f1c6c34c161cedb932db9"
+    },
+    {
       "path": "source/base/StarUnicodeLab.hpp",
       "sha256": "bc3842cbb0964055159d8f88ffc29ee75dae77b718821f17fb43e0dfe5779efa"
     },
@@ -29818,7 +29912,7 @@
     },
     {
       "path": "source/client/StarClientApplication.cpp",
-      "sha256": "d6ae18033b5608317843274bb91bbb89ff3a71b2a5c88981a4cdc7dbbf43357e"
+      "sha256": "bb59287de0920fb9ed49063b12fe26b011dd9e68ad26ca3a570c1136f018128e"
     },
     {
       "path": "source/client/StarClientApplication.hpp",
@@ -30262,7 +30356,7 @@
     },
     {
       "path": "source/core/StarLruCache.hpp",
-      "sha256": "7164a91b0572cb0a75c699f09e39fef6c6802c7631c5edc32ea7a8dabfff1ddb"
+      "sha256": "87d72f7b1dfca06040a2f3193e7c1920280d1f358beae9bf9727c7e319097577"
     },
     {
       "path": "source/core/StarLruCacheHost.hpp",
@@ -30762,7 +30856,11 @@
     },
     {
       "path": "source/core/StarTtlCache.hpp",
-      "sha256": "51942575d77806e99f783f18ba0edb0595a41e634605322d06a85b03a2514081"
+      "sha256": "f5e455a98035ead719fbcd7624711a3c767069c3ad75dbadc5cd5e4248f20ec0"
+    },
+    {
+      "path": "source/core/StarTtlCacheHost.hpp",
+      "sha256": "e925f0348c0861e63a0dbd302a67d4dbfab5b6403a9082201c0e55917366203e"
     },
     {
       "path": "source/core/StarUdp.cpp",
@@ -32734,11 +32832,11 @@
     },
     {
       "path": "source/game/StarTenantDatabase.cpp",
-      "sha256": "ea2ed647f96eafd4c1cccb22f0d2498d536ea9132cdd448d21c6b5803db1b02b"
+      "sha256": "92ede70f667c09af853b24959b89399a14c0213266a7f15b1cdc350a1daec4c9"
     },
     {
       "path": "source/game/StarTenantDatabase.hpp",
-      "sha256": "0656f4a745c5920aed4920471bd7e19dcc4c657415d4550aa333848d829b24d7"
+      "sha256": "6f0ffd22b07bd8506c34c12f9526ea0a51c5682c197cd3be60f7b9db93ce7405"
     },
     {
       "path": "source/game/StarTerrainDatabase.cpp",
@@ -33730,7 +33828,7 @@
     },
     {
       "path": "source/lab/behavior/behavior_lab.py",
-      "sha256": "9bfbaa0b169cfb9b058879e289aa2b4f6585538ae7435acb4383b7e4d541b0df"
+      "sha256": "8c132adf822bc5c8fed0849cf524544ce4c3e2b8003e5666e05b90eeb26a6b9f"
     },
     {
       "path": "source/lab/behavior/btree_padding.py",
@@ -33838,7 +33936,7 @@
     },
     {
       "path": "source/lab/behavior/test_behavior_lab.py",
-      "sha256": "8aebfd062f90517c356d60d1f9a238db7dcc4f3e4cd5f276507571ea38d4b8dd"
+      "sha256": "12582845862793efce9b3496ac52a3ed18c731fc6440199d95825bb399177778"
     },
     {
       "path": "source/lab/behavior/test_buffer_proof.py",
@@ -33894,11 +33992,11 @@
     },
     {
       "path": "source/lab/behavior/test_lru_proof.py",
-      "sha256": "ad7eb5ace2b937caf31c9a7e8b6eda11c7074b195b8ac568e2154c7f6bcdb044"
+      "sha256": "c7cad75961b2a3584d93ab6eab72bb5066ebeb3acc3e0f40c0414f7ccce3ca5b"
     },
     {
       "path": "source/lab/behavior/test_native_scenario_contract.py",
-      "sha256": "de055ae63ed3061e299d2351fa0623d1a4830e8413a488508f8b43779da4bcef"
+      "sha256": "df02b77cbf02bdde4e73e8c630e2cac190e26501849fa49c57608c26924e17de"
     },
     {
       "path": "source/lab/behavior/test_option_parser_proof.py",
@@ -33929,6 +34027,10 @@
       "sha256": "2c2db601897160fb7ec38f36c4dfb8bcc942b9dbd213f70e2e5f17ac51c88b46"
     },
     {
+      "path": "source/lab/behavior/test_ttl_proof.py",
+      "sha256": "c7d14fd395a0fc23562a38cf739a2ce75b52cc0a3ca4e23da3cad427ae4c31f9"
+    },
+    {
       "path": "source/lab/behavior/test_unicode_proof.py",
       "sha256": "e63e5ff27134e5222528fa3b32e21d595cd7d99982d5e213c5bb784fc1452273"
     },
@@ -33943,6 +34045,10 @@
     {
       "path": "source/lab/behavior/text_scan_proof.py",
       "sha256": "aa9e943504ced9090e8569ebf2b1f33a4a187119dcb89294b9f494901ddd99b7"
+    },
+    {
+      "path": "source/lab/behavior/ttl_proof.py",
+      "sha256": "0a1001474c0423ee5bb04c7320b0b56a2a6911a42591cd1761b76070ef86fd50"
     },
     {
       "path": "source/lab/behavior/unicode_proof.py",
@@ -34946,7 +35052,7 @@
     },
     {
       "path": "source/lab/migration/modules.json",
-      "sha256": "622b8e612bdfc1df51cfa6336137b258b19a8d645ac1ce6623606cc37c4b3149"
+      "sha256": "eb90add6c12e436b319401ab71365458e4f4cefe4f2428b442852d105f289dad"
     },
     {
       "path": "source/lab/native_artifacts.py",
@@ -35467,6 +35573,26 @@
     {
       "path": "source/lab/ttl-cache/verify.py",
       "sha256": "0d9d794b7ba4bbfecd5221cfa9b65b3231bc30e63f58012b4037617b56b1848f"
+    },
+    {
+      "path": "source/lab/ttl-production/game_syntax.py",
+      "sha256": "d71d3759c20d7aa912ff99d7052e45fbe259a8167c50df34b951f2206075b558"
+    },
+    {
+      "path": "source/lab/ttl-production/probe.cpp",
+      "sha256": "48914ad9b4074472bb2d745824a42c56100f6f5d45a66c29f9face8125b002a7"
+    },
+    {
+      "path": "source/lab/ttl-production/refresh.py",
+      "sha256": "0bca9475024cd09e029330e290d579c84480907622bd2872a0405b0d8933a0d5"
+    },
+    {
+      "path": "source/lab/ttl-production/run.py",
+      "sha256": "6ffebbe74b4fd3ee6164f52ec4e73c476864db7a12df49053036e696b6a80b78"
+    },
+    {
+      "path": "source/lab/ttl-production/verify.py",
+      "sha256": "dba384b0240358ddd92b3fdb8effe69b4bfe66c235a5cf7222d656803bcfbc3c"
     },
     {
       "path": "source/lab/ttl-rust/acquire.py",
@@ -36662,12 +36788,12 @@
   },
   "summary": {
     "by_disposition": {
-      "ffi-adapter": 39,
-      "harness": 28,
+      "ffi-adapter": 40,
+      "harness": 29,
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 476,
+      "oracle/harness": 483,
       "retain-tooling": 26,
       "retained-third-party": 296,
       "rust-candidate": 27,
@@ -36684,7 +36810,7 @@
       "foundation.random": 12,
       "foundation.runtime": 46,
       "foundation.serialization": 56,
-      "foundation.storage": 27,
+      "foundation.storage": 28,
       "foundation.text": 20,
       "gameplay.ai": 32,
       "gameplay.combat": 22,
@@ -36708,14 +36834,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 41,
-      "validation.oracles-harness": 504,
+      "validation.oracles-harness": 512,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1954,
+    "files": 1963,
     "modules": 39,
-    "no_direct_target": 848
+    "no_direct_target": 857
   }
 }

@@ -23,6 +23,8 @@
 #include "StarZstdLab.hpp"
 #include "StarPathEmbedLab.hpp"
 #include "StarLruCacheLab.hpp"
+#include "StarTtlCacheLab.hpp"
+#include "StarTenantDatabase.hpp"
 #include "StarLua.hpp"
 #include "StarRootLuaBindings.hpp"
 #include "StarHostAddressLab.hpp"
@@ -597,6 +599,10 @@ void ClientApplication::render() {
       if (BehaviorLab::enabled() && m_behaviorLruRoom && m_behaviorReady
           && !BehaviorLab::hasPendingFrame() && !m_renderData.isFullbright)
         BehaviorLab::prepareLruFrame(m_renderData, m_behaviorStage);
+      if (BehaviorLab::enabled() && BehaviorLab::ttlScene() && m_behaviorReady
+          && !BehaviorLab::hasPendingFrame() && !m_renderData.isFullbright
+          && BehaviorLab::ttlReady(m_behaviorStage))
+        BehaviorLab::prepareTtlFrame(m_renderData, m_behaviorStage);
 
       if (BehaviorLab::enabled() && m_behaviorStringViewRoom && m_behaviorReady
           && !BehaviorLab::hasPendingFrame() && !m_renderData.isFullbright) {
@@ -675,6 +681,10 @@ void ClientApplication::render() {
       if (m_behaviorLruRoom && m_behaviorReady && !BehaviorLab::hasPendingFrame()
           && !m_renderData.isFullbright)
         BehaviorLab::renderLruLabel(*m_guiContext);
+      if (BehaviorLab::enabled() && BehaviorLab::ttlScene() && m_behaviorReady
+          && !BehaviorLab::hasPendingFrame() && !m_renderData.isFullbright
+          && BehaviorLab::ttlReady(m_behaviorStage))
+        BehaviorLab::renderTtlLabel(*m_guiContext);
       if (m_behaviorTextScanRoom)
         renderBehaviorTextScanFrame();
       if (m_behaviorStringViewRoom)
@@ -1633,6 +1643,74 @@ Json BehaviorLab::lruProof() {
   return lruConsumer().proof;
 }
 
+namespace {
+struct TtlConsumer {
+  int stage = -1;
+  int64_t deadline = 0;
+  Json proof;
+};
+TtlConsumer& ttlConsumer() { static TtlConsumer value; return value; }
+}
+bool BehaviorLab::ttlScene() {
+  return enabled() && configuration().getString("scenario", "") == "ttl-room";
+}
+bool BehaviorLab::ttlReady(unsigned stage) {
+  return stage != 1 || Time::monotonicMilliseconds() >= ttlConsumer().deadline;
+}
+void BehaviorLab::prepareTtlFrame(WorldRenderData& renderData, unsigned stage) {
+  lruRequire(ttlScene() && stage < 3 && !renderData.isFullbright, "BehaviorLab: invalid TTL scene");
+  auto& consumer = ttlConsumer();
+  if (consumer.stage != int(stage)) {
+    lruRequire(int(stage) == consumer.stage + 1 && ttlReady(stage), "BehaviorLab: TTL phase/readiness");
+    if (stage == 0) TtlCacheLab::begin();
+    TtlCacheLab::setPhase(stage);
+    if (stage == 1)
+      const_cast<TenantDatabase&>(*Root::singleton().tenantDatabase()).cleanup();
+    auto assets = Root::singleton().assets();
+    auto engine = LuaEngine::create();
+    auto context = engine->createContext();
+    context.setCallbacks("root", LuaBindings::makeRootCallbacks());
+    context.load(*assets->bytes("/behaviorlab/ttl-consumer.lua"), "/behaviorlab/ttl-consumer.lua");
+    Json visual = context.invokePath<Json>("proof", stage);
+    auto events = Root::singleton().tenantDatabase()->ttlLabHistory(stage == 2);
+    if (stage == 0) {
+      Json last;
+      for (auto const& event : events.toArray())
+        if (event.getBool("foreground") && event.getString("operation") == "get") last = event;
+      lruRequire(!last.isNull(), "BehaviorLab: missing actual TTL get");
+      for (auto const& entry : last.get("after").getArray("entries"))
+        if (entry.getString("keyHex") == hexEncode("behavior-ttl-a", 14))
+          consumer.deadline = entry.getInt("stamp") + last.get("after").getInt("ttl") + 1;
+      lruRequire(consumer.deadline > 0, "BehaviorLab: missing actual TTL deadline");
+    }
+    consumer.proof = JsonObject{{"version", 1}, {"backend", TtlCacheLab::backend()},
+        {"selector", "STAR_USE_RUST_TTL_CACHE"}, {"phase", stage},
+        {"events", events}, {"visual", visual}, {"deadline", consumer.deadline},
+        {"consumer", "normal-root.tenantConfig-TenantDatabase-Assets-Tenant"},
+        {"imageConsumer", "normal-Assets-WorldPainter"}, {"labelConsumer", "normal-Font-TextPainter"},
+        {"configuration", configuration()}};
+    consumer.stage = int(stage);
+  }
+  auto drawable = Drawable::makeImage(consumer.proof.get("visual").getString("imagePath"),
+      2.0f / TilePixels, true, Vec2F(64, 48));
+  drawable.fullbright = true;
+  renderData.foregroundOverlays.append(std::move(drawable));
+}
+void BehaviorLab::renderTtlLabel(GuiContext& gui) {
+  auto const& proof = ttlConsumer().proof;
+  lruRequire(!proof.isNull(), "BehaviorLab: missing TTL Font proof");
+  gui.clearTextStyle(); gui.setDefaultFont(); gui.setFontSize(8, 1.0f);
+  gui.setFontColor(Vec4B(255, 255, 255, 255)); gui.setFontMode(FontMode::Normal);
+  gui.setFontProcessingDirectives("");
+  gui.renderText(proof.get("visual").getString("label"),
+      TextPositioning(Vec2F(gui.windowSize()) * 0.5f + Vec2F(-35, 70)));
+  gui.clearTextStyle();
+}
+Json BehaviorLab::ttlProof() {
+  lruRequire(!ttlConsumer().proof.isNull(), "BehaviorLab: missing TTL proof");
+  return ttlConsumer().proof;
+}
+
 void ClientApplication::validateBehaviorStorage() {
   auto const& config = BehaviorLab::configuration();
   auto scenario = config.getString("scenario", "lighting-room");
@@ -1641,7 +1719,7 @@ void ClientApplication::validateBehaviorStorage() {
       && scenario != "unicode-room" && scenario != "shell-room" && scenario != "jsonpath-room" && scenario != "assetpath-room"
       && scenario != "random-room" && scenario != "jsonpatch-room" && scenario != "text-room"
       && scenario != "compression-room" && scenario != "zstd-room" && scenario != "option-parser-room"
-      && scenario != "host-address-room" && scenario != "datastream-room" && scenario != "buffer-room" && scenario != "stringview-room" && scenario != "path-embed-room" && scenario != "lru-room")
+      && scenario != "host-address-room" && scenario != "datastream-room" && scenario != "buffer-room" && scenario != "stringview-room" && scenario != "path-embed-room" && scenario != "lru-room" && scenario != "ttl-room")
     throw StarException("BehaviorLab: unsupported scenario");
   m_behaviorRaycastRoom = scenario == "raycast-room";
   m_behaviorEncodingRoom = scenario == "encoding-room";
@@ -1784,7 +1862,7 @@ void ClientApplication::updateBehaviorScenario() {
       return;
     if (m_behaviorStage == 2) {
       Logger::info("BehaviorLab: {} completed (three acknowledged world frames)",
-          m_behaviorLruRoom ? "lru-room" : m_behaviorPathEmbedRoom ? "path-embed-room" : m_behaviorStringViewRoom ? "stringview-room" : m_behaviorBufferRoom ? "buffer-room" : m_behaviorDataStreamRoom ? "datastream-room" : m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
+          BehaviorLab::ttlScene() ? "ttl-room" : m_behaviorLruRoom ? "lru-room" : m_behaviorPathEmbedRoom ? "path-embed-room" : m_behaviorStringViewRoom ? "stringview-room" : m_behaviorBufferRoom ? "buffer-room" : m_behaviorDataStreamRoom ? "datastream-room" : m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
       m_behaviorPhase = 5;
       appController()->quit();
       return;
@@ -4122,6 +4200,8 @@ void ClientApplication::renderBehaviorTextScanFrame() {
 void ClientApplication::renderBehaviorScenario() {
   if (!m_behaviorReady || BehaviorLab::hasPendingFrame())
     return;
+  if (BehaviorLab::ttlScene() && !BehaviorLab::ttlReady(m_behaviorStage))
+    return;
   auto world = m_universeClient->worldClient();
   if (!world || !world->inWorld() || !m_behaviorLightingCompleted || m_renderData.isFullbright)
     return;
@@ -4157,7 +4237,7 @@ void ClientApplication::renderBehaviorScenario() {
       {"layout", "row-major-rgb-f32-bits"}, {"bits", std::move(lightmapBits)}};
   Json metadata = JsonObject{
       {"lightingDiagnostics", std::move(lightmapDiagnostic)},
-      {"scenario", m_behaviorLruRoom ? "lru-room" : m_behaviorPathEmbedRoom ? "path-embed-room" : m_behaviorStringViewRoom ? "stringview-room" : m_behaviorBufferRoom ? "buffer-room" : m_behaviorDataStreamRoom ? "datastream-room" : m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
+      {"scenario", BehaviorLab::ttlScene() ? "ttl-room" : m_behaviorLruRoom ? "lru-room" : m_behaviorPathEmbedRoom ? "path-embed-room" : m_behaviorStringViewRoom ? "stringview-room" : m_behaviorBufferRoom ? "buffer-room" : m_behaviorDataStreamRoom ? "datastream-room" : m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
       {"worldState", JsonObject{
           {"worldId", printWorldId(m_universeClient->clientContext()->playerWorldId())},
           {"worldSize", jsonFromVec2U(world->geometry().size())},
@@ -4306,6 +4386,8 @@ void ClientApplication::renderBehaviorScenario() {
   }
   if (m_behaviorLruRoom)
     metadata = metadata.set("lruProof", BehaviorLab::lruProof());
+  if (BehaviorLab::ttlScene())
+    metadata = metadata.set("ttlProof", BehaviorLab::ttlProof());
   BehaviorLab::queueFrame(m_behaviorCapture, std::move(metadata));
   m_behaviorReady = false;
   m_behaviorPhase = 4;

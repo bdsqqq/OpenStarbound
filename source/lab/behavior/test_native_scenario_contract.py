@@ -31,7 +31,7 @@ class NativeScenarioContractTests(unittest.TestCase):
             check_native_scenarios(source.replace(clause, "", 1), lab.SCENARIOS)
 
     def test_stringview_is_twentieth_and_overlay_is_isolated(self):
-        self.assertEqual(len(lab.SCENARIOS), 22)
+        self.assertEqual(len(lab.SCENARIOS), 23)
         self.assertEqual(lab.SCENARIOS[19], "stringview-room")
         overlay = lab.ROOT / "source/lab/behavior/string-view-assets"
         self.assertEqual(lab.asset_overlays("stringview-room")["string-view-fixture"], overlay)
@@ -40,7 +40,7 @@ class NativeScenarioContractTests(unittest.TestCase):
                 self.assertNotIn("string-view-fixture", lab.asset_overlays(scenario))
 
     def test_path_embed_is_twenty_first_and_overlay_is_isolated(self):
-        self.assertEqual(len(lab.SCENARIOS), 22)
+        self.assertEqual(len(lab.SCENARIOS), 23)
         self.assertEqual(lab.SCENARIOS[20], "path-embed-room")
         overlay = lab.ROOT / "source/lab/behavior/path-embed-assets"
         self.assertEqual(lab.asset_overlays("path-embed-room")["path-embed-fixture"], overlay)

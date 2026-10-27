@@ -307,9 +307,9 @@ class LruProofTests(unittest.TestCase):
                     lab.validated(Path('/logical'))
 
     def test_scene_overlay_is_issue_scoped_and_old_order_retained(self):
-        self.assertEqual(lab.SCENARIOS[-1], 'lru-room')
+        self.assertEqual(lab.SCENARIOS[21], 'lru-room')
         self.assertEqual(lab.SCENARIOS[20], 'path-embed-room')
-        self.assertEqual(len(lab.SCENARIOS), 22)
+        self.assertEqual(len(lab.SCENARIOS), 23)
         for scene in lab.SCENARIOS:
             self.assertEqual('lru-fixture' in lab.asset_overlays(scene), scene == 'lru-room')
 

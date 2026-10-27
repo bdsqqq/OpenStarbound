@@ -25,6 +25,11 @@ public:
   static void prepareLruFrame(WorldRenderData& renderData, unsigned stage);
   static void renderLruLabel(GuiContext& gui);
   static Json lruProof();
+  static bool ttlScene();
+  static bool ttlReady(unsigned stage);
+  static void prepareTtlFrame(WorldRenderData& renderData, unsigned stage);
+  static void renderTtlLabel(GuiContext& gui);
+  static Json ttlProof();
 };
 
 }

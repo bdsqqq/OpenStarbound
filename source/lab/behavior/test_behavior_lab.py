@@ -655,6 +655,7 @@ class BehaviorLabTests(unittest.TestCase):
         self.assertEqual(len(frames), 3)
         self.assertEqual(manifest["binary"]["sha256"], lab.sha(executable))
         self.assertEqual(manifest["assets"]["sha256"], lab.sha(assets))
+        lab.validate_process_binding(captured, manifest)
         boot = lab.load(captured.parent / "sbinit.config")
         self.assertEqual(boot["assetSources"], [str(assets), *(str(p.resolve()) for p in lab.ASSET_OVERLAYS.values())])
         fixture_prefix = "behavior-fixture/objects/behaviorlab/constantlight/"
@@ -712,6 +713,7 @@ class BehaviorLabTests(unittest.TestCase):
         process.wait.return_value = 0
         with mock.patch.object(lab, 'verified_build', return_value={}), \
                 mock.patch.object(lab, 'overlay_identity', return_value={}), \
+                mock.patch.object(lab, 'process_identity', return_value=('logical-start', 123)), \
                 mock.patch.object(lab.subprocess, 'Popen', return_value=process), \
                 mock.patch.object(lab, 'stop_process_group'), \
                 mock.patch.object(lab.time, 'monotonic', side_effect=[10, 12]), \
@@ -757,6 +759,7 @@ class BehaviorLabTests(unittest.TestCase):
                     process.wait.side_effect = error
                     with mock.patch.object(lab, "verified_build", return_value={}), \
                             mock.patch.object(lab, "overlay_identity", return_value={}), \
+                            mock.patch.object(lab, "process_identity", return_value=("logical-start", 123)), \
                             mock.patch.object(lab.subprocess, "Popen", side_effect=error if label == "spawn" else None,
                                               return_value=process), \
                             mock.patch.object(lab, "stop_process_group") as cleanup:
@@ -785,6 +788,7 @@ class BehaviorLabTests(unittest.TestCase):
 
         with mock.patch.object(lab, "verified_build", return_value={}), \
                 mock.patch.object(lab, "overlay_identity", return_value={}), \
+                mock.patch.object(lab, "process_identity", return_value=("logical-start", 123)), \
                 mock.patch.object(lab.subprocess, "Popen", side_effect=spawn), \
                 mock.patch.object(lab, "stop_process_group") as cleanup:
             with self.assertRaisesRegex(lab.LabError, "SIGTERM"):

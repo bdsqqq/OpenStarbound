@@ -1,0 +1,10 @@
+{
+  "name": "behavior-ttl-a",
+  "priority": 17,
+  "colonyTagCriteria": {
+    "behavior-ttl-proof": 3
+  },
+  "tenants": [],
+  "labIndex": 17,
+  "labLiteral": "normal-tenant-constructor"
+}

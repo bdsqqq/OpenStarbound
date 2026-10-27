@@ -53,6 +53,8 @@
     {"id":"rust-lru-cache-abi","module":"foundation.storage","disposition":"ffi-adapter","pattern":"source/core/StarRustLruCache\\.h"},
     {"id":"rust-lru-cache-host","module":"foundation.storage","disposition":"ffi-adapter","pattern":"source/core/StarLruCacheHost\\.hpp"},
     {"id":"rust-lru-cache","module":"foundation.storage","disposition":"rust-candidate","pattern":"source/rust/ffi/src/lru_cache\\.rs"},
+    {"id":"ttl-cache-lab-contract","module":"validation.oracles-harness","disposition":"harness","pattern":"source/base/StarTtlCacheLab\\.hpp"},
+    {"id":"rust-ttl-cache-host","module":"foundation.storage","disposition":"ffi-adapter","pattern":"source/core/StarTtlCacheHost\\.hpp"},
     {"id":"rust-ttl-cache-abi","module":"foundation.storage","disposition":"ffi-adapter","pattern":"source/core/StarRustTtlCache\\.h"},
     {"id":"rust-ttl-cache","module":"foundation.storage","disposition":"rust-candidate","pattern":"source/rust/ffi/src/ttl_cache\\.rs"},
     {"id":"rust-path-embed-abi","module":"foundation.storage","disposition":"ffi-adapter","pattern":"source/core/StarRustPathEmbed\\.h"},

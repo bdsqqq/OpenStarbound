@@ -57,6 +57,10 @@ public:
 
   TenantPtr getTenant(String const& name) const;
 
+  // Lab-only observation barrier: no in-flight worker operation is omitted
+  // from the final history. Uses the SAME mutex as getTenant/cleanup.
+  Json ttlLabHistory(bool stopWatching = false) const;
+
   // Return the list of all tenants for which colonyTags is a superset of
   // colonyTagCriteria
   List<TenantPtr> getMatchingTenants(StringMap<unsigned> const& colonyTags) const;
