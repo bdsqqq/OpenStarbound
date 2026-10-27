@@ -5,6 +5,7 @@ import unittest
 from unittest import mock
 from PIL import Image
 import test_string_view_proof as string_view_fixtures
+import test_path_embed_proof as path_embed_fixtures
 import behavior_lab as lab
 
 
@@ -30,12 +31,26 @@ class NativeScenarioContractTests(unittest.TestCase):
             check_native_scenarios(source.replace(clause, "", 1), lab.SCENARIOS)
 
     def test_stringview_is_twentieth_and_overlay_is_isolated(self):
-        self.assertEqual(len(lab.SCENARIOS), 20)
-        self.assertEqual(lab.SCENARIOS[-1], "stringview-room")
+        self.assertEqual(len(lab.SCENARIOS), 21)
+        self.assertEqual(lab.SCENARIOS[19], "stringview-room")
         overlay = lab.ROOT / "source/lab/behavior/string-view-assets"
         self.assertEqual(lab.asset_overlays("stringview-room")["string-view-fixture"], overlay)
+        for scenario in lab.SCENARIOS:
+            if scenario != "stringview-room":
+                self.assertNotIn("string-view-fixture", lab.asset_overlays(scenario))
+
+    def test_path_embed_is_twenty_first_and_overlay_is_isolated(self):
+        self.assertEqual(len(lab.SCENARIOS), 21)
+        self.assertEqual(lab.SCENARIOS[-1], "path-embed-room")
+        overlay = lab.ROOT / "source/lab/behavior/path-embed-assets"
+        self.assertEqual(lab.asset_overlays("path-embed-room")["path-embed-fixture"], overlay)
         for scenario in lab.SCENARIOS[:-1]:
-            self.assertNotIn("string-view-fixture", lab.asset_overlays(scenario))
+            self.assertNotIn("path-embed-fixture", lab.asset_overlays(scenario))
+        source = (lab.ROOT / "source/client/StarClientApplication.cpp").read_text()
+        clause = ' && scenario != "path-embed-room"'
+        self.assertEqual(source.count(clause), 1)
+        with self.assertRaisesRegex(ValueError, "startup scenario allowlist"):
+            check_native_scenarios(source.replace(clause, "", 1), lab.SCENARIOS)
 
     def test_missing_stringview_native_gate_is_detected(self):
         source = (lab.ROOT / "source/client/StarClientApplication.cpp").read_text()
@@ -48,7 +63,7 @@ class NativeScenarioContractTests(unittest.TestCase):
 class StringViewScenarioIntegrationTests(unittest.TestCase):
     """In-memory synthetic frames only; no game, captures, files, or deletion."""
 
-    def frames(self, backend, mutate=None):
+    def frames(self, backend, mutate=None, scenario="stringview-room", fixture=string_view_fixtures.fixture, image_fixture=None):
         stages = ("lit-room", "occluder-added", "occluder-restored")
         actions = ("room-populated", "foreground-occluder-added", "foreground-occluder-removed")
         directory = mock.Mock()
@@ -58,21 +73,26 @@ class StringViewScenarioIntegrationTests(unittest.TestCase):
         envelopes = {}
         for index, path in enumerate(receipts):
             r = {field: "synthetic-stable-state" for field in lab.SCENE_FIELDS}
-            r.update(scenario="stringview-room", inWorld=True, stage=stages[index],
+            r.update(scenario=scenario, inWorld=True, stage=stages[index],
                 worldId="synthetic-world", worldSize=[256, 128], playerPosition=[10, 20], materialId=1,
                 cameraPosition=[64, 48], cameraPixelRatio=2, playerOutsideView=True,
                 uiHidden=True, lightingCompleted=True, lightEntityReplicated=True,
                 fullbright=False, replicatedSettledUpdates=90, stageIndex=index,
                 occluderPresent=index == 1, observedOccluderMaterial=1 if index == 1 else 0,
                 action=actions[index], lightingBackend="cpp", rustLightingCalls=0)
-            r.update(string_view_fixtures.fixture(backend))
+            r.update(fixture(backend))
             if mutate:
                 mutate(r, index)
             envelopes[path] = {"name": stages[index], "file": pngs[index].name,
-                "width": 24, "height": 16, "metadata": r,
+                "width": 400 if image_fixture else 24, "height": 240 if image_fixture else 16, "metadata": r,
                 "capture": {"source": "final-default-framebuffer", "stage": "after-imgui-before-swap"}}
         def image(path):
-            return Image.new("RGBA", (24, 16), (0, 55, 0, 255) if path.stem == stages[1] else (22, 0, 0, 255))
+            color = (0, 55, 0, 255) if path.stem == stages[1] else (22, 0, 0, 255)
+            if image_fixture:
+                result = image_fixture()
+                result.putpixel((0, 0), color)
+                return result
+            return Image.new("RGBA", (24, 16), color)
         with mock.patch.object(lab, "check_owned", side_effect=lambda p: p), \
              mock.patch.object(lab, "load", side_effect=envelopes.__getitem__), \
              mock.patch.object(lab, "image", side_effect=image), \
@@ -126,6 +146,53 @@ class StringViewScenarioIntegrationTests(unittest.TestCase):
                 r["stringViewProof"]["font"]["glyphs"][0]["rgba"] = [18, 52, 86, 255]
         with self.assertRaisesRegex(lab.LabError, "foreground font"):
             self.frames("rust", mutate)
+
+
+class PathEmbedScenarioIntegrationTests(unittest.TestCase):
+    """Exercise common scene plumbing with synthetic states, not game captures."""
+
+    def frames(self, backend, mutate=None):
+        return StringViewScenarioIntegrationTests().frames(backend, mutate,
+            scenario="path-embed-room", fixture=path_embed_fixtures.fixture,
+            image_fixture=path_embed_fixtures.frame)
+
+    def compare(self, reference, candidate, same=False):
+        return StringViewScenarioIntegrationTests().compare(reference, candidate, same)
+
+    def test_synthetic_native_repeat_and_rust_pair_pass(self):
+        native, rust = self.frames("native"), self.frames("rust")
+        self.assertTrue(self.compare(native, native, same=True)["passed"])
+        self.assertTrue(self.compare(native, rust)["passed"])
+
+    def test_pair_rejects_wrong_backend(self):
+        native, rust = self.frames("native"), self.frames("rust")
+        for ref, cand, repeat in ((native, native, False), (rust, rust, False), (native, rust, True)):
+            result = self.compare(ref, cand, repeat)
+            self.assertFalse(result["passed"])
+            self.assertIn("PathEmbed backend", str(result))
+
+    def test_captures_reject_missing_or_bypassed_measurement(self):
+        with self.assertRaises(lab.LabError):
+            self.frames("rust", lambda r, i: r.pop("pathEmbedProof"))
+        for operation in ("selector", "escape"):
+            def mutate(r, index):
+                m = r["pathEmbedProof"]["source"]["measurement"]
+                m["delta"][operation] = m["after"][operation] = 0
+            with self.subTest(operation=operation), self.assertRaises(lab.LabError):
+                self.frames("rust", mutate)
+
+    def test_capture_sequence_rejects_stale_valid_measurement(self):
+        def mutate(r, index):
+            if index == 1:
+                m = r["pathEmbedProof"]["source"]["measurement"]
+                m["before"] = {"selector": 1, "escape": 1}
+                m["after"] = {"selector": 2, "escape": 2}
+        with self.assertRaisesRegex(lab.LabError, "changed across stages"):
+            self.frames("rust", mutate)
+
+    def test_common_occluder_contract_still_required(self):
+        with self.assertRaises(lab.LabError):
+            self.frames("rust", lambda r, i: r.update(occluderPresent=False))
 
 
 if __name__ == "__main__": unittest.main()

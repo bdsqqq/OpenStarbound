@@ -121,7 +121,7 @@ class QualifierTests(unittest.TestCase):
     def test_seal_pins_every_matrix_role_before_replay(self):
         required = q.matrix_evidence_paths()
         self.assertEqual(len(required), 720)
-        for scene in q.lab.SCENARIOS:
+        for scene in q.SCENARIOS:
             root = q.matrix_root(scene)
             for role in q.ROLES:
                 self.assertIn(root / role / 'launch.json', required)
@@ -138,6 +138,13 @@ class QualifierTests(unittest.TestCase):
             q.seal(q.OWN / 'preparation.json', 'c' * 64, q.OWN / 'inspection.json', q.OWN / 'seal.json')
         self.assertTrue(set(map(str, required)) <= set(recorded['bindings']))
 
+    def test_future_live_scenes_do_not_expand_the_finite_file_oracle(self):
+        original = q.matrix_evidence_paths()
+        with patch.object(q.lab, 'SCENARIOS', (*q.SCENARIOS, 'future-room')):
+            self.assertEqual(q.matrix_evidence_paths(), original)
+        self.assertEqual(len(q.SCENARIOS), 20)
+        self.assertEqual(len(original), 720)
+
     def test_kernel_archive_and_missing_bindings(self):
         good = dict(status='FINITE_CURRENT_PRODUCTION_FILE_RUST_PASS', archive=str(q.ARCHIVE),
                     archive_sha256='a'*64, modes=34, bindings={'a':'b'}, artifacts={'c':'d'})
@@ -147,7 +154,7 @@ class QualifierTests(unittest.TestCase):
             with self.assertRaises(ValueError): q.kernel_identity(dict(good, **values), 'a'*64)
 
     def test_inspection_missing_negative_hash_and_duplicate(self):
-        rows = [dict(scene=scene, stage=stage, pngSha256='a'*64) for scene in q.lab.SCENARIOS for stage in q.stages(scene)]
+        rows = [dict(scene=scene, stage=stage, pngSha256='a'*64) for scene in q.SCENARIOS for stage in q.stages(scene)]
         good = dict(schema=1, inspectedBy='parent', allFramesViewed=True, frames=rows)
         q.inspection(good, rows)
         for mutate in (lambda d: d.update(allFramesViewed=1), lambda d: d['frames'].pop(),
@@ -157,9 +164,9 @@ class QualifierTests(unittest.TestCase):
             with self.assertRaises(ValueError): q.inspection(bad, rows)
 
     def test_report_partial_and_domain(self):
-        history = {s: dict(root='/frozen/'+s, frames={n: dict(dimensions=[1,1], pixelsSha256='a'*64) for n in q.stages(s)}) for s in q.lab.SCENARIOS}
+        history = {s: dict(root='/frozen/'+s, frames={n: dict(dimensions=[1,1], pixelsSha256='a'*64) for n in q.stages(s)}) for s in q.SCENARIOS}
         rows = [dict(scene=s, report=str(q.matrix_root(s)/'report.json'), previous=history[s]['root'],
-                     frames=[dict(name=n+'.png', dimensions=[1,1], decodedRgbaSha256='a'*64) for n in sorted(q.stages(s))]) for s in q.lab.SCENARIOS]
+                     frames=[dict(name=n+'.png', dimensions=[1,1], decodedRgbaSha256='a'*64) for n in sorted(q.stages(s))]) for s in q.SCENARIOS]
         good = dict(passed=True, actualMatrices=20, historicalSequences=20, testedProduction=q.REVISION, rows=rows)
         q.validate_report(good, history)
         for mutate in (lambda d: d.update(actualMatrices=True), lambda d: d['rows'].pop(),

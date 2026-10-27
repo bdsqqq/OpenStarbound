@@ -48,6 +48,7 @@
     {"id":"text-process-lab-contract","module":"validation.oracles-harness","disposition":"harness","pattern":"source/core/StarTextProcessLab\\.hpp"},
     {"id":"string-view-lab-contract","module":"validation.oracles-harness","disposition":"harness","pattern":"source/base/StarStringViewLab\\.hpp"},
     {"id":"file-lab-contract","module":"validation.oracles-harness","disposition":"harness","pattern":"source/base/StarFileLab\\.hpp"},
+    {"id":"path-embed-lab-contract","module":"validation.oracles-harness","disposition":"harness","pattern":"source/base/StarPathEmbedLab\\.hpp"},
     {"id":"rust-path-embed-abi","module":"foundation.storage","disposition":"ffi-adapter","pattern":"source/core/StarRustPathEmbed\\.h"},
     {"id":"rust-path-embed","module":"foundation.storage","disposition":"rust-candidate","pattern":"source/rust/ffi/src/path_embed\\.rs"},
     {"id":"rust-file-abi","module":"foundation.storage","disposition":"ffi-adapter","pattern":"source/core/StarRustFile\\.h"},

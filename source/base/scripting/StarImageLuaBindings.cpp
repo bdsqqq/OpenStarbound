@@ -7,6 +7,8 @@
 #include "StarPathEmbed.hpp"
 #include "StarCompressionLab.hpp"
 #include "StarZstdLab.hpp"
+#include "StarPathEmbedLab.hpp"
+#include <cstdlib>
 
 namespace Star {
 
@@ -37,7 +39,13 @@ LuaMethods<Image> LuaUserDataMethods<Image>::make() {
     });
   });
 
+  if (std::getenv("STAR_BEHAVIOR_LAB")) {
+    methods.registerMethod("beginPathEmbedLab", [](Image& image) { PathEmbedLab::begin(image); });
+    methods.registerMethod("finishPathEmbedLab", [](Image& image) { return PathEmbedLab::finish(image); });
+  }
+
   methods.registerMethod("embed", [](Image& image, String const& compression, MVariant<String,Json> const& frames, Maybe<String> const& framesCompressionMode) -> String {
+    PathEmbedLab::Scope measurement(image);
     auto compressionMethod = EmbeddedCompressionMethodNames.getLeft(compression);
     BufferPtr buf = make_shared<Buffer>();
     image.writePng(buf);
@@ -69,6 +77,9 @@ LuaMethods<Image> LuaUserDataMethods<Image>::make() {
         outStr += strf(";frames;json;{}",embedAndCompressData(ds.takeData(),framesCompressionMethod));
       }
     }
+    measurement.complete(outStr, frames.is<Json>() ? &frames.get<Json>() : nullptr,
+        compressionMethod == EmbeddedCompressionMethod::None,
+        framesCompressionMode && framesCompressionMode->equalsIgnoreCase("text"));
     return outStr;
   });
 

@@ -33,6 +33,14 @@ HISTORY = BASE / 'string-view-actual-report.json'
 ACCEPTED = BASE / 'string-view-qualification-tools-r1/full-replay-r1/qualification.json'
 ACCEPTED_SHA = '2b3143774f57a38b7b08c40b0349a7fe5b74e97f7ead0d657252d5c9305d5c6c'
 ROLES = ('reference', 'reference-repeat', 'candidate')
+# This verifier owns the accepted finite File dataset, not future lab scenes.
+# Extending the live runner must not silently redefine its twenty-scene oracle.
+SCENARIOS = ('assetpath-room', 'buffer-room', 'bytes-room', 'compression-room',
+             'datastream-room', 'encoding-room', 'host-address-room',
+             'jsonpatch-room', 'jsonpath-room', 'lighting-room',
+             'option-parser-room', 'random-room', 'raycast-room', 'sha256-room',
+             'shell-room', 'stringview-room', 'text-room', 'unicode-room',
+             'vlq-room', 'zstd-room')
 REVISION = 'd3a1b6f5'
 BYTE_ANCHORS = {**{i: (36,) for i in range(4)}, 4: (34,), 5: (34, 40), 6: (34, 40),
                 7: (13,), 8: (34, 40), 9: (34, 40), 10: (13,), 11: (34, 40),
@@ -143,7 +151,7 @@ def historical(bindings):
     exact(report['passed'], True, 'historical pass')
     exact(report['actualMatrices'], 20, 'historical count')
     rows = report['rows']
-    need(len(rows) == 20 and {r['scene'] for r in rows} == set(lab.SCENARIOS), 'historical scenes')
+    need(len(rows) == 20 and {r['scene'] for r in rows} == set(SCENARIOS), 'historical scenes')
     result = {}
     for row in rows:
         scene = row['scene']
@@ -202,7 +210,7 @@ def prepare(output):
     exact(len(source), 1492, 'game source inventory')
     data = dict(schema=1, status='PREPARED_NOT_APPLICATION_QUALIFIED', testedProduction=REVISION,
                 history=history, historicalBindings=bindings, tools=tools, source=source,
-                scenarios=sorted(lab.SCENARIOS), auxiliaryAPI='verify(freeze_path, acquisition_path)',
+                scenarios=sorted(SCENARIOS), auxiliaryAPI='verify(freeze_path, acquisition_path)',
                 auxiliaryVerifier=str(AUX / 'replay.py'))
     write_new(output, data)
     return sha(output)
@@ -215,7 +223,7 @@ def prepared(path, expected, bindings):
     exact(data['schema'], 1, 'prepare schema')
     exact(data['status'], 'PREPARED_NOT_APPLICATION_QUALIFIED', 'prepare status')
     exact(data['testedProduction'], REVISION, 'production revision')
-    exact(data['scenarios'], sorted(lab.SCENARIOS), 'scenario inventory')
+    exact(data['scenarios'], sorted(SCENARIOS), 'scenario inventory')
     exact(data['auxiliaryAPI'], 'verify(freeze_path, acquisition_path)', 'auxiliary API')
     exact(data['auxiliaryVerifier'], str(AUX / 'replay.py'), 'auxiliary verifier domain')
     frozen_tools(data['tools'], bindings)
@@ -235,7 +243,7 @@ def validate_report(report, history):
     exact(report['historicalSequences'], 20, 'historical sequence count')
     exact(report['testedProduction'], REVISION, 'tested production')
     rows = report['rows']
-    need(type(rows) is list and len(rows) == 20 and {r['scene'] for r in rows} == set(lab.SCENARIOS), 'exact twenty rows')
+    need(type(rows) is list and len(rows) == 20 and {r['scene'] for r in rows} == set(SCENARIOS), 'exact twenty rows')
     for row in rows:
         keys(row, 'scene report previous frames')
         scene = row['scene']
@@ -438,7 +446,7 @@ def auxiliary(bindings, proofs, archive_sha):
 def matrix_evidence_paths():
     """Pin acquired observations at seal time, not first during replay."""
     paths = set()
-    for scene in lab.SCENARIOS:
+    for scene in SCENARIOS:
         root = matrix_root(scene)
         paths.update(root / suffix for suffix in ('report.json', 'comparison/report.json', 'repeatability/report.json'))
         for role in ROLES:

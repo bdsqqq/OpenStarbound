@@ -37,6 +37,7 @@ import json_patch_proof
 import text_scan_proof
 import compression_proof
 import zstd_proof
+import path_embed_proof
 import option_parser_proof
 import host_address_proof
 import data_stream_proof
@@ -50,7 +51,7 @@ ASSET_OVERLAYS = {
     "behavior-fixture": ROOT / "source/lab/behavior/assets",
 }
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,95}\Z")
-SCENARIOS = ("lighting-room", "raycast-room", "encoding-room", "sha256-room", "vlq-room", "bytes-room", "unicode-room", "shell-room", "jsonpath-room", "assetpath-room", "random-room", "jsonpatch-room", "text-room", "compression-room", "zstd-room", "option-parser-room", "host-address-room", "datastream-room", "buffer-room", "stringview-room")
+SCENARIOS = ("lighting-room", "raycast-room", "encoding-room", "sha256-room", "vlq-room", "bytes-room", "unicode-room", "shell-room", "jsonpath-room", "assetpath-room", "random-room", "jsonpatch-room", "text-room", "compression-room", "zstd-room", "option-parser-room", "host-address-room", "datastream-room", "buffer-room", "stringview-room", "path-embed-room")
 MAX_PIXELS = 16_777_216
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
 
@@ -231,6 +232,11 @@ def semantic_world_state(receipt: dict) -> dict:
             native["compressionProof"] = compression_proof.validate(receipt)
         except ValueError as error:
             raise LabError(str(error)) from error
+    if receipt.get("scenario") == "path-embed-room":
+        try:
+            native["pathEmbedProof"] = path_embed_proof.validate(receipt)
+        except ValueError as error:
+            raise LabError(str(error)) from error
     if receipt.get("scenario") == "zstd-room":
         try:
             native["zstdProof"] = zstd_proof.validate(receipt)
@@ -363,6 +369,11 @@ def captures(directory: Path) -> dict:
                 compression_proof.visible(frame, receipt)
             except ValueError as error:
                 raise LabError(str(error)) from error
+        if receipt["scenario"] == "path-embed-room":
+            try:
+                path_embed_proof.visible(frame, receipt)
+            except ValueError as error:
+                raise LabError(str(error)) from error
         if receipt["scenario"] == "zstd-room":
             try:
                 zstd_proof.visible(frame, receipt)
@@ -394,7 +405,7 @@ def captures(directory: Path) -> dict:
         result[name] = {"receipt": receipt, "png": pngs[name], "dimensions": list(frame.size),
                         "pngSha256": sha(pngs[name]), "receiptSha256": sha(receipts[name]),
                         "pixelsSha256": hashlib.sha256(frame.tobytes()).hexdigest()}
-    if scenarios in ({"lighting-room"}, {"encoding-room"}, {"sha256-room"}, {"vlq-room"}, {"bytes-room"}, {"unicode-room"}, {"shell-room"}, {"jsonpath-room"}, {"assetpath-room"}, {"random-room"}, {"jsonpatch-room"}, {"text-room"}, {"compression-room"}, {"zstd-room"}, {"option-parser-room"}, {"host-address-room"}, {"datastream-room"}, {"buffer-room"}, {"stringview-room"}):
+    if scenarios in ({"lighting-room"}, {"encoding-room"}, {"sha256-room"}, {"vlq-room"}, {"bytes-room"}, {"unicode-room"}, {"shell-room"}, {"jsonpath-room"}, {"assetpath-room"}, {"random-room"}, {"jsonpatch-room"}, {"text-room"}, {"compression-room"}, {"zstd-room"}, {"option-parser-room"}, {"host-address-room"}, {"datastream-room"}, {"buffer-room"}, {"stringview-room"}, {"path-embed-room"}):
         validate_lighting_sequence(result)
         if scenarios == {"encoding-room"}:
             proofs = [encoding_proof.validate(frame["receipt"]) for frame in result.values()]
@@ -448,6 +459,11 @@ def captures(directory: Path) -> dict:
             proofs = [compression_proof.validate(frame["receipt"]) for frame in result.values()]
             if any(proof != proofs[0] for proof in proofs[1:]):
                 raise LabError("actual compression producer/consumer observations changed across stages")
+        if scenarios == {"path-embed-room"}:
+            try:
+                path_embed_proof.validate_snapshots([frame["receipt"] for frame in result.values()])
+            except ValueError as error:
+                raise LabError(str(error)) from error
         if scenarios == {"zstd-room"}:
             proofs = [zstd_proof.validate(frame["receipt"]) for frame in result.values()]
             if any(proof != proofs[0] for proof in proofs[1:]):
@@ -767,6 +783,12 @@ def pair_compare(reference: Path, candidate: Path, output: Path, same_backend=Fa
                     row["errors"].append("expected C++ reference and correct OptionParser backend")
                 if ref_meta["lightingBackend"] != "cpp" or (same_backend and cand_meta["lightingBackend"] != "cpp"):
                     row["errors"].append("expected C++ reference lighting")
+            elif ref_meta["scenario"] == "path-embed-room":
+                wanted = "native" if same_backend else "rust"
+                if ref_meta["pathEmbedProof"]["backend"] != "native" or cand_meta["pathEmbedProof"]["backend"] != wanted:
+                    row["errors"].append("expected native reference and correct PathEmbed backend")
+                if ref_meta["lightingBackend"] != "cpp" or (same_backend and cand_meta["lightingBackend"] != "cpp"):
+                    row["errors"].append("expected C++ reference lighting")
             elif ref_meta["scenario"] == "zstd-room":
                 wanted = "cpp" if same_backend else "rust"
                 if ref_meta["zstdProof"]["backend"] != "cpp" or cand_meta["zstdProof"]["backend"] != wanted:
@@ -945,6 +967,8 @@ def asset_overlays(scenario="lighting-room") -> dict:
         overlays["jsonpatch-fixture"] = ROOT / "source/lab/behavior/jsonpatch-assets"
     if scenario == "compression-room":
         overlays["compression-fixture"] = ROOT / "source/lab/behavior/compression-assets"
+    if scenario == "path-embed-room":
+        overlays["path-embed-fixture"] = ROOT / "source/lab/behavior/path-embed-assets"
     if scenario == "zstd-room":
         overlays["zstd-fixture"] = ROOT / "source/lab/behavior/zstd-assets"
     if scenario == "option-parser-room":
@@ -1006,7 +1030,7 @@ def capture(executable: Path, assets: Path, directory: Path, timeout: float, sce
                         "clientIPJoinable": False, "clientP2PJoinable": False,
                         "serverAdvertise": False, "serverIP": "127.0.0.1",
                         **({"optionParserProof": option_parser_proof.CONFIGURATION} if scenario == "option-parser-room" else {}),
-                        **({"safe": {"allowRemoteAssets": True}} if scenario in ("encoding-room", "vlq-room", "bytes-room", "compression-room", "zstd-room") else {})}})
+                        **({"safe": {"allowRemoteAssets": True}} if scenario in ("encoding-room", "vlq-room", "bytes-room", "compression-room", "zstd-room", "path-embed-room") else {})}})
     # Both overlays are required inputs; namespace their hashes to avoid collisions.
     overlay = overlay_identity(scenario)
     environment = dict(os.environ)

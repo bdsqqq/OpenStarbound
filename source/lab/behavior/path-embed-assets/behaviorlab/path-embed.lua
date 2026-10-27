@@ -1,5 +1,5 @@
--- Leave the returned embedded path unconsumed: the future native TCP -> Assets
--- fixture must perform the first base-image and alias/crop acquisitions itself.
+-- Leave both returned paths unconsumed: native TCP -> Assets owns the first
+-- base-image and alias/crop acquisitions. Only the LAB observer brackets embed.
 local seed = assets.image('/behaviorlab/path-embed-seed.png')
 local reserved = 'reserved%:?;/'
 local frames = {
@@ -9,7 +9,9 @@ local frames = {
   },
   aliases = {crop = reserved}
 }
+seed:beginPathEmbedLab()
 local embedded = seed:embed('None', frames, 'text')
+local measurement = seed:finishPathEmbedLab()
 assert(embedded:sub(1, 19) == '/opensb_data;image;')
 assert(embedded:find(';frames;text;', 1, true))
 -- This literal exercises every escape in meaningful parsed frame names. It is
@@ -22,6 +24,7 @@ assert(second)
 assert(not embedded:find(escaped, second + #escaped, true))
 assets.add('/behaviorlab/path-embed-proof.json', {
   version = 1,
+  measurement = measurement,
   basePath = embedded,
   cropPath = embedded .. ':crop',
   selectedAlias = 'crop',

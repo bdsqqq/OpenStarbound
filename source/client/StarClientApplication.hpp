@@ -113,6 +113,7 @@ private:
   void prepareBehaviorRandomMwcFrame();
   void prepareBehaviorCompressionFrame();
   void prepareBehaviorZstdFrame();
+  void prepareBehaviorPathEmbedFrame();
   void prepareBehaviorHostAddressFrame();
   void prepareBehaviorDataStreamFrame();
   void prepareBehaviorBufferFrame();
@@ -146,6 +147,16 @@ private:
   Json m_behaviorDataStreamProof;
   bool m_behaviorHostAddressRoom = false;
   Json m_behaviorHostAddressProof;
+  bool m_behaviorPathEmbedRoom = false;
+  Json m_behaviorPathEmbedProof;
+  // Both original normal Assets acquisitions survive through WorldPainter.
+  ImageConstPtr m_behaviorPathEmbedBaseImage;
+  ImageConstPtr m_behaviorPathEmbedCropImage;
+  Image const* m_behaviorPathEmbedBaseIdentity = nullptr;
+  Image const* m_behaviorPathEmbedCropIdentity = nullptr;
+  bool m_behaviorPathEmbedSubmitted = false;
+  unsigned m_behaviorPathEmbedBaseAcquisitions = 0;
+  unsigned m_behaviorPathEmbedCropAcquisitions = 0;
   bool m_behaviorZstdRoom = false;
   Json m_behaviorZstdProof;
   ImageConstPtr m_behaviorZstdImage;

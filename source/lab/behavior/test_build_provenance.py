@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import build_provenance as provenance
 
@@ -25,6 +26,8 @@ class BuildProvenanceTests(unittest.TestCase):
 
     def seal(self, build_dir=None):
         snapshot = provenance.begin(self.root, build_dir)
+        if build_dir is not None:
+            snapshot = provenance.configured(snapshot, self.root)
         return provenance.seal(self.binary, snapshot, self.root)
 
     def verify(self):
@@ -94,6 +97,8 @@ class BuildProvenanceTests(unittest.TestCase):
         compiler = self.put("external/compiler", "#!/bin/sh\necho fixture-compiler-1\n")
         compiler.chmod(0o755)
         cache = self.put("build/cmake/CMakeCache.txt", f"CMAKE_CXX_COMPILER:FILEPATH={compiler}\nSTAR_USE_RUST_LIGHTING:BOOL=ON\n")
+        self.put("build/cmake/compile_commands.json", json.dumps([
+            {"file": str(self.cpp), "directory": str(cache.parent)}]))
         proof = self.seal(cache.parent)
         self.assertEqual(proof["build_identity"]["tools"]["CMAKE_CXX_COMPILER"]["version"], "fixture-compiler-1")
         compiler.write_text("#!/bin/sh\necho fixture-compiler-2\n")
@@ -118,11 +123,86 @@ class BuildProvenanceTests(unittest.TestCase):
         with self.assertRaisesRegex(provenance.ProvenanceError, "missing CMake cache"):
             self.seal(self.root / "build/cmake")
 
+    def cmake_inputs(self):
+        build = self.root / "build/cmake"
+        self.put("build/cmake/CMakeCache.txt", "STAR_USE_RUST_PATH_EMBED:BOOL=OFF\n")
+        generated = self.put("build/cmake/core/StarVersion.cpp", 'char const* version = "before";\n')
+        self.put("build/cmake/compile_commands.json", json.dumps([
+            {"file": str(self.cpp), "directory": str(build)},
+            {"file": str(generated), "directory": str(build)}]))
+        return build, generated
+
+    def test_postbuild_only_generated_source_binding_is_rejected(self):
+        build, _ = self.cmake_inputs()
+        snapshot = provenance.begin(self.root, build)
+        with self.assertRaisesRegex(provenance.ProvenanceError, "not frozen before compilation"):
+            provenance.seal(self.binary, snapshot, self.root)
+        self.assertFalse(provenance.sidecar(self.binary).exists())
+
+    def test_generated_source_is_bound_before_build_and_during_verify(self):
+        build, generated = self.cmake_inputs()
+        proof = self.seal(build)
+        self.assertIn(str(generated), proof["compile_source_files"])
+        self.assertEqual(self.verify(), proof)
+        generated.write_text('char const* version = "after";\n')
+        with self.assertRaisesRegex(provenance.ProvenanceError, "compilation source inputs differ"):
+            self.verify()
+
+    def test_generated_source_change_during_compilation_cannot_be_sealed(self):
+        build, generated = self.cmake_inputs()
+        snapshot = provenance.configured(provenance.begin(self.root, build), self.root)
+        generated.write_text("changed after configuration")
+        with self.assertRaisesRegex(provenance.ProvenanceError, "compilation source inputs differ"):
+            provenance.seal(self.binary, snapshot, self.root)
+        self.assertFalse(provenance.sidecar(self.binary).exists())
+
+    def test_generated_source_change_while_hashing_binary_cannot_be_sealed(self):
+        build, generated = self.cmake_inputs()
+        snapshot = provenance.configured(provenance.begin(self.root, build), self.root)
+        original_hash = provenance._hash
+        def mutate_after_binary_hash(path):
+            result = original_hash(path)
+            if path == self.binary.resolve():
+                generated.write_text("changed while sealing")
+            return result
+        with patch.object(provenance, '_hash', side_effect=mutate_after_binary_hash):
+            with self.assertRaisesRegex(provenance.ProvenanceError, "compilation source inputs differ"):
+                provenance.seal(self.binary, snapshot, self.root)
+        self.assertFalse(provenance.sidecar(self.binary).exists())
+
+    def test_generated_source_omission_is_rejected(self):
+        build, generated = self.cmake_inputs()
+        snapshot = provenance.configured(provenance.begin(self.root, build), self.root)
+        del snapshot["compile_source_files"][str(generated)]
+        with self.assertRaisesRegex(provenance.ProvenanceError, "compilation source inputs differ"):
+            provenance.seal(self.binary, snapshot, self.root)
+
+    def test_missing_generated_source_cannot_be_frozen(self):
+        build, generated = self.cmake_inputs()
+        generated.unlink()
+        with self.assertRaisesRegex(provenance.ProvenanceError, "compilation sources"):
+            provenance.configured(provenance.begin(self.root, build), self.root)
+
     def test_malformed_receipt_fails(self):
         self.seal()
         provenance.sidecar(self.binary).write_text('{"schema":1}')
         with self.assertRaises(provenance.ProvenanceError):
             self.verify()
+
+    def test_cli_configured_phase_binds_generated_sources(self):
+        build, generated = self.cmake_inputs()
+        script = Path(provenance.__file__).resolve()
+        snapshot = self.root / "build/inputs.json"
+        base = [sys.executable, str(script)]
+        common = ["--source-root", str(self.root)]
+        subprocess.run(base + ["begin", "--build-dir", str(build), "--snapshot", str(snapshot)] + common, check=True, capture_output=True)
+        subprocess.run(base + ["configured", "--snapshot", str(snapshot)] + common, check=True, capture_output=True)
+        subprocess.run(base + ["seal", "--snapshot", str(snapshot), "--binary", str(self.binary)] + common, check=True, capture_output=True)
+        subprocess.run(base + ["verify", "--binary", str(self.binary)] + common, check=True, capture_output=True)
+        generated.write_text("changed after seal")
+        failed = subprocess.run(base + ["verify", "--binary", str(self.binary)] + common, capture_output=True, text=True)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn("compilation source inputs differ", failed.stderr)
 
     def test_cli_phases_and_failure_status(self):
         script = Path(provenance.__file__).resolve()

@@ -21,6 +21,7 @@
 #include "StarRandomMwcLab.hpp"
 #include "StarCompressionLab.hpp"
 #include "StarZstdLab.hpp"
+#include "StarPathEmbedLab.hpp"
 #include "StarHostAddressLab.hpp"
 #include "StarDataStreamLab.hpp"
 #include "StarBufferLab.hpp"
@@ -582,6 +583,8 @@ void ClientApplication::render() {
         prepareBehaviorOptionParserFrame();
       if (BehaviorLab::enabled() && m_behaviorZstdRoom)
         prepareBehaviorZstdFrame();
+      if (BehaviorLab::enabled() && m_behaviorPathEmbedRoom)
+        prepareBehaviorPathEmbedFrame();
       if (BehaviorLab::enabled() && m_behaviorBufferRoom)
         prepareBehaviorBufferFrame();
       if (BehaviorLab::enabled() && m_behaviorDataStreamRoom)
@@ -634,6 +637,7 @@ void ClientApplication::render() {
           || (m_behaviorRandomMwcRoom && !m_behaviorRandomMwcProof.isNull())
           || (m_behaviorCompressionRoom && !m_behaviorCompressionProof.isNull())
           || (m_behaviorZstdRoom && !m_behaviorZstdProof.isNull())
+          || (m_behaviorPathEmbedRoom && !m_behaviorPathEmbedProof.isNull())
           || (m_behaviorBufferRoom && !m_behaviorBufferProof.isNull())
           || (m_behaviorDataStreamRoom && !m_behaviorDataStreamProof.isNull())
           || (m_behaviorHostAddressRoom && !m_behaviorHostAddressProof.isNull())
@@ -642,11 +646,12 @@ void ClientApplication::render() {
         // claimed. Screen-space coordinates avoid the 64px world-image area.
         m_guiContext->clearTextStyle();
         m_guiContext->setDefaultFont();
-        m_guiContext->setFontSize((m_behaviorBufferRoom || m_behaviorZstdRoom || m_behaviorHostAddressRoom || m_behaviorDataStreamRoom) ? 8 : 16, 1.0f);
+        m_guiContext->setFontSize((m_behaviorPathEmbedRoom || m_behaviorBufferRoom || m_behaviorZstdRoom || m_behaviorHostAddressRoom || m_behaviorDataStreamRoom) ? 8 : 16, 1.0f);
         m_guiContext->setFontColor(Vec4B(255, 255, 255, 255));
         m_guiContext->setFontMode(FontMode::Normal);
         m_guiContext->setFontProcessingDirectives("");
-        m_guiContext->renderText(m_behaviorBufferRoom ? m_behaviorBufferProof.get("visual").getString("label")
+        m_guiContext->renderText(m_behaviorPathEmbedRoom ? m_behaviorPathEmbedProof.get("visual").getString("label")
+            : m_behaviorBufferRoom ? m_behaviorBufferProof.get("visual").getString("label")
             : m_behaviorDataStreamRoom ? m_behaviorDataStreamProof.get("visual").getString("label")
             : m_behaviorHostAddressRoom ? m_behaviorHostAddressProof.get("visual").getString("label")
             : m_behaviorOptionParserRoom ? m_behaviorOptionParserProof.get("visual").getString("label")
@@ -1545,7 +1550,7 @@ void ClientApplication::validateBehaviorStorage() {
       && scenario != "unicode-room" && scenario != "shell-room" && scenario != "jsonpath-room" && scenario != "assetpath-room"
       && scenario != "random-room" && scenario != "jsonpatch-room" && scenario != "text-room"
       && scenario != "compression-room" && scenario != "zstd-room" && scenario != "option-parser-room"
-      && scenario != "host-address-room" && scenario != "datastream-room" && scenario != "buffer-room" && scenario != "stringview-room")
+      && scenario != "host-address-room" && scenario != "datastream-room" && scenario != "buffer-room" && scenario != "stringview-room" && scenario != "path-embed-room")
     throw StarException("BehaviorLab: unsupported scenario");
   m_behaviorRaycastRoom = scenario == "raycast-room";
   m_behaviorEncodingRoom = scenario == "encoding-room";
@@ -1562,6 +1567,7 @@ void ClientApplication::validateBehaviorStorage() {
   m_behaviorCompressionRoom = scenario == "compression-room";
   m_behaviorOptionParserRoom = scenario == "option-parser-room";
   m_behaviorZstdRoom = scenario == "zstd-room";
+  m_behaviorPathEmbedRoom = scenario == "path-embed-room";
   m_behaviorHostAddressRoom = scenario == "host-address-room";
   m_behaviorDataStreamRoom = scenario == "datastream-room";
   m_behaviorBufferRoom = scenario == "buffer-room";
@@ -1686,7 +1692,7 @@ void ClientApplication::updateBehaviorScenario() {
       return;
     if (m_behaviorStage == 2) {
       Logger::info("BehaviorLab: {} completed (three acknowledged world frames)",
-          m_behaviorStringViewRoom ? "stringview-room" : m_behaviorBufferRoom ? "buffer-room" : m_behaviorDataStreamRoom ? "datastream-room" : m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
+          m_behaviorPathEmbedRoom ? "path-embed-room" : m_behaviorStringViewRoom ? "stringview-room" : m_behaviorBufferRoom ? "buffer-room" : m_behaviorDataStreamRoom ? "datastream-room" : m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
       m_behaviorPhase = 5;
       appController()->quit();
       return;
@@ -3162,6 +3168,133 @@ void ClientApplication::prepareBehaviorHostAddressFrame() {
   m_renderData.foregroundOverlays.append(std::move(drawable));
 }
 
+void ClientApplication::prepareBehaviorPathEmbedFrame() {
+  m_behaviorPathEmbedSubmitted = false;
+  if (m_behaviorPathEmbedProof.isNull()) {
+    auto assets = m_root->assets();
+    String const proofPath = "/behaviorlab/path-embed-proof.json";
+    if (!assets->assetExists(proofPath))
+      throw StarException("BehaviorLab: PathEmbed Lua output missing (postLoad errors are fatal here)");
+    auto source = assets->json(proofPath);
+    auto measurement = source.get("measurement");
+    auto path = source.getString("basePath");
+    auto cropPath = source.getString("cropPath");
+    Json const frameModel = JsonObject{{"frameList", JsonObject{{"reserved%:?;/", JsonArray{16, 0, 32, 16}},
+        {"wrong", JsonArray{0, 0, 16, 16}}}}, {"aliases", JsonObject{{"crop", "reserved%:?;/"}}}};
+    if (source.size() != 9 || !source.get("version").isType(Json::Type::Int) || source.getInt("version") != 1
+        || source.getString("selectedAlias") != "crop" || source.getString("reservedFrameName") != "reserved%:?;/"
+        || source.get("seedSize") != Json(JsonArray{32, 16}) || source.get("selectedRect") != Json(JsonArray{16, 0, 32, 16})
+        || source.get("wrongRect") != Json(JsonArray{0, 0, 16, 16}) || cropPath != path + ":crop"
+        || measurement.size() != 13 || measurement.getString("backend") != PathEmbedLab::backend()
+        || !measurement.get("version").isType(Json::Type::Int) || measurement.getInt("version") != 1
+        || measurement.getString("scopeThread") != "lua-calling-thread" || !measurement.getBool("completed")
+        || !measurement.get("operationCount").isType(Json::Type::Int) || measurement.getInt("operationCount") != 1
+        || measurement.getString("method") != "None" || measurement.getString("framesMode") != "text"
+        || measurement.getString("path") != path || Json::parse(measurement.getString("rawFrames")) != frameModel)
+      throw StarException("BehaviorLab: PathEmbed source/measurement fields differ");
+    auto parts = path.split(";");
+    if (parts.size() != 6 || parts[0] != "/opensb_data" || parts[1] != "image"
+        || parts[3] != "frames" || parts[4] != "text" || parts[5] != measurement.getString("escapedFrames"))
+      throw StarException("BehaviorLab: PathEmbed None/text path differs");
+    if (parts[5].split("reserved%%%c%q%s%b").size() != 3)
+      throw StarException("BehaviorLab: PathEmbed independent escaped name literal differs");
+    for (auto name : {"selector", "escape"}) {
+      auto before = measurement.get("before"), after = measurement.get("after"), delta = measurement.get("delta");
+      uint64_t expected = String(PathEmbedLab::backend()) == "rust" ? 1 : 0;
+      if (before.size() != 2 || after.size() != 2 || delta.size() != 2
+          || !before.get(name).isType(Json::Type::Int) || !after.get(name).isType(Json::Type::Int)
+          || !delta.get(name).isType(Json::Type::Int) || before.getInt(name) < 0 || after.getInt(name) < 0
+          || after.getUInt(name) < before.getUInt(name) || after.getUInt(name) - before.getUInt(name) != expected
+          || delta.getUInt(name) != expected || (!expected && before.getUInt(name) != 0))
+        throw StarException("BehaviorLab: PathEmbed executing-thread completed counters differ");
+    }
+    uint8_t loopbackBytes[4] = {127, 0, 0, 1};
+    HostAddress const loopback(NetworkMode::IPv4, loopbackBytes);
+    TcpSocketPtr listener;
+    uint16_t port = 0;
+    for (uint16_t candidate = 40265; candidate <= 40296; ++candidate) {
+      try {
+        listener = TcpSocket::listen(HostAddressWithPort(loopback, candidate));
+        port = candidate;
+        break;
+      } catch (NetworkException const&) {}
+    }
+    if (!listener) throw StarException("BehaviorLab: no owned PathEmbed loopback port");
+    listener->setNonBlocking(true);
+    auto rawA = TcpSocket::connectTo(HostAddressWithPort(loopback, port));
+    TcpSocketPtr rawB;
+    auto deadline = Time::monotonicMilliseconds() + 2000;
+    while (!rawB && Time::monotonicMilliseconds() < deadline) rawB = listener->accept();
+    if (!rawB) throw StarException("BehaviorLab: PathEmbed TCP accept deadline");
+    listener->close();
+    auto a = TcpPacketSocket::open(rawA), b = TcpPacketSocket::open(rawB);
+    a->setNetRules(NetCompatibilityRules(VersionNumber(5)));
+    b->setNetRules(NetCompatibilityRules(VersionNumber(5)));
+    a->setCompressionStreamEnabled(false);
+    b->setCompressionStreamEnabled(false);
+    JsonArray rounds;
+    auto transfer = [&](String const& text) {
+      a->sendPackets({make_shared<ChatSendPacket>(text, ChatSendMode::Broadcast, JsonObject{})});
+      List<PacketPtr> received;
+      auto until = Time::monotonicMilliseconds() + 2000;
+      while (Time::monotonicMilliseconds() < until) {
+        if (auto ready = Socket::poll({{rawA, {true, false}}, {rawB, {true, false}}}, 0))
+          for (auto const& peer : *ready)
+            if (peer.second.exception) throw StarException("BehaviorLab: PathEmbed TCP EOF/error");
+        a->writeData(); b->readData();
+        received.appendAll(b->receivePackets());
+        if (!a->sentPacketsPending() && !received.empty()) break;
+      }
+      b->readData(); received.appendAll(b->receivePackets());
+      a->readData();
+      if (!a->isOpen() || !b->isOpen() || a->sentPacketsPending() || received.size() != 1
+          || !a->receivePackets().empty())
+        throw StarException("BehaviorLab: PathEmbed TCP deadline/count/reverse traffic");
+      auto chat = std::dynamic_pointer_cast<ChatSendPacket>(received.first());
+      if (!chat || chat->text != text || chat->sendMode != ChatSendMode::Broadcast || !chat->data.empty())
+        throw StarException("BehaviorLab: PathEmbed typed TCP payload differs");
+      rounds.append(JsonObject{{"direction", "a-to-b"}, {"sentText", text}, {"receivedText", chat->text},
+          {"sendMode", unsigned(chat->sendMode)}, {"receivedData", chat->data}});
+      return chat->text;
+    };
+    auto receivedBase = transfer(path);
+    auto receivedCrop = transfer(cropPath);
+    auto receivedLabel = transfer("PATHEMBED");
+    a->close(); b->close();
+    // Two declared normal acquisitions, never a predecoded Lua PNG/proxy. The
+    // alias image alone does not keep the embedded base alive across cache TTL.
+    m_behaviorPathEmbedBaseImage = assets->image(receivedBase);
+    ++m_behaviorPathEmbedBaseAcquisitions;
+    m_behaviorPathEmbedBaseIdentity = m_behaviorPathEmbedBaseImage.get();
+    m_behaviorPathEmbedCropImage = assets->image(receivedCrop);
+    ++m_behaviorPathEmbedCropAcquisitions;
+    m_behaviorPathEmbedCropIdentity = m_behaviorPathEmbedCropImage.get();
+    auto frames = assets->imageFrames(receivedBase);
+    Json const expectedFrames = JsonObject{{"file", "<embedded frames>"},
+        {"frames", frameModel.get("frameList")}, {"aliases", frameModel.get("aliases")}};
+    if (!frames || frames->toJson() != expectedFrames || frames->getRect("crop") != Maybe<RectU>(RectU(16, 0, 32, 16)))
+      throw StarException("BehaviorLab: PathEmbed normal Assets text.frames/alias bounds differ");
+    // Fail immediately on bad decoding, then observe the same originals again
+    // after painting each captured stage.
+    PathEmbedLab::imageJson(*m_behaviorPathEmbedBaseImage, false);
+    PathEmbedLab::imageJson(*m_behaviorPathEmbedCropImage, true);
+    m_behaviorPathEmbedProof = JsonObject{{"version", 1}, {"backend", PathEmbedLab::backend()},
+        {"source", source}, {"parsedFrames", frames->toJson()},
+        {"network", JsonObject{{"transport", "tcp"}, {"address", "127.0.0.1"}, {"rulesVersion", 5},
+            {"streamEnabled", false}, {"universeHandshake", false}, {"ownedBindSucceeded", true}, {"rounds", std::move(rounds)}}},
+        {"visual", JsonObject{{"imagePath", receivedCrop}, {"basePath", receivedBase}, {"scale", 4},
+            {"displaySize", JsonArray{64, 64}}, {"center", JsonArray{64, 48}}, {"fullbright", true},
+            {"consumer", "WorldPainter.foregroundOverlays"}, {"label", receivedLabel}}}};
+  }
+  if (!m_behaviorReady || BehaviorLab::hasPendingFrame() || m_renderData.isFullbright) return;
+  auto visual = m_behaviorPathEmbedProof.get("visual");
+  auto drawable = Drawable::makeImage(visual.getString("imagePath"),
+      visual.getFloat("scale") * 0.5f / TilePixels, true, Vec2F(64, 48));
+  drawable.fullbright = true;
+  m_renderData.foregroundOverlays.append(std::move(drawable));
+  m_behaviorPathEmbedSubmitted = true;
+}
+
 void ClientApplication::prepareBehaviorZstdFrame() {
   // Run before the frame-ready guard: the first normal Assets image lookup must
   // be driven by the actual TCP-received path, not a Lua preload or proxy.
@@ -3932,7 +4065,7 @@ void ClientApplication::renderBehaviorScenario() {
       {"layout", "row-major-rgb-f32-bits"}, {"bits", std::move(lightmapBits)}};
   Json metadata = JsonObject{
       {"lightingDiagnostics", std::move(lightmapDiagnostic)},
-      {"scenario", m_behaviorStringViewRoom ? "stringview-room" : m_behaviorBufferRoom ? "buffer-room" : m_behaviorDataStreamRoom ? "datastream-room" : m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
+      {"scenario", m_behaviorPathEmbedRoom ? "path-embed-room" : m_behaviorStringViewRoom ? "stringview-room" : m_behaviorBufferRoom ? "buffer-room" : m_behaviorDataStreamRoom ? "datastream-room" : m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
       {"worldState", JsonObject{
           {"worldId", printWorldId(m_universeClient->clientContext()->playerWorldId())},
           {"worldSize", jsonFromVec2U(world->geometry().size())},
@@ -4044,6 +4177,25 @@ void ClientApplication::renderBehaviorScenario() {
     if (m_behaviorHostAddressProof.isNull())
       throw StarException("BehaviorLab: HostAddress frame has no completed proof");
     metadata = metadata.set("hostAddressProof", m_behaviorHostAddressProof);
+  }
+  if (m_behaviorPathEmbedRoom) {
+    bool baseHeld = bool(m_behaviorPathEmbedBaseImage);
+    bool cropHeld = bool(m_behaviorPathEmbedCropImage);
+    bool baseSame = baseHeld && m_behaviorPathEmbedBaseImage.get() == m_behaviorPathEmbedBaseIdentity;
+    bool cropSame = cropHeld && m_behaviorPathEmbedCropImage.get() == m_behaviorPathEmbedCropIdentity;
+    bool distinct = baseHeld && cropHeld && m_behaviorPathEmbedBaseImage.get() != m_behaviorPathEmbedCropImage.get();
+    if (m_behaviorPathEmbedProof.isNull() || !m_behaviorPathEmbedSubmitted || !baseSame || !cropSame || !distinct
+        || m_behaviorPathEmbedBaseAcquisitions != 1 || m_behaviorPathEmbedCropAcquisitions != 1)
+      throw StarException("BehaviorLab: PathEmbed missing submitted drawable/original image ownership");
+    // After WorldPainter: inspect the same original objects, never reacquire or
+    // register a proxy to hide eviction, copying, or stale fixture state.
+    auto proof = m_behaviorPathEmbedProof
+        .set("images", JsonObject{{"base", PathEmbedLab::imageJson(*m_behaviorPathEmbedBaseImage, false)},
+            {"crop", PathEmbedLab::imageJson(*m_behaviorPathEmbedCropImage, true)}})
+        .set("ownership", JsonObject{{"baseHeld", baseHeld}, {"cropHeld", cropHeld},
+            {"baseIdentityUnchanged", baseSame}, {"cropIdentityUnchanged", cropSame}, {"distinctImages", distinct},
+            {"baseAcquisitions", m_behaviorPathEmbedBaseAcquisitions}, {"cropAcquisitions", m_behaviorPathEmbedCropAcquisitions}});
+    metadata = metadata.set("pathEmbedProof", proof);
   }
   if (m_behaviorZstdRoom) {
     if (m_behaviorZstdProof.isNull())
