@@ -683,7 +683,7 @@ void ClientApplication::render() {
         BehaviorLab::renderLruLabel(*m_guiContext);
       if (BehaviorLab::enabled() && BehaviorLab::ttlScene() && m_behaviorReady
           && !BehaviorLab::hasPendingFrame() && !m_renderData.isFullbright
-          && BehaviorLab::ttlReady(m_behaviorStage))
+          && BehaviorLab::ttlFramePrepared(m_behaviorStage))
         BehaviorLab::renderTtlLabel(*m_guiContext);
       if (m_behaviorTextScanRoom)
         renderBehaviorTextScanFrame();
@@ -1656,6 +1656,9 @@ bool BehaviorLab::ttlScene() {
 }
 bool BehaviorLab::ttlReady(unsigned stage) {
   return stage != 1 || Time::monotonicMilliseconds() >= ttlConsumer().deadline;
+}
+bool BehaviorLab::ttlFramePrepared(unsigned stage) {
+  return ttlConsumer().stage == int(stage);
 }
 void BehaviorLab::prepareTtlFrame(WorldRenderData& renderData, unsigned stage) {
   lruRequire(ttlScene() && stage < 3 && !renderData.isFullbright, "BehaviorLab: invalid TTL scene");
@@ -4200,7 +4203,9 @@ void ClientApplication::renderBehaviorTextScanFrame() {
 void ClientApplication::renderBehaviorScenario() {
   if (!m_behaviorReady || BehaviorLab::hasPendingFrame())
     return;
-  if (BehaviorLab::ttlScene() && !BehaviorLab::ttlReady(m_behaviorStage))
+  // A deadline can cross BETWEEN overlay preparation and framebuffer queuing.
+  // A second clock read must not authorize capturing the previous phase's proof.
+  if (BehaviorLab::ttlScene() && !BehaviorLab::ttlFramePrepared(m_behaviorStage))
     return;
   auto world = m_universeClient->worldClient();
   if (!world || !world->inWorld() || !m_behaviorLightingCompleted || m_renderData.isFullbright)

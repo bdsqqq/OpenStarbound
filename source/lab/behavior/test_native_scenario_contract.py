@@ -17,6 +17,39 @@ def check_native_scenarios(source, scenarios):
         raise ValueError("native startup scenario allowlist differs from advertised scenes")
 
 
+def ttl_capture_gate(source, prepared, stage, clock, deadline):
+    """Model ONLY the exact native capture precondition, not cache semantics."""
+    prefix = source.split('void ClientApplication::renderBehaviorScenario()', 1)[1].split('  auto world =', 1)[0]
+    if '!BehaviorLab::ttlFramePrepared(m_behaviorStage)' in prefix:
+        return prepared == stage
+    if '!BehaviorLab::ttlReady(m_behaviorStage)' in prefix:
+        return stage != 1 or clock >= deadline
+    raise ValueError('missing native TTL capture barrier')
+
+
+class TtlPreparedFrameContractTests(unittest.TestCase):
+    def test_deadline_crossing_cannot_capture_previous_phase(self):
+        source = (lab.ROOT / 'source/client/StarClientApplication.cpp').read_text()
+        self.assertIn('return ttlConsumer().stage == int(stage);', source)
+        # Preparation saw deadline-1 and did nothing. Time crosses later in the
+        # SAME render: readiness alone would queue phase1 with phase0 metadata.
+        self.assertFalse(ttl_capture_gate(source, 0, 1, 99, 100))
+        self.assertFalse(ttl_capture_gate(source, 0, 1, 100, 100))
+        self.assertTrue(ttl_capture_gate(source, 1, 1, 100, 100))
+
+    def test_old_native_clock_gate_reproduces_stale_phase_in_isolation(self):
+        source = (lab.ROOT / 'source/client/StarClientApplication.cpp').read_text()
+        old = source.replace('!BehaviorLab::ttlFramePrepared(m_behaviorStage)', '!BehaviorLab::ttlReady(m_behaviorStage)')
+        self.assertFalse(ttl_capture_gate(old, 0, 1, 99, 100))
+        self.assertTrue(ttl_capture_gate(old, 0, 1, 100, 100))
+        with self.assertRaises(AssertionError):
+            self.assertFalse(ttl_capture_gate(old, 0, 1, 100, 100))
+
+    def test_label_uses_prepared_phase_not_another_deadline_read(self):
+        source = (lab.ROOT / 'source/client/StarClientApplication.cpp').read_text()
+        self.assertIn('&& BehaviorLab::ttlFramePrepared(m_behaviorStage))\n        BehaviorLab::renderTtlLabel', source)
+
+
 class NativeScenarioContractTests(unittest.TestCase):
     def test_every_advertised_scenario_is_accepted(self):
         source = (lab.ROOT / "source/client/StarClientApplication.cpp").read_text()

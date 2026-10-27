@@ -29526,7 +29526,7 @@
     },
     {
       "path": "source/application/StarBehaviorLab.hpp",
-      "sha256": "9ba40d6c235cb973164d430b124187c299e3a59a1f7524d3c7c36bf0c55f5365"
+      "sha256": "8a32acc85b447c3d6c5204a258c9b026ee355450b00a38af6ff66544b507f641"
     },
     {
       "path": "source/application/StarDesktopService_pc_steam.cpp",
@@ -29942,7 +29942,7 @@
     },
     {
       "path": "source/client/StarClientApplication.cpp",
-      "sha256": "bb59287de0920fb9ed49063b12fe26b011dd9e68ad26ca3a570c1136f018128e"
+      "sha256": "f5a1bb9101660184eb7dfe48271aba92b39c96d859788f1f40a3706672b2d9be"
     },
     {
       "path": "source/client/StarClientApplication.hpp",
@@ -34026,7 +34026,7 @@
     },
     {
       "path": "source/lab/behavior/test_native_scenario_contract.py",
-      "sha256": "df02b77cbf02bdde4e73e8c630e2cac190e26501849fa49c57608c26924e17de"
+      "sha256": "272513714601dba6ff13ce6b55e5f08a426c55636067c48553730007c1ef0fd9"
     },
     {
       "path": "source/lab/behavior/test_option_parser_proof.py",

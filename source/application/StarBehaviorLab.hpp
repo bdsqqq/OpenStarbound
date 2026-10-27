@@ -27,6 +27,7 @@ public:
   static Json lruProof();
   static bool ttlScene();
   static bool ttlReady(unsigned stage);
+  static bool ttlFramePrepared(unsigned stage);
   static void prepareTtlFrame(WorldRenderData& renderData, unsigned stage);
   static void renderTtlLabel(GuiContext& gui);
   static Json ttlProof();
