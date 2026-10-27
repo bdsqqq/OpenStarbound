@@ -167,6 +167,34 @@ def verify(archive_root, manifest_path):
     print('ARCHIVE_RECONSTRUCTION_PASS', len(manifest['entries']), len(seen))
 
 
+def allocated_bytes(root):
+    """Like du: count allocated blocks once per inode; never follow links."""
+    total = 0
+    seen = set()
+    for parent, dirs, files in os.walk(root, followlinks=False):
+        paths = [Path(parent), *(Path(parent) / name for name in files),
+                 *(Path(parent) / name for name in dirs if (Path(parent) / name).is_symlink())]
+        for path in paths:
+            s = path.lstat()
+            inode = (s.st_dev, s.st_ino)
+            if inode not in seen:
+                seen.add(inode)
+                total += s.st_blocks * 512
+    return total
+
+
+def budget(repo, max_live_gib, max_archive_gib):
+    build = repo / 'build'
+    archive_size = allocated_bytes(build / 'migration-evidence-archive')
+    live_size = allocated_bytes(build) - archive_size
+    result = dict(live_build_bytes=live_size, archive_bytes=archive_size,
+                  max_live_bytes=int(max_live_gib * 1024**3),
+                  max_archive_bytes=int(max_archive_gib * 1024**3))
+    result['passed'] = live_size <= result['max_live_bytes'] and archive_size <= result['max_archive_bytes']
+    print(json.dumps(result, sort_keys=True))
+    return result['passed']
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repo', type=Path, default=Path(__file__).resolve().parents[1])
@@ -177,14 +205,21 @@ def main():
     a.add_argument('roots', nargs='+')
     v = sub.add_parser('verify')
     v.add_argument('manifest', type=Path)
+    b = sub.add_parser('budget')
+    b.add_argument('--max-live-gib', type=float, default=4)
+    b.add_argument('--max-archive-gib', type=float, default=16)
     args = parser.parse_args()
     repo = args.repo.resolve()
     archive_root = repo / 'build/migration-evidence-archive'
+    if args.command == 'budget':
+        if args.max_live_gib < 0 or args.max_archive_gib < 0:
+            parser.error('nonnegative budgets required')
+        sys.exit(0 if budget(repo, args.max_live_gib, args.max_archive_gib) else 1)
     if args.command == 'verify':
         verify(archive_root, args.manifest)
         return
-    if not args.run or Path(args.run).name != args.run or args.run in ('.', '..') or args.min_bytes < 1:
-        parser.error('safe single-component run name and positive minimum required')
+    if not args.run or Path(args.run).name != args.run or args.run in ('.', '..') or args.min_bytes < 0:
+        parser.error('safe single-component run name and nonnegative minimum required')
     lock = repo / 'build/.migration-cleanup.lock'
     with lock.open('x') as stream:
         stream.write(str(os.getpid()) + '\n')

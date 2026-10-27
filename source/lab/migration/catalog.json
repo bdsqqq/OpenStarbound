@@ -28970,7 +28970,7 @@
     },
     {
       "path": "scripts/cleanup-migration-artifacts.py",
-      "sha256": "42612eee3bab2777fd834bf62b2a39cb919cb070d9efdf0f3feb76fe3c65cb39"
+      "sha256": "408c3b86ea44160401f2a93b4dcd3c70d5984c6c58c328c5bf235e9eb567c499"
     },
     {
       "path": "scripts/credits/generate-contributors.sh",
@@ -29042,7 +29042,7 @@
     },
     {
       "path": "scripts/test_cleanup_migration_artifacts.py",
-      "sha256": "ddffd64bdb3d13f31ad0a5a9d822f1886204d837ad7e24fc3bc7fedadf599e70"
+      "sha256": "431ebf748e78e75437fe5acef925319a2ea7b7d81d806c4c7a442701f7c8e451"
     },
     {
       "path": "source/CMakeLists.txt",

@@ -62,6 +62,23 @@ class CleanupTests(unittest.TestCase):
             self.assertFalse((tree / 'b').exists())
             self.assertEqual(outside.read_bytes(), b'xxx')
 
+    def test_zero_byte_logs_archive_and_budget_rejects_growth(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp).resolve()
+            tree = repo / 'build/old'
+            tree.mkdir(parents=True)
+            (tree / 'empty.log').write_bytes(b'')
+            (tree / 'data').write_bytes(b'x' * 8192)
+            self.assertFalse(cleanup.budget(repo, 0, 0))
+            arc = repo / 'build/migration-evidence-archive'
+            cleanup.archive(repo, ['build/old'], arc, 'empty', 0)
+            manifest = json.loads((arc / 'runs/empty/manifest.json').read_bytes())
+            self.assertEqual(len(manifest['entries']), 2)
+            self.assertFalse((tree / 'empty.log').exists())
+            cleanup.verify(arc, arc / 'runs/empty/manifest.json')
+            self.assertTrue(cleanup.budget(repo, 1, 1))
+            self.assertFalse(cleanup.budget(repo, 1, 0))
+
     def test_corrupt_existing_blob_never_prunes_new_input(self):
         import hashlib
         with tempfile.TemporaryDirectory() as temp:
