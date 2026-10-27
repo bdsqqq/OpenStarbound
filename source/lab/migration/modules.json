@@ -77,6 +77,8 @@
     {"id":"rust-line-query-abi","module":"foundation.math-geometry","disposition":"ffi-adapter","pattern":"source/core/StarRustLine\\.h"},
     {"id":"rust-line-query","module":"foundation.math-geometry","disposition":"rust-candidate","pattern":"source/rust/ffi/src/line_query\\.rs"},
     {"id":"core-math","module":"foundation.math-geometry","disposition":"migrate","pattern":"source/core/Star(?:AStar|Interpolation|Line|MathCommon|Matrix3|MultiArrayInterpolator|ParametricFunction|PeriodicFunction|Poly|Rect|SectorArray2D|SpatialHash2D|Spline|Vector)\\.(?:hpp|cpp)"},
+    {"id":"rust-weighted-pool-abi","module":"foundation.random","disposition":"ffi-adapter","pattern":"source/core/StarRustWeightedPool\\.h"},
+    {"id":"rust-weighted-pool","module":"foundation.random","disposition":"rust-candidate","pattern":"source/rust/ffi/src/weighted_pool\\.rs"},
     {"id":"rust-random-mwc-abi","module":"foundation.random","disposition":"ffi-adapter","pattern":"source/core/StarRustRandomMwc\\.h"},
     {"id":"rust-random-mwc","module":"foundation.random","disposition":"rust-candidate","pattern":"source/rust/ffi/src/random_mwc\\.rs"},
     {"id":"core-random","module":"foundation.random","disposition":"migrate","pattern":"source/core/Star(?:Perlin|Random|RandomPoint|SecureRandom|StaticRandom|WeightedPool)(?:_(?:unix|windows))?\\.(?:hpp|cpp)"},

@@ -1,0 +1,26 @@
+[
+  {
+    "output": "ProxyBoundaryWeightedPool.hpp",
+    "input": "/Users/bdsqqq/www/OpenStarbound/source/lab/weighted-pool-boundary/BoundaryWeightedPool.hpp",
+    "inputSha256": "e02958ac31ea146ff650eb9131da30b7059ce0da0674c6dfdbe07f8350d64a84",
+    "transformation": "dependency names only, matching frozen native proxy"
+  },
+  {
+    "output": "scalar.cpp",
+    "input": "/Users/bdsqqq/www/OpenStarbound/source/lab/weighted-pool/scalar.cpp",
+    "inputSha256": "f3909bad05bd1873fa027a9b3cec2be97b0883aa7a62910778a67663d4eeb0e5",
+    "transformation": "header/class names only"
+  },
+  {
+    "output": "lifecycle.cpp",
+    "input": "/Users/bdsqqq/www/OpenStarbound/source/lab/weighted-pool/lifecycle.cpp",
+    "inputSha256": "ea38177cd56ee7faf0920dc2933ade1e4f06caed42b3cb2d59e73b117ddb8535",
+    "transformation": "header/class names only; remove unavailable mutant route (original mutant still frozen separately)"
+  },
+  {
+    "output": "corpus.cpp",
+    "input": "/Users/bdsqqq/www/OpenStarbound/source/lab/weighted-pool-boundary/scalar.cpp",
+    "inputSha256": "bca65fdb0d4fb8b3920e27cbaad6fea6101028f3d802b4b3c561a96f572b3c2e",
+    "transformation": "scalar dependency definitions; original native.cpp stdin corpus loop verbatim modulo class name"
+  }
+]

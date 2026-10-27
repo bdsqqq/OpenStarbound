@@ -6671,6 +6671,16 @@
       "language": "c/c++",
       "line": 1,
       "membership_status": "no-direct-target-found",
+      "module": "foundation.random",
+      "path": "source/core/StarRustWeightedPool.h",
+      "rule": "rust-weighted-pool-abi"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "ffi-adapter",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
       "module": "foundation.compression-crypto",
       "path": "source/core/StarRustZstd.h",
       "rule": "rust-zstd-abi"
@@ -25098,6 +25108,196 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/BoundaryWeightedPool.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/ProxyBoundaryWeightedPool.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/audit.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/combined.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/continue.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/corpus.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/fixtures.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/frame.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/friend.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/generate.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/generic_gap.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/hardening.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/lifecycle.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/mock.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/numeric.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/probe.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/scalar.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/verify.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/weighted-pool/StarWeightedPool.original.hpp",
       "rule": "laboratories"
     },
@@ -26096,6 +26296,16 @@
       "module": "foundation.serialization",
       "path": "source/rust/ffi/src/vlq.rs",
       "rule": "rust-vlq"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "rust-candidate",
+      "language": "rust",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "foundation.random",
+      "path": "source/rust/ffi/src/weighted_pool.rs",
+      "rule": "rust-weighted-pool"
     },
     {
       "cmake_membership": [],
@@ -30921,6 +31131,10 @@
       "sha256": "1acd4b67f3368d32876dab2806a6430599f1f5f0b30a3ed5ee4af751e05b04e4"
     },
     {
+      "path": "source/core/StarRustWeightedPool.h",
+      "sha256": "266fce1bf416dd11516d07326382ae00851bd3cb210c81f2c1e6ed37273b80a2"
+    },
+    {
       "path": "source/core/StarRustZstd.h",
       "sha256": "eb75c737473ee82f9d03f5fcb81e5668b2c4bf2e063ba8289219812381714db3"
     },
@@ -35290,7 +35504,7 @@
     },
     {
       "path": "source/lab/migration/modules.json",
-      "sha256": "eb90add6c12e436b319401ab71365458e4f4cefe4f2428b442852d105f289dad"
+      "sha256": "5d3d2d127672a8f7917b93252ebb1fabf0c738f48b05fda6c13a2644611ed06b"
     },
     {
       "path": "source/lab/native_artifacts.py",
@@ -35941,6 +36155,82 @@
       "sha256": "08c8c273cbd8b655c1db96cfd5b399f67c0734b51ee3ce70781f27b8ccfab07c"
     },
     {
+      "path": "source/lab/weighted-pool-boundary/BoundaryWeightedPool.hpp",
+      "sha256": "e02958ac31ea146ff650eb9131da30b7059ce0da0674c6dfdbe07f8350d64a84"
+    },
+    {
+      "path": "source/lab/weighted-pool-boundary/ProxyBoundaryWeightedPool.hpp",
+      "sha256": "2e219e195a3b0cc769ca14b3c2a6cde38692a7c94c43cc3a5bfb4b5707cb156c"
+    },
+    {
+      "path": "source/lab/weighted-pool-boundary/audit.py",
+      "sha256": "ad420f07cdf197f1e65d624ceda1cc54c3c9502fae7ac8bdba81d8577c162551"
+    },
+    {
+      "path": "source/lab/weighted-pool-boundary/combined.cpp",
+      "sha256": "25ab538581bf137186c0f06cb575249e8dc2446229cd491bb8ad7d8da95a5fb8"
+    },
+    {
+      "path": "source/lab/weighted-pool-boundary/continue.py",
+      "sha256": "153675a5a81b6dc1d8d48a65fd5eebc618b2a9a56f82029df6560a375b459ab1"
+    },
+    {
+      "path": "source/lab/weighted-pool-boundary/corpus.cpp",
+      "sha256": "ad3abb9a598c5e262b3a4cc7c45e1f91fab17468d1c860cf2a1f188543eff9d0"
+    },
+    {
+      "path": "source/lab/weighted-pool-boundary/fixtures.py",
+      "sha256": "c3d50aabef7b5f9d1c51c2ad7f77413b1e2f9c33971c1a7aedc43d24b7371a7d"
+    },
+    {
+      "path": "source/lab/weighted-pool-boundary/frame.hpp",
+      "sha256": "f1c16e43f0dbcb095c171a47a803bf4a23046fe690e874890ab0b2a1527cdc7c"
+    },
+    {
+      "path": "source/lab/weighted-pool-boundary/friend.cpp",
+      "sha256": "d53f6bff04966bb609317f8be0b66f4f5e911f05f096e67ce3b3821085ca2fb5"
+    },
+    {
+      "path": "source/lab/weighted-pool-boundary/generate.py",
+      "sha256": "924813386d9d2576c7d2cb91a107a34f51c6916e380d6f1ae03b4a1a6aa9f728"
+    },
+    {
+      "path": "source/lab/weighted-pool-boundary/generic_gap.py",
+      "sha256": "4091b7207a1d60aad4c2fee66de2f6264a3d99d644bef4868d2226edde16be8b"
+    },
+    {
+      "path": "source/lab/weighted-pool-boundary/hardening.py",
+      "sha256": "52a2431a49f8d331276f0f39232f08fc27455a3993668586f73bd0b8871cb4e2"
+    },
+    {
+      "path": "source/lab/weighted-pool-boundary/lifecycle.cpp",
+      "sha256": "77c0e9412e1f7bb8ca094c9475e44bb5e500af2f03e9ab175a0496e29732d3a1"
+    },
+    {
+      "path": "source/lab/weighted-pool-boundary/mock.cpp",
+      "sha256": "7c9c56a4ada2a46ab62287d5c837fcef7b11de7ca071cb23380886325efe1258"
+    },
+    {
+      "path": "source/lab/weighted-pool-boundary/numeric.cpp",
+      "sha256": "f0e19acac106d16359e2c56388da6ebccc873626da3cd1139d44adf6c016f671"
+    },
+    {
+      "path": "source/lab/weighted-pool-boundary/probe.cpp",
+      "sha256": "447453c341b43b696b040b84df419bc8bfbb74b3081c3303e6536632d83c7ecb"
+    },
+    {
+      "path": "source/lab/weighted-pool-boundary/run.py",
+      "sha256": "2c0e0b29eb744048fcc29f1114e92c680bd21efcbb29f19caaf8198cb0ef22b3"
+    },
+    {
+      "path": "source/lab/weighted-pool-boundary/scalar.cpp",
+      "sha256": "bca65fdb0d4fb8b3920e27cbaad6fea6101028f3d802b4b3c561a96f572b3c2e"
+    },
+    {
+      "path": "source/lab/weighted-pool-boundary/verify.py",
+      "sha256": "29a472d92230ee50e719e21b92154e67ce3adb89f6fd8d2ce5ff291360bede9a"
+    },
+    {
       "path": "source/lab/weighted-pool/StarWeightedPool.original.hpp",
       "sha256": "8991eb5350db61d4c69ace303ac2890c49bea6866b981cab329b79efd49763c6"
     },
@@ -36234,7 +36524,7 @@
     },
     {
       "path": "source/rust/ffi/src/lib.rs",
-      "sha256": "4f74322188959e805b1c6378ebd7a6e931201532d5cf17659f5b6e70af27f233"
+      "sha256": "75d6ad208c68583c9c6602d30113a82d4c4496d737ccf11856a47eb45ade364d"
     },
     {
       "path": "source/rust/ffi/src/line_query.rs",
@@ -36283,6 +36573,10 @@
     {
       "path": "source/rust/ffi/src/vlq.rs",
       "sha256": "3c08b767a3b2425ad53165324f3eb1a9b6b60ac4005c128c68c55544e9728d4f"
+    },
+    {
+      "path": "source/rust/ffi/src/weighted_pool.rs",
+      "sha256": "db860676a728e25849a41cc5f5f9a32d69b10224a5e1ee8064253d7d0f0fd4eb"
     },
     {
       "path": "source/rust/ffi/src/zstd.rs",
@@ -37110,15 +37404,15 @@
   },
   "summary": {
     "by_disposition": {
-      "ffi-adapter": 40,
+      "ffi-adapter": 41,
       "harness": 29,
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 504,
+      "oracle/harness": 523,
       "retain-tooling": 28,
       "retained-third-party": 296,
-      "rust-candidate": 27,
+      "rust-candidate": 28,
       "test": 57
     },
     "by_module": {
@@ -37129,7 +37423,7 @@
       "foundation.compression-crypto": 18,
       "foundation.math-geometry": 16,
       "foundation.media": 14,
-      "foundation.random": 12,
+      "foundation.random": 14,
       "foundation.runtime": 46,
       "foundation.serialization": 56,
       "foundation.storage": 28,
@@ -37156,14 +37450,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 43,
-      "validation.oracles-harness": 533,
+      "validation.oracles-harness": 552,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1986,
+    "files": 2007,
     "modules": 39,
-    "no_direct_target": 880
+    "no_direct_target": 901
   }
 }
