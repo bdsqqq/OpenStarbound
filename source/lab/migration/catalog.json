@@ -22954,11 +22954,81 @@
     {
       "cmake_membership": [],
       "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/lru-cache/StarLruCache.original.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/lru-cache/inventory.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/lru-cache/model.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/lru-cache/native.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/lru-cache/run-acquisition-2.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/lru-cache/run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
       "language": "harness/tool script",
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/native_artifacts.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/native_evidence_json.py",
       "rule": "laboratories"
     },
     {
@@ -23929,6 +23999,16 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/test_native_artifacts.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/test_native_evidence_json.py",
       "rule": "laboratories"
     },
     {
@@ -33987,6 +34067,30 @@
       "sha256": "d367c46a0c903951691ab325bf1b3175cf40c0be8fd69264eeb27166c1289ac9"
     },
     {
+      "path": "source/lab/lru-cache/StarLruCache.original.hpp",
+      "sha256": "b0ca8540168e7c90d375c9f7b327c568bd2e3d1d9c5df99febaee9f5658cadd7"
+    },
+    {
+      "path": "source/lab/lru-cache/inventory.py",
+      "sha256": "cbad570a3185cc97f542360e7244dfff4059823b6926bfe57c8e42657f36ff59"
+    },
+    {
+      "path": "source/lab/lru-cache/model.py",
+      "sha256": "f962c12524ac9fb1bd95800c9001d014b053f0870e04619bf63d9e9152d1f64a"
+    },
+    {
+      "path": "source/lab/lru-cache/native.cpp",
+      "sha256": "fd6e5987dad3b8a4fadb52320f7cebc4b2fc99eb194542ad8cbe52ab1b9e9382"
+    },
+    {
+      "path": "source/lab/lru-cache/run-acquisition-2.py",
+      "sha256": "0f6861930ca33c42bab895c969a469424041f42cc61df1a4161b7a7f17ad42d2"
+    },
+    {
+      "path": "source/lab/lru-cache/run.py",
+      "sha256": "fc74b193cb47dd8501196d762d57dbd52429b8f9a5d6a730d62aa3f1e2980807"
+    },
+    {
       "path": "source/lab/migration/inventory.py",
       "sha256": "d57c5e7a7f3ede9df96fb248fabb5a54c81799b1110219cb763062d1556242e6"
     },
@@ -33997,6 +34101,10 @@
     {
       "path": "source/lab/native_artifacts.py",
       "sha256": "e419a265c27a171b971e1ecf60fb2062ed2e01d1f2427e2201f09479324843e4"
+    },
+    {
+      "path": "source/lab/native_evidence_json.py",
+      "sha256": "973ee8989a9ef1b07a1b62c54bc2906006a9a0cf7b993743f8a57885a7382048"
     },
     {
       "path": "source/lab/native_symbols.py",
@@ -34385,6 +34493,10 @@
     {
       "path": "source/lab/test_native_artifacts.py",
       "sha256": "b9db4b732565b134a2ac07bb33a5db2351e60490406614d521f8d48a7c9a9980"
+    },
+    {
+      "path": "source/lab/test_native_evidence_json.py",
+      "sha256": "91a5dfa34d5a2deb92f25cfbb6a6328fbaa3d5758ecc0f30ec1ec07981cb14dd"
     },
     {
       "path": "source/lab/test_native_symbols.py",
@@ -35589,7 +35701,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 411,
+      "oracle/harness": 419,
       "retain-tooling": 20,
       "retained-third-party": 296,
       "rust-candidate": 25,
@@ -35630,14 +35742,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 35,
-      "validation.oracles-harness": 438,
+      "validation.oracles-harness": 446,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1877,
+    "files": 1885,
     "modules": 39,
-    "no_direct_target": 771
+    "no_direct_target": 779
   }
 }
