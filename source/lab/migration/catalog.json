@@ -1809,7 +1809,27 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "tools.release",
+      "path": "scripts/test_verify_ttl_retention.py",
+      "rule": "release-scripts"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "retain-tooling",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "tools.release",
       "path": "scripts/verify-lru-retention.py",
+      "rule": "release-scripts"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "retain-tooling",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "tools.release",
+      "path": "scripts/verify-ttl-retention.py",
       "rule": "release-scripts"
     },
     {
@@ -29537,8 +29557,16 @@
       "sha256": "ac40eb068736e4f3b330f3afd1b3b58c299581116001a709a83627249320c59e"
     },
     {
+      "path": "scripts/test_verify_ttl_retention.py",
+      "sha256": "3f63fb6aabf25ab3e6915d38327b3acc86559f415f9ec8df00f9b609d1203b95"
+    },
+    {
       "path": "scripts/verify-lru-retention.py",
       "sha256": "4c16a71d9abaf350d86a2e6ef05cc04a61136a960790e6ec3cdddbb0273b646e"
+    },
+    {
+      "path": "scripts/verify-ttl-retention.py",
+      "sha256": "7ae2252ffbc08e44ca8891ff87ef1eb25d5247bdaac14dc3ae28b1dfd113c220"
     },
     {
       "path": "source/CMakeLists.txt",
@@ -36892,7 +36920,7 @@
       "migrate": 960,
       "migrate-adapter": 24,
       "oracle/harness": 490,
-      "retain-tooling": 26,
+      "retain-tooling": 28,
       "retained-third-party": 296,
       "rust-candidate": 27,
       "test": 57
@@ -36931,15 +36959,15 @@
       "sessions.orchestration": 47,
       "sessions.persistence": 6,
       "tools.inactive": 21,
-      "tools.release": 41,
+      "tools.release": 43,
       "validation.oracles-harness": 519,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1970,
+    "files": 1972,
     "modules": 39,
-    "no_direct_target": 864
+    "no_direct_target": 866
   }
 }
