@@ -1,0 +1,7 @@
+# offline path embedding evidence replay — draft
+
+this directory is separate from the original producer because its recursively inventoried source tree must remain historical, not silently rebound. `object_inventory.py` uses the shared byte-only apple table parser; arbitrary symbol bytes are not utf-8 text. it inventories exact ordered objects and declared archive members, but unresolved origins are NOT acceptance. callers must reconstruct expectations independently from frozen recipes before adoption.
+
+`python3 -B source/lab/path-embed-replay/test_object_inventory.py`: six in-memory semantic groups pass. an actual r3 leaf-map smoke check is BLOCKED: the bound `libcpptrace.a` archive table contains two `utils.cpp.o` members, both named identically in the map. names alone do not disambiguate physical members. the guard remains strict; no successful actual closure is claimed. retain this first failed component approach; more identifying evidence or an explicitly justified multiplicity contract is needed before changing it.
+
+sdk interface/reexport/load-declaration research is separate and unsettled. r3's 35 stub paths lack acquisition-time byte bindings. neither current sdk hashes, suffix allowlists, these unit tests nor a successful future object inventory would establish the missing sdk evidence, framework implementation coverage, native calibration, a rust port or actual game behavior.
