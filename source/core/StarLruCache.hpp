@@ -51,6 +51,7 @@ public:
   void clear();
 
 private:
+  friend struct TtlCacheLabAccess;
   OrderedMapType m_map;
   size_t m_maxSize;
 #ifdef STAR_USE_RUST_LRU_CACHE
