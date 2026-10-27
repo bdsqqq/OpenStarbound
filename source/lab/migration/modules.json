@@ -192,6 +192,7 @@
     {"id":"vendor","module":"retained.third-party","disposition":"retained-third-party","pattern":"source/(?:extern/(?!imgui_(?:iterator|lua_bindings))|application/discord/|test/gtest/).+\\.(?:c|cc|cpp|h|hpp|inl)"},
     {"id":"tests","module":"validation.tests","disposition":"test","pattern":"source/test/(?:[a-z][a-z0-9_]*|StarTestUniverse)\\.(?:cpp|hpp)"},
     {"id":"laboratories","module":"validation.oracles-harness","disposition":"oracle/harness","pattern":"source/lab/(?!migration/).+\\.(?:c|cpp|hpp|h|py|sh|rs)"},
+    {"id":"ttl-native-lifecycle","module":"validation.oracles-harness","disposition":"oracle/harness","pattern":"source/lab/ttl-cache/lifecycle\\.inc"},
     {"id":"behavior-lab-contract","module":"validation.oracles-harness","disposition":"harness","pattern":"source/application/StarBehaviorLab\\.(?:hpp|cpp)"}
   ]
 }
