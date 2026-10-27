@@ -19,10 +19,12 @@ def fixture(backend='rust', phase=2, initial=(), mutant=None, origin=123):
         key = n.encode().hex()
         before = p.state(keys)
         # Mutants deliberately implement common *different* LRU semantics.
-        if not (mutant == 'hit-keeps-capacity' and key in keys):
+        if not ((mutant == 'hit-keeps-capacity' or
+                 (mutant == 'warmup-hit-keeps-capacity' and index < 20)) and key in keys):
             while len(keys) > 19:
                 keys.pop(0)
-        produced = key not in keys or mutant == 'hit-produces'
+        produced = key not in keys or mutant == 'hit-produces' or (
+            mutant == 'warmup-hit-produces' and index < 20)
         producer_state = p.state(keys) if produced else None
         if requested is None:
             if mutant == 'error-rolls-back':
@@ -30,9 +32,10 @@ def fixture(backend='rust', phase=2, initial=(), mutant=None, origin=123):
             status, error = 'error', dict(kind='std::exception',
                 messageHex=f"(DungeonException) Unknown dungeon: '{n}'".encode().hex())
         else:
-            if key in keys:
-                keys.remove(key)
-            keys.append(key)
+            if not (mutant == 'warmup-omit-promotion' and index == 0 and key in keys):
+                if key in keys:
+                    keys.remove(key)
+                keys.append(key)
             status, error = 'ok', None
         after_c = (c + (backend == 'rust')) % 2**64
         if mutant == 'error-not-counted' and requested is None:
@@ -49,7 +52,7 @@ def fixture(backend='rust', phase=2, initial=(), mutant=None, origin=123):
         if p.phase_for(index) != phase:
             continue
         if requested is None:
-            results.append(dict(name=p.MISSING, ok=False, error=f"Unknown dungeon: '{p.MISSING}'"))
+            results.append(dict(name=p.MISSING, ok=False, error=f"(DungeonException) Unknown dungeon: '{p.MISSING}'"))
         else:
             results.append(dict(name=p.name(requested), ok=True, metadata=p.metadata(requested)))
     visual = dict(phase=phase, results=results, continuation=True, selected=p.metadata(selected),
@@ -72,7 +75,7 @@ def frame(receipt):
     return image
 
 
-def frames(backend='rust', mutate=None):
+def frames(backend='rust', mutate=None, initial=()):
     directory = mock.Mock()
     pngs = [Path('/logical')/(stage+'.png') for stage in p.STAGES]
     paths = [path.with_suffix('.json') for path in pngs]
@@ -80,7 +83,7 @@ def frames(backend='rust', mutate=None):
     envelopes, images = {}, {}
     for phase, path in enumerate(paths):
         r = {field: 'logical-stable-world' for field in lab.SCENE_FIELDS}
-        r.update(fixture(backend, phase))
+        r.update(fixture(backend, phase, initial=initial))
         r.update(inWorld=True, playerOutsideView=True, uiHidden=True, lightingCompleted=True,
             lightEntityReplicated=True, fullbright=False, replicatedSettledUpdates=90,
             lightingBackend='cpp', rustLightingCalls=0)
@@ -124,6 +127,84 @@ class LruProofTests(unittest.TestCase):
         # opaque non-UTF8 keys survive in the evidence without symbol decoding.
         result = p.validate(fixture(initial=['fffe0080']))
         self.assertEqual(result['events'][0]['before']['keysHex'], ['fffe0080'])
+
+    def test_convergence_observation_for_every_initial_occupancy(self):
+        for size in range(21):
+            opaque = [(b'\xff\x00' + bytes([i])).hex() for i in range(size)]
+            forward = [p.name(i+1).encode().hex() for i in range(size)]
+            reverse = [p.name(21-i).encode().hex() for i in range(size)]
+            mixed = [forward[i] if i % 2 else opaque[i] for i in range(size)]
+            unknown = [p.MISSING.encode().hex()] + opaque[1:] if size else []
+            for initial in (opaque, forward, reverse, mixed, unknown):
+                for backend in ('native', 'rust'):
+                    for phase in range(3):
+                        with self.subTest(size=size, initial=initial, backend=backend, phase=phase):
+                            receipt = fixture(backend, phase, initial=initial)
+                            original = copy.deepcopy(receipt)
+                            self.assertEqual(p.observation(receipt), p.observation(fixture('native', phase)))
+                            self.assertEqual(receipt, original, 'raw evidence must remain untouched')
+                            self.assertEqual(p.validate(receipt)['events'][0]['before'], p.state(initial))
+
+    def test_warmup_defects_reject_before_projection_even_if_they_converge(self):
+        first = p.name(1).encode().hex()
+        opaque = [bytes([i, 255]).hex() for i in range(19)]
+        cases = [('warmup-hit-produces', [first]),
+                 ('warmup-hit-keeps-capacity', opaque + [first]),
+                 ('warmup-omit-promotion', [first, 'ff00'])]
+        for mutant, initial in cases:
+            r = fixture(initial=initial, mutant=mutant)
+            self.assertEqual(r['lruProof']['events'][20]['after'], fixture()['lruProof']['events'][20]['after'])
+            with self.subTest(mutant=mutant), self.assertRaises(ValueError):
+                p.observation(r)
+        for index in (19, 20):
+            r = fixture(); r['lruProof']['events'][index]['after']['keysHex'].reverse()
+            with self.subTest(index=index), self.assertRaises(ValueError):
+                p.observation(r)
+
+    def test_raw_initial_history_cannot_be_rewritten_between_frames(self):
+        rs = [fixture(phase=i, initial=['ff00']) for i in range(3)]
+        changed = copy.deepcopy(rs); changed[2] = fixture(phase=2, initial=['fe00'])
+        self.assertEqual(p.observation(rs[2]), p.observation(changed[2]))
+        with self.assertRaisesRegex(ValueError, 'history'):
+            p.validate_snapshots(changed)
+
+    def test_common_comparator_relates_different_valid_initial_inputs(self):
+        opaque = ['ff00', 'fe00']
+        occupied = [p.name(i).encode().hex() for i in range(20, 0, -1)]
+        native = frames('native', initial=opaque)
+        for backend, repeat in (('native', True), ('rust', False)):
+            self.assertTrue(compare(native, frames(backend, initial=occupied), repeat)['passed'])
+
+    def test_deterministic_error_bytes_remain_exact_after_projection(self):
+        original = fixture('native', phase=1)
+        changed = copy.deepcopy(original)
+        changed['lruProof']['events'][23]['error']['messageHex'] += b' extra'.hex()
+        changed['lruProof']['visual']['results'][1]['error'] += ' extra'
+        p.validate(changed)  # individually recognizable error, different exact bytes
+        self.assertNotEqual(p.observation(original), p.observation(changed))
+        def mutate(r, phase):
+            if phase >= 1:
+                r['lruProof']['events'][23]['error']['messageHex'] += b' extra'.hex()
+                if phase == 1:
+                    r['lruProof']['visual']['results'][1]['error'] += ' extra'
+        result = compare(frames('native'), frames('rust', mutate=mutate))
+        self.assertFalse(result['passed'])
+
+    def test_raw_lua_backtrace_is_diagnostic_not_native_message(self):
+        a = fixture(phase=1)
+        b = copy.deepcopy(a)
+        a['lruProof']['visual']['results'][1]['error'] += '\nStack trace (most recent call first):\n#0 0x123 native-frame'
+        b['lruProof']['visual']['results'][1]['error'] += '\nStack trace (most recent call first):\n#0 0x456 rust-frame'
+        raw = copy.deepcopy(a)
+        self.assertEqual(p.observation(a), p.observation(b))
+        self.assertEqual(a, raw, 'full raw diagnostic must stay recorded')
+        b['lruProof']['visual']['results'][1]['error'] = 'different message'
+        with self.assertRaisesRegex(ValueError, 'message mismatch'):
+            p.observation(b)
+        b = fixture(phase=1)
+        b['lruProof']['visual']['results'][1]['error'] += '\nnot a recognized backtrace'
+        with self.assertRaisesRegex(ValueError, 'diagnostic format'):
+            p.observation(b)
 
     def test_required_members_fail_closed(self):
         original = fixture()

@@ -59,6 +59,32 @@ cache mutation that changes the expected boundary state rejects; it is not
 silently discarded. 22/25/27 cumulative operation counts and exactly three
 paired frame/receipt stages are required.
 
+cross-run comparison is relational, not an assumption of identical bootstrap
+inputs. EVERY raw transition is validated first. after twenty distinct successful
+accesses, all untouched initial keys must have been evicted: accessed keys are
+MRU, and before access twenty a full cache necessarily has an untouched entry.
+therefore the exact state is1..20, then2..21 after access21. comparison retains
+this proved convergence, event20 itself, all later transitions, metadata and error
+messages. raw initial/warmup histories and exact within-run history prefixes stay
+in their original receipts and remain mandatory validation inputs. tests cover
+all initial occupancies0..20, existing fixture keys, opaque/mixed/reversed keys,
+and warmup defects that later converge anyway; such defects still reject.
+
+Lua appends an exception backtrace with ASLR addresses and backend-specific
+frames. `StarException::what()` explicitly prints WITHOUT that trace
+(`StarException_unix.cpp:69–75`). validation requires the Lua first line to equal
+the complete native exception message bytes in the scoped receipt, and accepts
+only the recognized diagnostic backtrace form. raw Lua diagnostics remain
+untouched; only the exact message participates in cross-run semantic equality.
+a changed message, malformed diagnostic, counter, transition or pixel still
+rejects. this is not a tolerance or native-algorithm change.
+
+actual acquisitionr1 remains FAILED: candidate was correctly blocked when the
+old comparator demanded equality of arbitrary initial cache histories and Lua
+ASLR traces. no old artifact/report was rewritten. fresh acquisitionr2 used the
+revised, pre-frozen verifier and passed; parent inspected all nine real images.
+full qualification still requires the old21scene/PCM/save/TCP/CLI gates.
+
 restoring the world is still checked against the existing scene fields, but the
 three LRU images intentionally differ because cache phases differ. this special
 rule applies ONLY to `lru-room`; it does not loosen old restoration goldens or

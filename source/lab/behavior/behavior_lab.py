@@ -235,7 +235,7 @@ def semantic_world_state(receipt: dict) -> dict:
             raise LabError(str(error)) from error
     if receipt.get("scenario") == "lru-room":
         try:
-            native["lruProof"] = lru_proof.validate(receipt)
+            native["lruProof"] = lru_proof.observation(receipt)
         except ValueError as error:
             raise LabError(str(error)) from error
     if receipt.get("scenario") == "path-embed-room":

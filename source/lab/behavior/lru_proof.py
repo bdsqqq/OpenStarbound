@@ -164,10 +164,41 @@ def validate(receipt):
             members(result, 'name ok error')
             equal(result['name'], MISSING, 'Lua unknown name')
             equal(result['ok'], False, 'Lua pcall error')
-            need(type(result['error']) is str and MISSING in result['error'] and 'Unknown dungeon:' in result['error'], 'Lua error propagation')
+            need(type(result['error']) is str, 'Lua error propagation')
+            message, newline, trace = result['error'].partition('\n')
+            # StarException::what() prints without a trace; the Lua wrapper adds
+            # outputException(e,true). Preserve raw diagnostics, compare what()
+            # exactly, not ASLR addresses or backend-dependent stack frames.
+            equal(message.encode('utf-8'), byte_hex(events[23]['error']['messageHex']),
+                  'Lua/native exception message mismatch')
+            need(not newline or trace.startswith('Stack trace (most recent call first):\n'),
+                 'unknown Lua exception diagnostic format')
         else:
             equal(result, dict(name=name(requested), ok=True, metadata=metadata(requested)), 'Lua metadata result')
     return {k: v for k, v in p.items() if k not in ('backend', 'events')} | {'events': normalized}
+
+
+def observation(receipt):
+    """Compare deterministic behavior, AFTER replaying the entire raw history.
+
+    Untouched initial entries precede accessed entries in LRU order. Before the
+    twentieth distinct access, a full cache necessarily contains an untouched
+    entry, so pre-eviction cannot remove an already accessed one. Thus accesses
+    1..20 converge to exactly those twenty keys, even if initially cached. Raw
+    bootstrap histories remain mandatory evidence, not cross-run equal inputs.
+    """
+    proof = validate(receipt)
+    events = proof['events']
+    convergence = state([name(i).encode('ascii').hex() for i in range(1, 21)])
+    equal(events[19]['after'], convergence, '20-access convergence')
+    equal(events[20]['after'], state([name(i).encode('ascii').hex() for i in range(2, 22)]),
+          '21-access convergence')
+    # Keep event20 itself, all metadata/results/error bytes and every later
+    # transition exact. validate_snapshots still compares RAW within-run prefixes.
+    visual = dict(proof['visual'])
+    visual['results'] = [dict(r, error=r['error'].partition('\n')[0]) if not r['ok'] else r
+                         for r in visual['results']]
+    return proof | {'convergence': convergence, 'events': events[20:], 'visual': visual}
 
 
 def validate_snapshots(receipts):
