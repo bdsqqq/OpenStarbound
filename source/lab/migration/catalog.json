@@ -6591,6 +6591,16 @@
       "language": "c/c++",
       "line": 1,
       "membership_status": "no-direct-target-found",
+      "module": "foundation.storage",
+      "path": "source/core/StarRustTtlCache.h",
+      "rule": "rust-ttl-cache-abi"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "ffi-adapter",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
       "module": "foundation.text",
       "path": "source/core/StarRustUnicode.h",
       "rule": "rust-unicode-abi"
@@ -24528,6 +24538,96 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-boundary/c11.c",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-boundary/cache.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-boundary/controls.inc",
+      "rule": "ttl-boundary-controls"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-boundary/host.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-boundary/lazy.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-boundary/mock.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-boundary/native.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-boundary/run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-boundary/verify.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/ttl-cache/StarTtlCache.original.hpp",
       "rule": "laboratories"
     },
@@ -24589,6 +24689,86 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/ttl-cache/verify.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-rust/acquire.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-rust/admission.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-rust/canonical.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-rust/common.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-rust/controls.inc",
+      "rule": "ttl-rust-controls"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-rust/evidence.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-rust/extra.inc",
+      "rule": "ttl-rust-controls"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-rust/verify.py",
       "rule": "laboratories"
     },
     {
@@ -25536,6 +25716,16 @@
       "module": "foundation.text",
       "path": "source/rust/ffi/src/text_scan.rs",
       "rule": "rust-text-scan"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "rust-candidate",
+      "language": "rust",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "foundation.storage",
+      "path": "source/rust/ffi/src/ttl_cache.rs",
+      "rule": "rust-ttl-cache"
     },
     {
       "cmake_membership": [],
@@ -30349,6 +30539,10 @@
       "sha256": "59311b50123ee7614f3ba442ebc9123e606ddddc3326b00b7e3343b38ada53a5"
     },
     {
+      "path": "source/core/StarRustTtlCache.h",
+      "sha256": "254cf12cb2ec798334cf0799b4344f58eb140e657dceb12d0788200cdc17332d"
+    },
+    {
       "path": "source/core/StarRustUnicode.h",
       "sha256": "aeda5a23b6660f13f0f63ade8bb62a71554d416fa05cdd9d6a3b12fbb231dbc9"
     },
@@ -34714,7 +34908,7 @@
     },
     {
       "path": "source/lab/migration/modules.json",
-      "sha256": "eada5609303bfadbd3c2e09575a0113bad4f023bf99aef5d739ef72ae4db3620"
+      "sha256": "622b8e612bdfc1df51cfa6336137b258b19a8d645ac1ce6623606cc37c4b3149"
     },
     {
       "path": "source/lab/native_artifacts.py",
@@ -35173,6 +35367,42 @@
       "sha256": "72ddc3185d1efdfbdd83af58099967f428140ca5d5fbab8bb552240d6902040e"
     },
     {
+      "path": "source/lab/ttl-boundary/c11.c",
+      "sha256": "59020c19dc68472712fc7663699d09885d6cb264d018b4d411ae6470e4d4c63b"
+    },
+    {
+      "path": "source/lab/ttl-boundary/cache.hpp",
+      "sha256": "5bb90f41a4e74f310afc580e3e9328a68217458b3967848858e694aed1a9c152"
+    },
+    {
+      "path": "source/lab/ttl-boundary/controls.inc",
+      "sha256": "180a9891ec4d66cd0e272e6de7e2dc00309cfd71aee2738bc2547862d2c5420a"
+    },
+    {
+      "path": "source/lab/ttl-boundary/host.hpp",
+      "sha256": "bbcb9049962e10d5488113f2267c6d92973af4e3d257f987e1045532206f76b1"
+    },
+    {
+      "path": "source/lab/ttl-boundary/lazy.cpp",
+      "sha256": "f9480fbd8c9fffd14fd73b12b97578c0bed2db2fbcf812d5dfca8a3bb8b5f5fb"
+    },
+    {
+      "path": "source/lab/ttl-boundary/mock.cpp",
+      "sha256": "a17347e1006c17523e1348683ebd3f0ec50bd3c571b81b36c118cae9bfd46075"
+    },
+    {
+      "path": "source/lab/ttl-boundary/native.cpp",
+      "sha256": "489e78a512d967663d6cc5681b7066aec91f1a39bf661699bd240bd3eb953b55"
+    },
+    {
+      "path": "source/lab/ttl-boundary/run.py",
+      "sha256": "23b3126501d3456e151a161d7a79b5e1f65c0263ab85d43c745ddf36a84afa8d"
+    },
+    {
+      "path": "source/lab/ttl-boundary/verify.py",
+      "sha256": "de4fe43baebaad7b1588b49449ac100b9168315c9963032bbfae5cb895edea46"
+    },
+    {
       "path": "source/lab/ttl-cache/StarTtlCache.original.hpp",
       "sha256": "51942575d77806e99f783f18ba0edb0595a41e634605322d06a85b03a2514081"
     },
@@ -35199,6 +35429,38 @@
     {
       "path": "source/lab/ttl-cache/verify.py",
       "sha256": "0d9d794b7ba4bbfecd5221cfa9b65b3231bc30e63f58012b4037617b56b1848f"
+    },
+    {
+      "path": "source/lab/ttl-rust/acquire.py",
+      "sha256": "fb0d7f312542e53702711134a7a78f3d73c24dd6b1db58d0464ea6861eb1332f"
+    },
+    {
+      "path": "source/lab/ttl-rust/admission.py",
+      "sha256": "23706f77221715532d58240c0135f8ca6699641cace557c014e1bf832f110b1b"
+    },
+    {
+      "path": "source/lab/ttl-rust/canonical.py",
+      "sha256": "9fa222dca5eca6fe77300f9db7d25db6abb73419aef01f941f3e82ba922feb1c"
+    },
+    {
+      "path": "source/lab/ttl-rust/common.py",
+      "sha256": "51748fd5956e54f25b7110feb56e44534374d6831f17982447d189124c1a91c8"
+    },
+    {
+      "path": "source/lab/ttl-rust/controls.inc",
+      "sha256": "c7d8def6a9ce7126f295f826186f0247c94a1fc15936f9f79a1ec6b06a6751dc"
+    },
+    {
+      "path": "source/lab/ttl-rust/evidence.py",
+      "sha256": "22ccfa72ed67ce6183b4c7e5d2527e86d29e8fcf755dd84d77f1da31041e02fa"
+    },
+    {
+      "path": "source/lab/ttl-rust/extra.inc",
+      "sha256": "5618391c8f876c384553ef2e28a139ea5ad9a17ee9bdc8e5e187eb81dd17c450"
+    },
+    {
+      "path": "source/lab/ttl-rust/verify.py",
+      "sha256": "424f15825c6edd2eff0610236777a45b86dbfc6a79854b2a869ed49271e6f60e"
     },
     {
       "path": "source/lab/unicode/StarUnicode.original.cpp",
@@ -35482,7 +35744,7 @@
     },
     {
       "path": "source/rust/ffi/src/lib.rs",
-      "sha256": "6ef54d320883f585761f169a013d3c2c3f33986171b1897df23497b497191b84"
+      "sha256": "4f74322188959e805b1c6378ebd7a6e931201532d5cf17659f5b6e70af27f233"
     },
     {
       "path": "source/rust/ffi/src/line_query.rs",
@@ -35519,6 +35781,10 @@
     {
       "path": "source/rust/ffi/src/text_scan.rs",
       "sha256": "38c41fce0e7d2af411b079ff32aa47ed5014b31c3cb2a508fcf2faec131837e7"
+    },
+    {
+      "path": "source/rust/ffi/src/ttl_cache.rs",
+      "sha256": "c17c51d6d902558e7b8a0fbed4d5b0282044dbe432775e8b4eea12784b00d6fd"
     },
     {
       "path": "source/rust/ffi/src/unicode.rs",
@@ -36354,15 +36620,15 @@
   },
   "summary": {
     "by_disposition": {
-      "ffi-adapter": 38,
+      "ffi-adapter": 39,
       "harness": 28,
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 458,
+      "oracle/harness": 475,
       "retain-tooling": 24,
       "retained-third-party": 296,
-      "rust-candidate": 26,
+      "rust-candidate": 27,
       "test": 57
     },
     "by_module": {
@@ -36376,7 +36642,7 @@
       "foundation.random": 12,
       "foundation.runtime": 46,
       "foundation.serialization": 56,
-      "foundation.storage": 25,
+      "foundation.storage": 27,
       "foundation.text": 20,
       "gameplay.ai": 32,
       "gameplay.combat": 22,
@@ -36400,14 +36666,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 39,
-      "validation.oracles-harness": 486,
+      "validation.oracles-harness": 503,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1932,
+    "files": 1951,
     "modules": 39,
-    "no_direct_target": 826
+    "no_direct_target": 845
   }
 }

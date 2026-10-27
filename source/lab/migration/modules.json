@@ -195,6 +195,8 @@
     {"id":"tests","module":"validation.tests","disposition":"test","pattern":"source/test/(?:[a-z][a-z0-9_]*|StarTestUniverse)\\.(?:cpp|hpp)"},
     {"id":"laboratories","module":"validation.oracles-harness","disposition":"oracle/harness","pattern":"source/lab/(?!migration/).+\\.(?:c|cpp|hpp|h|py|sh|rs)"},
     {"id":"ttl-native-lifecycle","module":"validation.oracles-harness","disposition":"oracle/harness","pattern":"source/lab/ttl-cache/lifecycle\\.inc"},
+    {"id":"ttl-boundary-controls","module":"validation.oracles-harness","disposition":"oracle/harness","pattern":"source/lab/ttl-boundary/controls\\.inc"},
+    {"id":"ttl-rust-controls","module":"validation.oracles-harness","disposition":"oracle/harness","pattern":"source/lab/ttl-rust/(?:controls|extra)\\.inc"},
     {"id":"behavior-lab-contract","module":"validation.oracles-harness","disposition":"harness","pattern":"source/application/StarBehaviorLab\\.(?:hpp|cpp)"}
   ]
 }
