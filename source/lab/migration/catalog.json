@@ -29558,7 +29558,7 @@
     },
     {
       "path": "scripts/test_verify_ttl_retention.py",
-      "sha256": "3f63fb6aabf25ab3e6915d38327b3acc86559f415f9ec8df00f9b609d1203b95"
+      "sha256": "3308cba36dbc9931bb46f2bfd07559e351f68f6abf129cdf56d21dfa54734f65"
     },
     {
       "path": "scripts/verify-lru-retention.py",
@@ -29566,7 +29566,7 @@
     },
     {
       "path": "scripts/verify-ttl-retention.py",
-      "sha256": "7ae2252ffbc08e44ca8891ff87ef1eb25d5247bdaac14dc3ae28b1dfd113c220"
+      "sha256": "83ca36173da412ba408a074c724a2ec7ac96a341c3a502acde0c9cb82564e204"
     },
     {
       "path": "source/CMakeLists.txt",

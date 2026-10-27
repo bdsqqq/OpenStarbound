@@ -170,8 +170,8 @@ class Resolver:
         row, manifest = self.index[str(p)]
         need(row['sha256'] == sha and (size is None or row['size'] == size),
              'archive member hash/size: ' + name)
+        blob = ROOT / 'build/migration-evidence-archive/blobs' / sha[:2] / (sha + '.gz')
         if sha not in self.blobs:
-            blob = ROOT / 'build/migration-evidence-archive/blobs' / sha[:2] / (sha + '.gz')
             need(blob.resolve() == blob and regular(blob), 'archive blob regular physical path')
             with gzip.open(blob, 'rb') as stream:
                 need(digest(stream) == (sha, row['size']), 'archive reconstructed byte integrity')

@@ -108,6 +108,12 @@ class RetentionTests(unittest.TestCase):
         self.assertGreater(report['currentBindings'], 0)
         self.assertFalse(report['originalCurrentOriginReplayAvailable'])
 
+    def test_cached_archive_blob_can_be_resolved_and_read_repeatedly(self):
+        resolver = self.m.Resolver([self.pin(self.manifest)])
+        for _ in range(3):
+            self.assertEqual(resolver.read(str(self.old), sha(self.old_raw)), self.old_raw)
+        self.assertEqual(len(resolver.blobs), 1)
+
     def test_corrupt_blob_rejected_even_with_valid_gzip(self):
         self.blob.write_bytes(gzip.compress(b'wrong but decodable bytes', mtime=0))
         with self.assertRaisesRegex(ValueError, 'archive reconstructed byte integrity'):
