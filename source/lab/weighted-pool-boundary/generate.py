@@ -6,8 +6,9 @@ s=(R/'source/core/StarWeightedPool.hpp').read_text();s=s.replace('WeightedPool',
 # Helpers are nested types/static-free member functions; the two native fields stay exact.
 helpers=r'''
   template<unsigned Mode> struct NativeFrame : WpBoundary::Frame {
-    BoundaryWeightedPool* pool; uint64_t a,b; RandomSource* random; Item* value; void const* borrowed=nullptr;
-    NativeFrame(BoundaryWeightedPool const* p,uint64_t x=0,uint64_t y=0,RandomSource* r=nullptr,Item* v=nullptr):pool(const_cast<BoundaryWeightedPool*>(p)),a(x),b(y),random(r),value(v){
+    using Pool=std::conditional_t<(Mode<=3),BoundaryWeightedPool,BoundaryWeightedPool const>;
+    Pool* pool; uint64_t a,b; RandomSource* random; Item* value; void const* borrowed=nullptr;
+    NativeFrame(Pool* p,uint64_t x=0,uint64_t y=0,RandomSource* r=nullptr,Item* v=nullptr):pool(p),a(x),b(y),random(r),value(v){
       this->allowed=[this](uint32_t op,uint64_t arg){return permits(op,arg);};
       this->leaf=[this](uint32_t op,uint64_t arg){return perform(op,arg);};
     }
@@ -18,7 +19,7 @@ helpers=r'''
       switch(op){
        case SB_WP_COUNT:return Mode==5||Mode==14;
        case SB_WP_IS_EMPTY:return Mode==9||Mode==10||Mode==11||Mode==12||Mode==18;
-       case SB_WP_AT_BORROW:return Mode==6||(Mode==4&&arg==0);
+       case SB_WP_AT_BORROW:return Mode==6;
        case SB_WP_AT_WEIGHT:return Mode==7;
        case SB_WP_AT_ITEM_BORROW:return Mode==8;
        case SB_WP_APPEND_ITEM_EXPRESSION:return Mode==2;
@@ -32,7 +33,8 @@ helpers=r'''
        case SB_WP_CALL_INDEX_SOURCE:return Mode==10;
        case SB_WP_CALL_INDEX_GLOBAL:return Mode==11;
        case SB_WP_CALL_INDEX_SEED:return Mode==12;
-       case SB_WP_READ_WEIGHT:case SB_WP_SCAN_SIZE:return Mode==18;
+       case SB_WP_READ_WEIGHT:return Mode==18&&arg<pool->m_items.size();
+       case SB_WP_SCAN_SIZE:return Mode==18;
       }return false;
     }
     SbWpReply perform(uint32_t op,uint64_t arg){using namespace WpBoundary;
@@ -44,9 +46,9 @@ helpers=r'''
       case SB_WP_AT_WEIGHT:return reply(SB_WP_F64,bits(pool->at(arg).first));
       case SB_WP_AT_ITEM_BORROW:borrowed=&pool->at(arg).second;return reply(SB_WP_BORROW);
       case SB_WP_APPEND_ITEM_EXPRESSION:if constexpr(Mode==2)pool->m_items.append({number(a),std::move(*value)});return reply();
-      case SB_WP_CLEAR_ITEMS:pool->m_items.clear();return reply();
+      case SB_WP_CLEAR_ITEMS:if constexpr(Mode==3){pool->m_items.clear();return reply();}break;
       case SB_WP_READ_TOTAL:return reply(SB_WP_F64,bits(pool->m_totalWeight));
-      case SB_WP_WRITE_TOTAL:pool->m_totalWeight=number(arg);return reply();
+      case SB_WP_WRITE_TOTAL:if constexpr(Mode==2||Mode==3){pool->m_totalWeight=number(arg);return reply();}break;
       case SB_WP_DRAW_SOURCE:return reply(SB_WP_F64,bits(random->randd()));
       case SB_WP_DRAW_GLOBAL:return reply(SB_WP_F64,bits(Random::randd()));
       case SB_WP_DRAW_STATIC:return reply(SB_WP_F64,bits(staticRandomDouble(arg)));
@@ -80,15 +82,20 @@ B=[
 r'''WpBoundary::Frame root;
 root.allowed=[](uint32_t op,uint64_t a){return op==SB_WP_CONTAINER_SCOPE&&!a;};
 root.leaf=[&](uint32_t,uint64_t){
- using std::begin;using std::end;
- auto cursor=begin(container);auto finish=end(container);
+ // These generic lambdas retain the enclosing WeightedPool access context.
+ auto memberBegin=[](auto& c)->decltype(c.begin()){return c.begin();};
+ auto memberEnd=[](auto& c)->decltype(c.end()){return c.end();};
+ constexpr bool members=std::is_invocable_v<decltype(memberBegin),Container&>&&std::is_invocable_v<decltype(memberEnd),Container&>;
+ auto cursor=[&](){if constexpr(members)return memberBegin(container);else return WpBoundary::Adl::first(container);}();
+ auto finish=[&](){if constexpr(members)return memberEnd(container);else return WpBoundary::Adl::last(container);}();
+ auto phase=WpBoundary::CursorPhase::condition;
  WpBoundary::Frame loop;
- loop.allowed=[](uint32_t op,uint64_t a){return !a&&(op==SB_WP_CONTAINER_END||op==SB_WP_CONTAINER_ADD_EXPRESSION||op==SB_WP_CONTAINER_NEXT);};
- loop.leaf=[&](uint32_t op,uint64_t){if(op==SB_WP_CONTAINER_END)return WpBoundary::reply(SB_WP_BOOL,!(cursor!=finish));if(op==SB_WP_CONTAINER_NEXT){++cursor;return WpBoundary::reply();} {auto const& pair=*cursor;add(get<0>(pair),get<1>(pair));}return WpBoundary::reply();};
+ loop.allowed=[&](uint32_t op,uint64_t a){if(a)return false;using P=WpBoundary::CursorPhase;return(op==SB_WP_CONTAINER_END&&phase==P::condition)||(op==SB_WP_CONTAINER_ADD_EXPRESSION&&phase==P::value)||(op==SB_WP_CONTAINER_NEXT&&phase==P::next);};
+ loop.leaf=[&](uint32_t op,uint64_t){using P=WpBoundary::CursorPhase;if(op==SB_WP_CONTAINER_END){bool more=static_cast<bool>(cursor!=finish);phase=more?P::value:P::ended;return WpBoundary::reply(SB_WP_BOOL,!more);}if(op==SB_WP_CONTAINER_NEXT){++cursor;phase=P::condition;return WpBoundary::reply();} {auto const& pair=*cursor;add(get<0>(pair),get<1>(pair));}phase=P::next;return WpBoundary::reply();};
  loop.run(1,1);return WpBoundary::reply();};root.run(1);''',
 'NativeFrame<2> f(this,WpBoundary::bits(weight),0,nullptr,&item);f.run(2);',
 'NativeFrame<3> f(this);f.run(3);',
-'NativeFrame<4> f(this);f.run(4);return *static_cast<ItemsList const*>(f.borrowed);',
+'NativeFrame<4> f(this);f.borrowed=&m_items;f.borrowReturned=true;f.run(4);return m_items;',
 'NativeFrame<5> f(this);return f.run(5).value;',
 'NativeFrame<6> f(this,index);f.run(6);return *static_cast<ItemsType const*>(f.borrowed);',
 'NativeFrame<7> f(this,index);return WpBoundary::number(f.run(7).value);',
@@ -101,14 +108,15 @@ root.leaf=[&](uint32_t,uint64_t){
 r'''NativeFrame<14> root(this,desiredCount);size_t targetCount=root.run(14).value;
 Set<size_t> indices;
 WpBoundary::Frame collect;
-collect.allowed=[](uint32_t op,uint64_t a){return (op==SB_WP_ARG&&a<2)||(op==SB_WP_UNIQUE_SET_SIZE&&!a)||op==SB_WP_CALL_INDEX_SEED||op==SB_WP_UNIQUE_SET_ADD;};
+collect.allowed=[&](uint32_t op,uint64_t a){return (op==SB_WP_ARG&&a<2)||(op==SB_WP_UNIQUE_SET_SIZE&&!a)||op==SB_WP_CALL_INDEX_SEED||(op==SB_WP_UNIQUE_SET_ADD&&a<m_items.size());};
 collect.leaf=[&](uint32_t op,uint64_t a){if(op==SB_WP_ARG)return WpBoundary::reply(SB_WP_U64,a?seed:targetCount);if(op==SB_WP_UNIQUE_SET_SIZE)return WpBoundary::reply(SB_WP_U64,indices.size());if(op==SB_WP_CALL_INDEX_SEED)return WpBoundary::reply(SB_WP_U64,selectIndex(a));indices.add(a);return WpBoundary::reply();};
 collect.run(14,2);
 List<Item> result;
 auto cursor=indices.begin();auto finish=indices.end();
+auto phase=WpBoundary::CursorPhase::condition;
 WpBoundary::Frame append;
-append.allowed=[](uint32_t op,uint64_t a){return !a&&(op==SB_WP_UNIQUE_END||op==SB_WP_UNIQUE_APPEND_EXPRESSION||op==SB_WP_UNIQUE_NEXT);};
-append.leaf=[&](uint32_t op,uint64_t){if(op==SB_WP_UNIQUE_END)return WpBoundary::reply(SB_WP_BOOL,!(cursor!=finish));if(op==SB_WP_UNIQUE_NEXT){++cursor;return WpBoundary::reply();}result.append(m_items[*cursor].second);return WpBoundary::reply();};
+append.allowed=[&](uint32_t op,uint64_t a){if(a)return false;using P=WpBoundary::CursorPhase;return(op==SB_WP_UNIQUE_END&&phase==P::condition)||(op==SB_WP_UNIQUE_APPEND_EXPRESSION&&phase==P::value&&*cursor<m_items.size())||(op==SB_WP_UNIQUE_NEXT&&phase==P::next);};
+append.leaf=[&](uint32_t op,uint64_t){using P=WpBoundary::CursorPhase;if(op==SB_WP_UNIQUE_END){bool more=static_cast<bool>(cursor!=finish);phase=more?P::value:P::ended;return WpBoundary::reply(SB_WP_BOOL,!more);}if(op==SB_WP_UNIQUE_NEXT){++cursor;phase=P::condition;return WpBoundary::reply();}result.append(m_items[*cursor].second);phase=P::next;return WpBoundary::reply();};
 append.run(14,3);return result;''',
 'NativeFrame<15> f(this,0,0,&rand);return selectIndex(WpBoundary::number(f.run(15).value));',
 'NativeFrame<16> f(this);return selectIndex(WpBoundary::number(f.run(16).value));',

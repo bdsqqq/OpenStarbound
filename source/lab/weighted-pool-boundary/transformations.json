@@ -2,7 +2,7 @@
   {
     "output": "ProxyBoundaryWeightedPool.hpp",
     "input": "/Users/bdsqqq/www/OpenStarbound/source/lab/weighted-pool-boundary/BoundaryWeightedPool.hpp",
-    "inputSha256": "e02958ac31ea146ff650eb9131da30b7059ce0da0674c6dfdbe07f8350d64a84",
+    "inputSha256": "09a21794ee9e2bcd13dcfd46e84c60180c3b0bda10b0c54726a9eea66542bec1",
     "transformation": "dependency names only, matching frozen native proxy"
   },
   {

@@ -4,7 +4,16 @@
 #include <exception>
 #include <functional>
 #include <stdexcept>
+#include <type_traits>
 namespace WpBoundary {
+// Match range-for's ADL-only fallback; std::begin would lose private friend
+// access and could introduce a competing member-based overload.
+namespace Adl {
+void begin()=delete; void end()=delete;
+template<class C> auto first(C& c)->decltype(begin(c)){return begin(c);}
+template<class C> auto last(C& c)->decltype(end(c)){return end(c);}
+}
+enum class CursorPhase { condition, value, next, ended };
 inline uint64_t bits(double x){uint64_t b;std::memcpy(&b,&x,8);return b;}
 inline double number(uint64_t b){double x;std::memcpy(&x,&b,8);return x;}
 inline SbWpReply reply(uint32_t tag=SB_WP_VOID,uint64_t value=0){return {24,1,tag,0,value};}
@@ -19,7 +28,10 @@ struct Frame {
   if(!c||!q||!r)return SB_WP_INVALID;
   auto& f=*static_cast<Frame*>(c);
   // validate both incoming envelopes before a native object can be touched.
-  if(q->size!=24||q->version!=1||q->reserved||!q->op||q->op>28||r->size!=24||r->version!=1||r->tag!=SB_WP_VOID||r->reserved||r->value)return SB_WP_INVALID;
+  if(q->size!=24||q->version!=1||q->reserved||!q->op||q->op>28||r->size!=24||r->version!=1||r->reserved)return SB_WP_INVALID;
+  bool destination=(r->tag==SB_WP_VOID&&!r->value)||(r->tag==UINT32_MAX&&r->value==UINT64_MAX);
+  if(!destination||!f.allowed||!f.leaf)return SB_WP_INVALID;
+  if(f.error)return SB_WP_EXCEPTION;
   try {if(!f.allowed(q->op,q->arg))return SB_WP_INVALID;auto v=f.leaf(q->op,q->arg);if(!canonical(v))return SB_WP_INVALID;if(v.tag==SB_WP_BORROW)f.borrowReturned=true;*r=v;return SB_WP_OK;}
   catch(...){f.error=std::current_exception();return SB_WP_EXCEPTION;}
  }

@@ -25228,6 +25228,36 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/integration.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/integration_run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/integration_verify.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/weighted-pool-boundary/lifecycle.cpp",
       "rule": "laboratories"
     },
@@ -36156,11 +36186,11 @@
     },
     {
       "path": "source/lab/weighted-pool-boundary/BoundaryWeightedPool.hpp",
-      "sha256": "e02958ac31ea146ff650eb9131da30b7059ce0da0674c6dfdbe07f8350d64a84"
+      "sha256": "09a21794ee9e2bcd13dcfd46e84c60180c3b0bda10b0c54726a9eea66542bec1"
     },
     {
       "path": "source/lab/weighted-pool-boundary/ProxyBoundaryWeightedPool.hpp",
-      "sha256": "2e219e195a3b0cc769ca14b3c2a6cde38692a7c94c43cc3a5bfb4b5707cb156c"
+      "sha256": "28d1f3b57fe4bf2805124a1178919348720346f4d51203d840c9bc0ca3be9cb5"
     },
     {
       "path": "source/lab/weighted-pool-boundary/audit.py",
@@ -36168,7 +36198,7 @@
     },
     {
       "path": "source/lab/weighted-pool-boundary/combined.cpp",
-      "sha256": "25ab538581bf137186c0f06cb575249e8dc2446229cd491bb8ad7d8da95a5fb8"
+      "sha256": "91cc7fe50562dd25c483c8aec903bc1a501c14fd6de08909715fcb20ef175660"
     },
     {
       "path": "source/lab/weighted-pool-boundary/continue.py",
@@ -36184,7 +36214,7 @@
     },
     {
       "path": "source/lab/weighted-pool-boundary/frame.hpp",
-      "sha256": "f1c16e43f0dbcb095c171a47a803bf4a23046fe690e874890ab0b2a1527cdc7c"
+      "sha256": "3bf842874bc574edb559018c62e480f3e765197aaf7b182eb823d2d4431b9bac"
     },
     {
       "path": "source/lab/weighted-pool-boundary/friend.cpp",
@@ -36192,7 +36222,7 @@
     },
     {
       "path": "source/lab/weighted-pool-boundary/generate.py",
-      "sha256": "924813386d9d2576c7d2cb91a107a34f51c6916e380d6f1ae03b4a1a6aa9f728"
+      "sha256": "fff4a32d9068ea498dae02d31876bb752deca9dd54b077678bfd06e5faa6aa99"
     },
     {
       "path": "source/lab/weighted-pool-boundary/generic_gap.py",
@@ -36203,12 +36233,24 @@
       "sha256": "52a2431a49f8d331276f0f39232f08fc27455a3993668586f73bd0b8871cb4e2"
     },
     {
+      "path": "source/lab/weighted-pool-boundary/integration.cpp",
+      "sha256": "60fc7698922d339a901597addd9c9661b074df772efc0c9b32e9105b621819b0"
+    },
+    {
+      "path": "source/lab/weighted-pool-boundary/integration_run.py",
+      "sha256": "282ec4f882a9736f12818ca7ddd621f11c0f2f7b59db23d98db161e84398ceda"
+    },
+    {
+      "path": "source/lab/weighted-pool-boundary/integration_verify.py",
+      "sha256": "e5dd56a41c466fc60e43c54bc54217739d8dec96e78f8c55dd7b88e8a7ebf876"
+    },
+    {
       "path": "source/lab/weighted-pool-boundary/lifecycle.cpp",
       "sha256": "77c0e9412e1f7bb8ca094c9475e44bb5e500af2f03e9ab175a0496e29732d3a1"
     },
     {
       "path": "source/lab/weighted-pool-boundary/mock.cpp",
-      "sha256": "7c9c56a4ada2a46ab62287d5c837fcef7b11de7ca071cb23380886325efe1258"
+      "sha256": "a86dd1653ab6ca34931f3ec07e5f27a3d3309b181f4224abc3f31d813280f5dd"
     },
     {
       "path": "source/lab/weighted-pool-boundary/numeric.cpp",
@@ -36216,7 +36258,7 @@
     },
     {
       "path": "source/lab/weighted-pool-boundary/probe.cpp",
-      "sha256": "447453c341b43b696b040b84df419bc8bfbb74b3081c3303e6536632d83c7ecb"
+      "sha256": "d966162fa8444ff62024d8a14b216e18da2da6e24360d980ccbb335b31de4535"
     },
     {
       "path": "source/lab/weighted-pool-boundary/run.py",
@@ -37409,7 +37451,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 523,
+      "oracle/harness": 526,
       "retain-tooling": 28,
       "retained-third-party": 296,
       "rust-candidate": 28,
@@ -37450,14 +37492,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 43,
-      "validation.oracles-harness": 552,
+      "validation.oracles-harness": 555,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2007,
+    "files": 2010,
     "modules": 39,
-    "no_direct_target": 901
+    "no_direct_target": 904
   }
 }
