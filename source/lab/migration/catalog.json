@@ -1589,6 +1589,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "tools.release",
+      "path": "scripts/cleanup-migration-artifacts.py",
+      "rule": "release-scripts"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "retain-tooling",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "tools.release",
       "path": "scripts/credits/generate-contributors.sh",
       "rule": "release-scripts"
     },
@@ -1750,6 +1760,16 @@
       "membership_status": "no-direct-target-found",
       "module": "tools.release",
       "path": "scripts/osx/ycm_extra_conf.py",
+      "rule": "release-scripts"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "retain-tooling",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "tools.release",
+      "path": "scripts/test_cleanup_migration_artifacts.py",
       "rule": "release-scripts"
     },
     {
@@ -28949,6 +28969,10 @@
       "sha256": "62e9521d75bd4c32ec26e8832c4b057122f8450b19e502307ed74dd844decece"
     },
     {
+      "path": "scripts/cleanup-migration-artifacts.py",
+      "sha256": "42612eee3bab2777fd834bf62b2a39cb919cb070d9efdf0f3feb76fe3c65cb39"
+    },
+    {
       "path": "scripts/credits/generate-contributors.sh",
       "sha256": "aec1fe4e35cfb5bb1428be2f04f9b833544b26926437b5a534ef50e1c5584aa2"
     },
@@ -29015,6 +29039,10 @@
     {
       "path": "scripts/osx/ycm_extra_conf.py",
       "sha256": "15792866d691684843d42ad7ee87ada12ebbffc7cac10a40ceaaa71d3f57b8fb"
+    },
+    {
+      "path": "scripts/test_cleanup_migration_artifacts.py",
+      "sha256": "ddffd64bdb3d13f31ad0a5a9d822f1886204d837ad7e24fc3bc7fedadf599e70"
     },
     {
       "path": "source/CMakeLists.txt",
@@ -36192,7 +36220,7 @@
       "migrate": 960,
       "migrate-adapter": 24,
       "oracle/harness": 450,
-      "retain-tooling": 20,
+      "retain-tooling": 22,
       "retained-third-party": 296,
       "rust-candidate": 26,
       "test": 57
@@ -36231,15 +36259,15 @@
       "sessions.orchestration": 47,
       "sessions.persistence": 6,
       "tools.inactive": 21,
-      "tools.release": 35,
+      "tools.release": 37,
       "validation.oracles-harness": 478,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1920,
+    "files": 1922,
     "modules": 39,
-    "no_direct_target": 814
+    "no_direct_target": 816
   }
 }
