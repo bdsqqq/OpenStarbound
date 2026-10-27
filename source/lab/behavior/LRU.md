@@ -1,7 +1,6 @@
 # actual dungeon cache consumer
 
-status: client wiring integrated; logical verifier tests and targeted C++ syntax checks pass. **no game build, Lua execution, capture, audio, save, TCP or visual acceptance has yet been performed for this fixture.** the parent owns fresh acquisition after integrating both source writers. logical images in `test_lru_proof.py` are negative
-control inputs, never game evidence.
+status: **finite application qualification accepted**, production revision `5074db1a`, selectors default OFF. Parent independently replayed `build/lru-final-qualification-r3/qualification.json` (SHA256 `7b22bb0d323d85282aa958cb68054d119d5ad035a0bf5eb175901cc6eee40635`): 22 actual scene matrices, 66 PID-bound game captures, 198 selected PNG/receipt pairs, 44 exact edges and 66 historically inspected candidate frames. All nine R3 LRU images were inspected across Native/repeat/Rust. Production model/unwind/protocol, literal WAV conversion/12 CLI, finite TCP/SBVJ/BTree consumers are separately bound. This is not full-engine adoption, other-platform qualification, mixer/device audio, general save interchange or Universe handshake. Historical failure/status/identity limitations remain in the certificate and migration plan. Logical images in `test_lru_proof.py` are negative control inputs, never game evidence.
 
 ## boundary
 
@@ -82,8 +81,7 @@ rejects. this is not a tolerance or native-algorithm change.
 actual acquisitionr1 remains FAILED: candidate was correctly blocked when the
 old comparator demanded equality of arbitrary initial cache histories and Lua
 ASLR traces. no old artifact/report was rewritten. fresh acquisitionr2 used the
-revised, pre-frozen verifier and passed; parent inspected all nine real images.
-full qualification still requires the old21scene/PCM/save/TCP/CLI gates.
+revised, pre-frozen verifier and passed semantically; parent inspected all nine real images. Successful R2 manifests lacked PID/start receipts and were NOT upgraded. Fresh R3 used unchanged binaries and a pre-frozen non-mutating process observer, with three actual PID/PGID/start/normal-exit receipt pairs. The final composition combines R3 with the old21 scenes and PCM/save/TCP/CLI gates. Original final-r1 remains rejected and interrupted final-r2 unaccepted. Archived historical bytes are verified through exact pinned manifest membership; old inode/ctime/live-path seals are not renewed.
 
 restoring the world is still checked against the existing scene fields, but the
 three LRU images intentionally differ because cache phases differ. this special
@@ -114,7 +112,7 @@ cd "/Users/bdsqqq/www/OpenStarbound/source/lab/behavior"
 python3 -B -m unittest -v test_lru_proof
 ```
 
-13 deterministic tests exercise native/Rust normalization, occupied and opaque
+19 deterministic tests exercise native/Rust normalization, occupied and opaque
 non-UTF8 initial states, exact u64 wrap, membership/type failures, per-call
 producer/error/partial effects, continuation, sequence history, pixels/Font,
 fixture input literals, evaluated selector mismatch and common comparator
@@ -123,11 +121,17 @@ repeat/candidate backend enforcement. four coherent alternate executions
 SAME verifier, without merely changing a top-level hash. these tests are NOT
 application acceptance.
 
-## next acquisition (parent ONLY, not executed here)
+## retained replay and historical acquisition recipe
 
-wait for production/header and consumer writers to be terminal, finish client
-wiring and review the final diff, then select a NEW generation/output root. do
-not rebuild into a historical accepted artifact tree.
+The accepted final verifier is read-only and forbids subprocess creation:
+
+```sh
+python3 -B source/lab/lru-qualification/verify.py \
+  --certificate build/lru-final-qualification-r3/qualification.json --controls
+python3 -B scripts/cleanup-migration-artifacts.py budget
+```
+
+Do not rerun acquisition merely to reproduce the certificate. Cleanup is mandatory before another component: preserve only the current necessary Native/Rust pair and compact exact-byte evidence; pinned successor archive evidence is required before pruning dependencies of the final certificate. The commands below document the original fresh-generation recipe, NOT authorization to accumulate another generation. Any future acquisition requires settled ownership, an explicit prior-candidate disposition and passing disk budget; never rebuild into a historical accepted artifact tree.
 
 ```sh
 # inside the established offline build-tool environment; choose unused N.
