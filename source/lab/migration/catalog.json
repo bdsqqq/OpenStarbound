@@ -22908,6 +22908,46 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/path-embed-replay/archive_identity.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/path-embed-replay/expanded_invocation.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/path-embed-replay/link_trace.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/path-embed-replay/link_witness.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/path-embed-replay/object_inventory.py",
       "rule": "laboratories"
     },
@@ -22918,7 +22958,67 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/path-embed-replay/sdk_witness.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/path-embed-replay/test_archive_identity.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/path-embed-replay/test_expanded_invocation.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/path-embed-replay/test_link_trace.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/path-embed-replay/test_link_witness.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/path-embed-replay/test_object_inventory.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/path-embed-replay/test_sdk_witness.py",
       "rule": "laboratories"
     },
     {
@@ -33435,12 +33535,52 @@
       "sha256": "4fb71573cdef774a674d035c39d056e8b22bf76c82cfc695fe42e56b556be301"
     },
     {
+      "path": "source/lab/path-embed-replay/archive_identity.py",
+      "sha256": "8b24f89713bca0983c522df70b44fc4ab5c9d9cc0add408d81b62bb27c38ffb2"
+    },
+    {
+      "path": "source/lab/path-embed-replay/expanded_invocation.py",
+      "sha256": "2de5ac3e14f1a59315de28ecd692b51995d069b44fa49f3eeafe718788981aa5"
+    },
+    {
+      "path": "source/lab/path-embed-replay/link_trace.py",
+      "sha256": "ef5b3bbeb06682ae4062589e00a0d536cd2d28987104a56c1c37c01ecf2b1682"
+    },
+    {
+      "path": "source/lab/path-embed-replay/link_witness.py",
+      "sha256": "bbcdc8e7c55612cc54d086a23c6b6e5ff8404628f2da7066ed696107411c37d0"
+    },
+    {
       "path": "source/lab/path-embed-replay/object_inventory.py",
-      "sha256": "7df2b1ed04f183a4b58537fa7684a28b547f09fe8c7a5a163c6104602d23c3bd"
+      "sha256": "8f54c692936171eeb27b6433a53ae60154e5af4119752da5642a4c0ede02e38e"
+    },
+    {
+      "path": "source/lab/path-embed-replay/sdk_witness.py",
+      "sha256": "213ccbcf6562bd034b1e0bd795ad8b5587bb30465811294e20040493bb6936ef"
+    },
+    {
+      "path": "source/lab/path-embed-replay/test_archive_identity.py",
+      "sha256": "43ddc1a356f7f518a37fba768758d9b52cff550cc7fd8959324a01bcb6b2e62a"
+    },
+    {
+      "path": "source/lab/path-embed-replay/test_expanded_invocation.py",
+      "sha256": "fbed7e6a86427085b3f34335496566554322bee2274de3eccf8fcb95c12d32cf"
+    },
+    {
+      "path": "source/lab/path-embed-replay/test_link_trace.py",
+      "sha256": "10984084c2b0237a595e450bd2abd1e7113208eb18977d49431861cca6fde634"
+    },
+    {
+      "path": "source/lab/path-embed-replay/test_link_witness.py",
+      "sha256": "86c1be9399d6ebec27bfce83ee3719bd00e847fe07eee0037977060c58b66ff8"
     },
     {
       "path": "source/lab/path-embed-replay/test_object_inventory.py",
-      "sha256": "7918c18fdb2f2d7244c66c4448d4e2c992342c285c0abc378afad9c2999a404e"
+      "sha256": "31c7777b3618859be8860932500f1f397e6d9b9710bc6c5eb04ec450ce1df5eb"
+    },
+    {
+      "path": "source/lab/path-embed-replay/test_sdk_witness.py",
+      "sha256": "448dde5a5e4cc54136b3b9e382d8f1096a411d3b4682c57f6ebda703c504b212"
     },
     {
       "path": "source/lab/path-embed/closure.py",
@@ -34833,7 +34973,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 360,
+      "oracle/harness": 370,
       "retain-tooling": 20,
       "retained-third-party": 296,
       "rust-candidate": 24,
@@ -34874,14 +35014,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 35,
-      "validation.oracles-harness": 386,
+      "validation.oracles-harness": 396,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1823,
+    "files": 1833,
     "modules": 39,
-    "no_direct_target": 717
+    "no_direct_target": 727
   }
 }

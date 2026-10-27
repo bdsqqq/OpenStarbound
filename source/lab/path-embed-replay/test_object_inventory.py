@@ -49,6 +49,28 @@ class ObjectInventoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             reconcile(linkmap(self.entries() + [b'linker synthesized']), self.objects, self.tables)
 
+    def test_duplicate_names_need_physical_symbol_identity(self):
+        from test_archive_identity import archive, object_file
+        objects = [b'/owned/driver.o']
+        blob = archive([object_file([b'_left']), object_file([b'_right'])])
+        data = (linkmap([b'linker synthesized', *objects,
+                         b'/owned/lib.a(dup.o)', b'/owned/lib.a(dup.o)'])
+                .split(b'# Symbols:')[0] + b'# Symbols:\n'
+                + b'0x1000 0x8 [2] _left\n0x1008 0x8 [3] _right\n# End:\n')
+        tables = {b'/owned/lib.a': b'dup.o\ndup.o\n'}
+        with self.assertRaisesRegex(ValueError, 'ambiguous'):
+            reconcile(data, objects, tables)
+        result = reconcile(data, objects, tables, {b'/owned/lib.a': blob})
+        self.assertEqual(len(result['physical_member_identities']), 2)
+        self.assertEqual([w['object_index'] for w in result['physical_member_identities']], [2, 3])
+        self.assertNotEqual(*[w['member_offset'] for w in result['physical_member_identities']])
+        changed = archive([object_file([b'_changed']), object_file([b'_right'])])
+        with self.assertRaisesRegex(ValueError, 'unique symbol witness'):
+            reconcile(data, objects, tables, {b'/owned/lib.a': changed})
+        with self.assertRaisesRegex(ValueError, 'physical archive table'):
+            reconcile(data, objects, {b'/owned/lib.a': b'dup.o\ndup.o\nextra.o\n'},
+                      {b'/owned/lib.a': blob})
+
     def test_unknown_origin_is_never_silently_accepted(self):
         entries = [b'linker synthesized', *self.objects, b'not-a-known-origin']
         self.assertEqual(reconcile(linkmap(entries), self.objects, {})['unresolved_origins'],
