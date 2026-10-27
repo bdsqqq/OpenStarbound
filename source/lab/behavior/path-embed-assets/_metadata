@@ -1,0 +1,7 @@
+{
+  "name": "behavior-path-embed-fixtures",
+  "friendlyName": "Isolated native text-frames and image crop consumers",
+  "description": "Test-only inputs for the behavior lab; embedding does not preload the returned asset path.",
+  "priority": 1100,
+  "scripts": {"postLoad": ["/behaviorlab/path-embed.lua"]}
+}

@@ -239,3 +239,5 @@ pub use io_device::{star_io_device_call_count, star_io_device_run, StarIODeviceH
 
 mod byte_array;
 pub use byte_array::{star_byte_array_call_count, star_byte_array_run, StarByteArrayHost};
+
+mod path_embed;
