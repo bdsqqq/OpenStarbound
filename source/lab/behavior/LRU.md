@@ -123,15 +123,16 @@ application acceptance.
 
 ## retained replay and historical acquisition recipe
 
-The accepted final verifier is read-only and forbids subprocess creation:
+The parent ran the original final verifier +11 controls before retirement; its certificate/source bytes remain unchanged. After12obsolete LRU lab trees were compacted, the original live-origin replay is explicitly unavailable (it correctly rejects the new, previously unpinned archive). Exact-byte retention is now checked separately, NOT presented as a fresh semantic replay:
 
 ```sh
-python3 -B source/lab/lru-qualification/verify.py \
-  --certificate build/lru-final-qualification-r3/qualification.json --controls
+python3 -B scripts/verify-lru-retention.py \
+  --manifest build/migration-evidence-archive/runs/20261027-lru-retired-r1/manifest.json \
+  b120c15f75b990e431f058e7a07b786fa28b02498a02e7deda160406b34b1768
 python3 -B scripts/cleanup-migration-artifacts.py budget
 ```
 
-Do not rerun acquisition merely to reproduce the certificate. Cleanup is mandatory before another component: preserve only the current necessary Native/Rust pair and compact exact-byte evidence; pinned successor archive evidence is required before pruning dependencies of the final certificate. The commands below document the original fresh-generation recipe, NOT authorization to accumulate another generation. Any future acquisition requires settled ownership, an explicit prior-candidate disposition and passing disk budget; never rebuild into a historical accepted artifact tree.
+All14,545certificate bindings reconstruct exactly (891archived/13,654current) and2,419selected capture/storage/auxiliary products retain exact live membership/bytes. Retention report `build/lru-parent-semantic-r1/retention-after.json` SHA256 `a5eb2742b44918781a68d445b4c45351096856c89039fa7634657d3a914462c0`; old identity seals remain historical. Do not rerun acquisition merely to reproduce the certificate. Cleanup is mandatory before another component: preserve only the current necessary Native/Rust pair and compact exact-byte evidence; pinned successor archive evidence is required before pruning dependencies of the final certificate. The commands below document the original fresh-generation recipe, NOT authorization to accumulate another generation. Any future acquisition requires settled ownership, an explicit prior-candidate disposition and passing disk budget; never rebuild into a historical accepted artifact tree.
 
 ```sh
 # inside the established offline build-tool environment; choose unused N.

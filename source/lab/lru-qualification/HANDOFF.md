@@ -2,9 +2,21 @@
 
 host/worktree: `/Users/bdsqqq/www/OpenStarbound`, darwin arm64, parent checkpoint `412022cd`; compiled production remains `5074db1a`. Parent read the full verifier and independently executed the certificate reconstruction +11 controls at16:29UTC: PASS, exact hashes below unchanged. Implementation sub-agent terminal/no children; no native build/game/Cargo process started. Parent owns catalog refresh, local checkpoint and subsequent cleanup; accepted qualification is finite and composed, not full-engine completion.
 
+Original parent acceptance command (passed BEFORE retirement):
+
 ```sh
 python3 -B source/lab/lru-qualification/verify.py --certificate build/lru-final-qualification-r3/qualification.json --controls
 ```
+
+At16:36UTC parent archived/pruned12obsolete lab trees into pinned successor manifest SHA`b120c15f75b990e431f058e7a07b786fa28b02498a02e7deda160406b34b1768`. The original verifier now correctly rejects missing live-origin members: do NOT call it freshly replayable or change its immutable source/certificate. Separate exact-byte retention check:
+
+```sh
+python3 -B scripts/verify-lru-retention.py \
+  --manifest build/migration-evidence-archive/runs/20261027-lru-retired-r1/manifest.json \
+  b120c15f75b990e431f058e7a07b786fa28b02498a02e7deda160406b34b1768
+```
+
+Retention PASS:14,545original bindings (891archived/13,654current), all2,419selected live products; report `build/lru-parent-semantic-r1/retention-after.json` SHA`a5eb2742b44918781a68d445b4c45351096856c89039fa7634657d3a914462c0`. This is NOT a new semantic/game replay or old current-origin/inode/ctime attestation. Original reports/failures and accepted finite claims remain unchanged.
 
 - verifier sha256: `6a824fed7a72c752875b0079ac66d3982f2fa6f1a62c677bfc45a756e7964ae5`
 - certificate sha256: `7b22bb0d323d85282aa958cb68054d119d5ad035a0bf5eb175901cc6eee40635`
@@ -24,6 +36,6 @@ pre-production native/rust/unwind reports retain historical source closures: the
 
 `build/lru-final-qualification-r3/attempt-1.stderr` records one loader failure: historical native `report.json` is typed despite its suffix. fixed by detecting its declared format. attempt2 passed; its certificate/verifier are preserved under `attempt-2.*`, not final. attempt3 adds physical source-map membership, parent report bindings and stronger source/pid controls; `qualification.json` is the final certificate. `verify-1.stdout` records independent read-only reconstruction; budget stdout passes 4gib live / 16gib archive. no subprocess creation or old aggregate execution occurred.
 
-new output is about 14mib, below 64mb. cleanup is deliberately not performed. IMPORTANT: the final certificate also binds historical artifact maps in `build/lru-cache-recovery-r4`, `build/lru-boundary-unwind-r1/after-r3`, and `build/lru-rust-parity-r1`. pruning them into a NEW archive would require an explicitly pinned successor manifest/certificate resolver; the current resolver only trusts the four cleanup manifests already authorized. do not silently prune these and call this exact verifier freshly replayable afterward. all final selected-product roots are explicit in `qualification.json`; no broad current-root membership waiver exists.
+new output is about 14mib, below 64mb. cleanup was deliberately left to the parent at child handoff and has since been performed with the explicit successor above. Original pre-cleanup caveat (now resolved by that successor): the final certificate also binds historical artifact maps in `build/lru-cache-recovery-r4`, `build/lru-boundary-unwind-r1/after-r3`, and `build/lru-rust-parity-r1`. pruning them into a NEW archive would require an explicitly pinned successor manifest/certificate resolver; the current resolver only trusts the four cleanup manifests already authorized. do not silently prune these and call this exact verifier freshly replayable afterward. all final selected-product roots are explicit in `qualification.json`; no broad current-root membership waiver exists.
 
 finite qualification only: defaults remain off, full 39-module migration open; no other-platform, universal-equivalence, oom, sanitizer, performance, mixer/device/ogg, general player/world/ship save interchange or universe-handshake claim.
