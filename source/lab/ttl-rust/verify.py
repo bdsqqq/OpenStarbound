@@ -4,7 +4,8 @@ Coherent read overlays update product hashes to reach deeper semantic barriers.
 """
 import copy,re,tarfile
 from common import *
-import canonical,evidence,model
+import guarded_canonical as canonical
+import evidence,model
 from acquire import BASE,BASE_SHA,BOUNDARY,recipe,baseline
 KERNEL=ROOT/'source/rust/ffi/src/ttl_cache.rs'
 KERNEL_SHA='c17c51d6d902558e7b8a0fbed4d5b0282044dbe432775e8b4eea12784b00d6fd'
@@ -79,8 +80,8 @@ def verify(report=None,data=None):
  same(baseline(),typed(OUT/'native-baseline.typed'),'native calibration source/object lineage')
  ready=typed(OUT/'dependency-ready.typed');same(ready['source'],hashes(BOUNDARY.glob('*')),'parent reviewed boundary source')
  need(b'mock.cpp' not in data(OUT/'fixture.cpp') and b'sb_ttl_mock' not in data(OUT/'fixture.cpp'),'actual Rust fixture no mock controller')
- expected_commands={'sealed-canonical-configure','sealed-canonical-build','retained-deps','fixture-deps','c11','fixture-compile','fixture-expand','fixture-link','fixture-disassemble','ordered-0','ordered-1','hash-0','hash-1','lifecycle','real','controls'}
- same(sorted(p.name[:-8] for p in OUT.glob('*.receipt')),sorted(expected_commands),'exact sixteen owned command receipts')
+ expected_commands={'sealed-canonical-configure','sealed-canonical-build','guarded-object-deps','guarded-canonical-configure','guarded-canonical-build','fixture-deps','c11','fixture-compile','fixture-expand','fixture-link','fixture-disassemble','ordered-0','ordered-1','hash-0','hash-1','lifecycle','real','controls'}
+ same(sorted(p.name[:-8] for p in OUT.glob('*.receipt')),sorted(expected_commands),'exact historical preparation plus admitted bridge command receipts')
  verify_commands(report,data)
  for stem in ('provisional-canonical','provisional-toolchain'):
   retained=json.loads(data(OUT/(stem+'.json')))

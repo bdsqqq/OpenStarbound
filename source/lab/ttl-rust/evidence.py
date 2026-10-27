@@ -1,7 +1,8 @@
 """Pure Mach-O archive/link-map/provider reconstruction; no subprocesses."""
 import re,shlex
 from common import *
-import canonical,expanded_invocation,archive_identity,object_inventory,link_trace,native_symbols
+import guarded_canonical as canonical
+import expanded_invocation,archive_identity,object_inventory,link_trace,native_symbols
 ARCHIVE=canonical.ARCHIVE
 SDK=canonical.SDK
 def archive_providers():

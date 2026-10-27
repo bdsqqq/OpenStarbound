@@ -1514,6 +1514,16 @@
     },
     {
       "cmake_membership": [],
+      "disposition": "retain-tooling",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "tools.release",
+      "path": "scripts/audit-ttl-bridge.py",
+      "rule": "release-scripts"
+    },
+    {
+      "cmake_membership": [],
       "disposition": "harness",
       "language": "harness/tool script",
       "line": 1,
@@ -1610,6 +1620,16 @@
       "membership_status": "no-direct-target-found",
       "module": "tools.release",
       "path": "scripts/distclean.sh",
+      "rule": "release-scripts"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "retain-tooling",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "tools.release",
+      "path": "scripts/finalize-ttl-bridge.py",
       "rule": "release-scripts"
     },
     {
@@ -24768,6 +24788,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-rust/guarded_canonical.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/ttl-rust/verify.py",
       "rule": "laboratories"
     },
@@ -29231,6 +29261,10 @@
       "sha256": "19c69ad762e953d2308053cddcb8b9491f81259e0ad541536ae14e57e2523010"
     },
     {
+      "path": "scripts/audit-ttl-bridge.py",
+      "sha256": "238df3da8745f38bf7c07536c966d155d520eada890ce2dd0833ced851ad5cac"
+    },
+    {
       "path": "scripts/behavior-lab.sh",
       "sha256": "f0c906c2edb58c2159fe33ecee16df9bb2ab77d684da818655c811e0fecb3c2d"
     },
@@ -29269,6 +29303,10 @@
     {
       "path": "scripts/distclean.sh",
       "sha256": "552b1855a9fb8311ffe796dfa3009a1ffd6162b6b225ec0beb63d671bad1dd5b"
+    },
+    {
+      "path": "scripts/finalize-ttl-bridge.py",
+      "sha256": "a3245fabbb13eb26b5e7a64ba22b45d7192dbb7bc5ff3661c138ab8b84d15409"
     },
     {
       "path": "scripts/findskippedmatids.sh",
@@ -35432,7 +35470,7 @@
     },
     {
       "path": "source/lab/ttl-rust/acquire.py",
-      "sha256": "fb0d7f312542e53702711134a7a78f3d73c24dd6b1db58d0464ea6861eb1332f"
+      "sha256": "e69a2fb0f5185558cbeff541ba64b7794f48ecfc01568b96c74aef9f81107a05"
     },
     {
       "path": "source/lab/ttl-rust/admission.py",
@@ -35452,15 +35490,19 @@
     },
     {
       "path": "source/lab/ttl-rust/evidence.py",
-      "sha256": "22ccfa72ed67ce6183b4c7e5d2527e86d29e8fcf755dd84d77f1da31041e02fa"
+      "sha256": "da6e727ed0ab233af8720bbe713120a0f737a4867f1e95c3036d28efcd883938"
     },
     {
       "path": "source/lab/ttl-rust/extra.inc",
       "sha256": "5618391c8f876c384553ef2e28a139ea5ad9a17ee9bdc8e5e187eb81dd17c450"
     },
     {
+      "path": "source/lab/ttl-rust/guarded_canonical.py",
+      "sha256": "d0d619fc785a601d58b28e8c77107bebeb8de737bedf7685bfb91ec1b1079425"
+    },
+    {
       "path": "source/lab/ttl-rust/verify.py",
-      "sha256": "424f15825c6edd2eff0610236777a45b86dbfc6a79854b2a869ed49271e6f60e"
+      "sha256": "31fbbab2de599a0a359065ad7c4d7f20fda4a9b4853f9a4455f04c92a385ea38"
     },
     {
       "path": "source/lab/unicode/StarUnicode.original.cpp",
@@ -36625,8 +36667,8 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 475,
-      "retain-tooling": 24,
+      "oracle/harness": 476,
+      "retain-tooling": 26,
       "retained-third-party": 296,
       "rust-candidate": 27,
       "test": 57
@@ -36665,15 +36707,15 @@
       "sessions.orchestration": 47,
       "sessions.persistence": 6,
       "tools.inactive": 21,
-      "tools.release": 39,
-      "validation.oracles-harness": 503,
+      "tools.release": 41,
+      "validation.oracles-harness": 504,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1951,
+    "files": 1954,
     "modules": 39,
-    "no_direct_target": 845
+    "no_direct_target": 848
   }
 }

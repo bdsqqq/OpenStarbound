@@ -4,7 +4,9 @@ Only run after coordinator's explicit dependency-ready message is recorded.
 """
 import re,shlex
 from common import *
-import canonical,evidence,model,expanded_invocation,archive_identity,admission
+import guarded_canonical as canonical
+import guarded_canonical as admission
+import evidence,model,expanded_invocation,archive_identity
 BASE=ROOT/'build/ttl-cache-native-r1'
 BASE_SHA='cba3b3c84acc2128bd043400cabd6ed2ebf35fcdde37e6d36e2a870bc7926674'
 BOUNDARY=HERE.parent/'ttl-boundary'
@@ -41,17 +43,15 @@ def baseline():
  return {'report_sha256':BASE_SHA,'inputs':inputs,'selected':hashes(BASE/x for x in selected)}
 
 def retained_dependencies(r):
- command('retained-deps',[canonical.NINJA,'-t','deps',*[str(Path(p).relative_to(CM)) for p in r['objects']]],cwd=CM)
- paths=set();objects=[]
- for block in (OUT/'retained-deps.stdout').read_text().strip().split('\n\n'):
-  lines=block.splitlines();m=re.fullmatch(r'(.+): #deps ([0-9]+), deps mtime ([0-9]+) \(VALID\)',lines[0]);need(m is not None,'valid retained deps')
-  objects.append(str(CM/m[1]));need(len(lines)-1==int(m[2]),'retained deps count')
-  paths.update(Path(p.strip()) if Path(p.strip()).is_absolute() else CM/p.strip() for p in lines[1:])
- same(objects,r['objects'],'retained object dependency membership')
- # Native calibration already bound these exact objects and consumed sources.
- native=baseline()['inputs']
- for p in paths:need(str(p) in native and native[str(p)]==sha(p),'retained source lineage '+str(p))
- return paths
+ # The smaller 1142-file TTL fixture map is NOT the 113-object source closure.
+ # Independent metadata-only admission bound every actual Ninja object dependency
+ # against the accepted historical production compilation witness before configure.
+ lineage=load(OUT/'guarded-lineage.typed')
+ same(lineage['objects'],r['objects'],'retained object dependency membership')
+ need(sha(canonical.RUNTIME)==canonical.RUNTIME_SHA,'qualified Core witness pin')
+ for path,h in lineage['dependencies'].items():need(sha(path)==h,'qualified retained source/object lineage '+path)
+ for path,h in lineage['metadata'].items():need(sha(path)==h,'retained dependency metadata drift')
+ return set(map(Path,lineage['dependencies']))
 
 def fixture_source():
  source=(BOUNDARY/'native.cpp').read_text()
@@ -78,7 +78,7 @@ def acquire():
  paths=set(map(Path,baseline()['inputs']));paths.update(canonical.configured_inputs());paths.update(BOUNDARY.glob('*'));paths.update(p for p in HERE.glob('*') if p.is_file())
  paths.update(ROOT/'source/core'/x for x in ('StarTtlCache.hpp','StarRustTtlCache.h'))
  paths.update(Path(x) for x in r['libraries'] if Path(x).is_file());paths.update(map(Path,r['objects']))
- paths.update((OUT/'fixture.cpp',OUT/'corpus.tsv',canonical.ARCHIVE,OUT/'sealed-canonical.typed',OUT/'dependency-ready.typed'))
+ paths.update((OUT/'fixture.cpp',OUT/'corpus.tsv',canonical.ARCHIVE,OUT/'guarded-canonical.typed',OUT/'guarded-lineage.typed',OUT/'dependency-ready.typed'))
  paths.update(p for p in (HERE.parent/'path-embed-replay').glob('*.py'));paths.update((HERE.parent/'native_evidence_json.py',HERE.parent/'native_symbols.py'))
  pre=hashes(paths);dump(OUT/'precompiler-inputs.typed',pre)
  paths.update(retained_dependencies(r));same(pre,hashes(map(Path,pre)),'pre-dependency input stability')
