@@ -179,7 +179,7 @@ def contract(plan, commands, aliases=()):
               'initial': ledger(plan.initial_inputs), 'bootstrap_tree': tree(plan.owned_root)}
     require(all(a['canonical'] in plan.initial_inputs for a in result['aliases']),
             'canonical executable must be an initial input')
-    encoded(result)
+    result['contract_sha256'] = digest(encoded(result))
     return result
 
 
@@ -212,6 +212,10 @@ def semantic(stage, command, record):
 
 
 def check_frozen(frozen):
+    # Detect accidental changes to command fields as well as file/alias drift.
+    # This self-seal is an integrity check, not a signature or hostile-tamper proof.
+    payload = {k:v for k,v in frozen.items() if k != 'contract_sha256'}
+    require(frozen.get('contract_sha256') == digest(encoded(payload)), 'contract field drift')
     plan = restore(frozen['plan'])
     require(equal(codec.loads(np.preflight(plan)), frozen['plan']), 'plan transport drift')
     require(equal(ledger(plan.initial_inputs), frozen['initial']), 'initial input drift')
@@ -260,6 +264,21 @@ def group_gone(pgid):
     return False
 
 
+def observed_products(paths):
+    """Keep process evidence even when a tool fails to create a promised file.
+
+    Diagnostic entries cannot pass admission, which still requires the complete
+    exact physical ledger. Never follow an unsafe product merely to log failure.
+    """
+    result = {}
+    for path in paths:
+        try:
+            result[path] = identity(path)
+        except (OSError, Rejected) as exc:
+            result[path] = {'unavailable':type(exc).__name__, 'reason':str(exc)}
+    return result
+
+
 def execute(frozen):
     """Run only a frozen plan; no arbitrary callback can assert admission."""
     plan = check_frozen(frozen)
@@ -298,7 +317,7 @@ def execute(frozen):
                   'reaped':process.poll() is not None, 'group_gone':group_gone(process.pid),
                   'timed_out':timed_out, 'started_ns':start, 'ended_ns':time.time_ns(),
                   'elapsed_ns':elapsed, 'before':before,
-                  'artifacts':ledger(stage.outputs[:-2]+stage.logs), 'outputs':stage.writes}
+                  'artifacts':observed_products(stage.outputs[:-2]+stage.logs), 'outputs':stage.writes}
         receipt_path, cert_path = meta(stage)
         emit(receipt_path, record)  # failed records remain, but get no certificate.
         check_frozen(frozen)

@@ -13,7 +13,7 @@ import native_plan as np
 
 REPO = os.fsencode(os.path.dirname(os.path.dirname(a.LAB)))
 SOURCE = os.fsencode(os.path.dirname(os.path.abspath(__file__)))
-BASE = REPO+b'/build/lru-staged-native-r1/controls-r2'
+BASE = REPO+b'/build/lru-staged-recovery-r1/controls'
 PYTHON = os.fsencode(os.path.realpath(sys.executable))
 FILES = tuple(SOURCE+b'/'+n for n in (b'acquirer.py',b'recipe.py',b'worker.py',b'conformance.py'))
 SHARED = tuple(os.fsencode(a.LAB)+b'/'+n for n in
@@ -71,8 +71,11 @@ def run():
     # Whole-tree and nested opaque byte transport, physical output, actual
     # command/receipt/semantic certificate, then read-only reconstruction.
     label = 'positive-opaque'
-    script = b'import os,sys\np=os.fsencode(os.getcwd())+b"/../opaque-\\xff-\\x93.o"\nwith open(p,"xb") as f:f.write(b"object\\x00bytes")\nsys.stdout.buffer.write(b"ok\\n")\n'
-    plan, commands = setup(label, script, products={b'opaque-\xff-\x93.o':b'object\x00bytes'})
+    # Opaque POSIX byte strings are transport data, not portable macOS filenames.
+    opaque = {b"opaque-\xff-\x93.o": (b"\x00bytes", [False, 3])}
+    assert a.codec.loads(a.codec.dumps(opaque)) == opaque
+    script = b'import os,sys\np=os.fsencode(os.getcwd())+b"/../object.o"\nwith open(p,"xb") as f:f.write(b"object\\x00bytes")\nsys.stdout.buffer.write(b"ok\\n")\n'
+    plan, commands = setup(label, script, products={b'object.o':b'object\x00bytes'})
     frozen = freeze(label, plan, commands)
     a.execute(frozen)
     replay = a.reconstruct(a.load(BASE+b'/'+label.encode()+b'.contract.typed'))
@@ -204,7 +207,7 @@ time.sleep(30)
     a.emit(receipt,record)
     reject('bool-exit-reconstruction',lambda:a.reconstruct(f))
     a.emit(BASE+b'/conformance.typed',{'format':'lru-machinery-controls-v1','results':RESULTS,
-           'class_acquisitions_started':0,'unsuccessful_mechanical_attempts_total':1,
+           'class_acquisitions_started':0,'historical_mechanical_attempts_total':2,
            'class_execution_admitted':False,
            'not_covered':('whole expanded runtime/libLTO membership omission',
                           'SDK unknown consumed origin','physical archive ambiguity',

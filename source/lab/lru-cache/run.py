@@ -1,29 +1,38 @@
 #!/usr/bin/env python3
 """New independent native acquisition; --verify is strictly read-only."""
-import copy,hashlib,json,os,re,shlex,stat,subprocess,sys
+import copy,hashlib,json,os,re,shlex,signal,stat,subprocess,sys,time
 from pathlib import Path
 sys.dont_write_bytecode=True
 HERE=Path(__file__).resolve().parent;ROOT=HERE.parents[2]
-OUT=ROOT/'build/lru-cache-native-r1';CM=ROOT/'build/behavior/path-embed-combined-r1/reference/cmake'
+OUT=ROOT/'build/lru-cache-recovery-r4';CM=ROOT/'build/behavior/path-embed-combined-r1/reference/cmake'
 SDK='/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk'
 NINJA='/nix/store/ndfr0d2nizw172ppn99n505ikpsq9727-ninja-1.13.2/bin/ninja'
 sys.path[:0]=[str(HERE),str(HERE.parent),str(HERE.parent/'path-embed-replay'),str(HERE.parent/'behavior')]
 import model,inventory,sdk_witness,expanded_invocation,archive_identity,object_inventory,link_trace,native_symbols,build_provenance
+import native_evidence_json as evidence
 VARIANTS=['original','current','lookup-before-evict','set-trims','omit-promotion']
 ALIASES=['ordered','hash']
 SOURCES=['native.cpp','model.py','inventory.py','run.py','CONTRACT.md','StarLruCache.original.hpp']
 
 def need(x,m):
  if not x:raise ValueError(m)
-def encoded(x):return json.dumps(x,sort_keys=True,separators=(',',':'),ensure_ascii=True)
-def equal(a,b,m):need(encoded(a)==encoded(b),m)
+def encoded(x):
+ if type(x) is dict:x={k:v for k,v in sorted(x.items(),key=lambda row:evidence.dumps(row[0]))}
+ return evidence.dumps(x)
+def equal(a,b,m):
+ if type(a) is set and type(b) is set:need({encoded(x) for x in a}=={encoded(x) for x in b},m)
+ else:need(encoded(a)==encoded(b),m)
 def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 def hashes(ps):return {str(p):sha(p) for p in sorted(set(map(Path,ps)))}
 def put(p,b):
  p=Path(p);p.parent.mkdir(parents=True,exist_ok=True)
  with p.open('xb') as f:f.write(b)
-def dump(p,x):put(p,(json.dumps(x,indent=2,ensure_ascii=True)+'\n').encode())
-def js(p):return json.loads(Path(p).read_bytes())
+def dump(p,x):put(p,evidence.dumps(x).encode('ascii'))
+def decode(raw):
+ value=json.loads(raw)
+ if type(value) is dict and value.get('format')==evidence.FORMAT:return evidence.loads(raw.decode('ascii'))
+ return value
+def js(p):return decode(Path(p).read_bytes())
 def safe(p,fresh=False):
  need(p.is_absolute() and p==Path(os.path.normpath(p)),'absolute normalized path')
  need(not any(x.is_symlink() for x in [p,*p.parents]),'path symlink')
@@ -36,10 +45,24 @@ def tool(p):
  c,h=sdk_witness._resolve(str(p));return {'requested':str(p),'canonical':c,'hops':h,**sdk_witness._digest(c)}
 def env():return {'PATH':'/usr/bin:/bin:/usr/sbin:/sbin','HOME':str(OUT/'home'),'TMPDIR':str(OUT/'tmp'),'LANG':'C','LC_ALL':'C'}
 def invoke(name,args,stdin=b''):
- args=list(map(str,args));before=tool(args[0]);p=subprocess.run(args,cwd=CM,env=env(),input=stdin,capture_output=True,timeout=100)
+ args=list(map(str,args));before=tool(args[0]);started_ns=time.time_ns();tick=time.monotonic_ns()
+ child=subprocess.Popen(args,cwd=CM,env=env(),stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True)
+ started={'argv':args,'cwd':str(CM),'environment':env(),'pid':child.pid,'pgid':os.getpgid(child.pid),'started_ns':started_ns}
+ # Persist the actual child identity BEFORE waiting or inspecting products.
+ dump(OUT/(name+'.started.json'),started);timed_out=False
+ try:out,err=child.communicate(stdin,timeout=100)
+ except subprocess.TimeoutExpired:
+  timed_out=True;os.killpg(child.pid,signal.SIGTERM)
+  try:out,err=child.communicate(timeout=2)
+  except subprocess.TimeoutExpired:
+   os.killpg(child.pid,signal.SIGKILL);out,err=child.communicate(timeout=2)
+ elapsed=time.monotonic_ns()-tick
+ try:os.killpg(child.pid,0);group_gone=False
+ except ProcessLookupError:group_gone=True
+ p=subprocess.CompletedProcess(args,child.returncode,out,err)
  for ext,b in [('stdin',stdin),('stdout',p.stdout),('stderr',p.stderr)]:put(OUT/(name+'.'+ext),b)
- q={'argv':args,'cwd':str(CM),'environment':env(),'tool_before':before,'tool_after':tool(args[0]),'exit':p.returncode,'exit_type':'normal' if p.returncode>=0 else 'signal',**{k:hashlib.sha256(b).hexdigest() for k,b in [('stdin',stdin),('stdout',p.stdout),('stderr',p.stderr)]}}
- dump(OUT/(name+'.command.json'),q);equal(before,q['tool_after'],'tool drift');need(type(p.returncode)is int and p.returncode==0,'mechanical command failure '+name);return p
+ q={**started,'ended_ns':time.time_ns(),'elapsed_ns':elapsed,'reaped':child.poll() is not None,'group_gone':group_gone,'timed_out':timed_out,'tool_before':before,'tool_after':tool(args[0]),'exit':p.returncode,'exit_type':'normal' if p.returncode>=0 else 'signal',**{k:hashlib.sha256(b).hexdigest() for k,b in [('stdin',stdin),('stdout',p.stdout),('stderr',p.stderr)]}}
+ dump(OUT/(name+'.command.json'),q);equal(before,q['tool_after'],'tool drift');need(type(p.returncode)is int and p.returncode==0 and not timed_out and group_gone,'mechanical command failure '+name);return p
 
 def recipe():
  db=js(CM/'compile_commands.json');lines=(CM/'build.ninja').read_text().splitlines();i=next(i for i,l in enumerate(lines) if l.startswith('build ') and '/bin/starbound:' in l)
@@ -116,14 +139,27 @@ def reconcile(v,r,sdk_before,sdk):
  symbols=native_symbols.live_symbols((d/'native.map').read_bytes());providers=[]
  for name in (b'_main',b'_lru_native_dispatch_ordered',b'_lru_native_dispatch_hash'):
   row=native_symbols.unique_symbol(symbols,name);equal(row.object_path.hex(),str(d/'fixture.o').encode().hex(),'exact fresh-TU route provider');need(row.size>0,'surviving code size');providers.append(row.manifest())
- # Byte-only symbols: unique key/value identity excludes retained Core instantiations.
- cache_symbols=[s for s in symbols if b'LruNativeR1' in s.name and b'LruCacheBase' in s.name]
- need(cache_symbols and all(s.object_path==str(d/'fixture.o').encode() for s in cache_symbols),'all surviving unique cache code from fresh TU')
+ # Match the declaring class, not std::function thunks whose template arguments
+ # merely mention it. Linker-synthesized dependency thunks are not cache methods.
+ ns='Star' if v in ('original','current') else 'LruMutant'+str(VARIANTS.index(v))
+ prefix=rb'^__ZNK?'+str(len(ns)).encode()+ns.encode()+b'12LruCacheBase'
+ cache_symbols=[s for s in symbols if re.match(prefix,s.name) and b'LruNativeR1' in s.name]
+ need(cache_symbols,'surviving cache methods required')
+ aliases=[]
+ for symbol in cache_symbols:
+  if symbol.object_path==str(d/'fixture.o').encode():continue
+  # ld may expose a zero-size alias for an identical folded cold fragment.
+  # Credit it only through actual nonzero definitions at that EXACT address.
+  owners=[s for s in symbols if s.address==symbol.address and s.object_index!=0 and s.size>0]
+  need(symbol.object_index==0 and symbol.size==0 and owners and
+       all(s.object_path==str(d/'fixture.o').encode() for s in owners),
+       'cache alias lacks exact fresh-TU address owner')
+  aliases.append({'alias':symbol.manifest(),'definitions':[s.manifest() for s in owners]})
  dis=(OUT/(v+'-disassembly.stdout')).read_bytes();main=dis.split(b'_main:\n',1)
  need(len(main)==2,'surviving main disassembly');body=main[1].split(b'\n_',1)[0]
  for target in (b'_lru_native_dispatch_ordered',b'_lru_native_dispatch_hash'):
   need(any((b'\tbl\t' in line or b'\tb\t' in line) and target in line for line in body.splitlines()),'surviving main dispatch edge '+repr(target))
- return {'providers':providers,'cache_symbols':[x.manifest() for x in cache_symbols],'loaded_archive_members':len(trace['archive_members']),'surviving_archive_members':len(mapped['used_archive_members']),'sdk_records':len(consumed),'consumed':consumed}
+ return {'providers':providers,'cache_symbols':[x.manifest() for x in cache_symbols],'folded_aliases':aliases,'loaded_archive_members':len(trace['archive_members']),'surviving_archive_members':len(mapped['used_archive_members']),'sdk_records':len(consumed),'consumed':consumed}
 
 def compare(data):
  lines=data.splitlines();regular=b'\n'.join(x for x in lines if not x.startswith(b'@'))+b'\n';need(regular==model.expected(),'semantic state/value/order/error/event model mismatch')
@@ -138,7 +174,7 @@ def artifacts(plan,admission=False):
  fixed=['recipe.json','mutations.json','corpus.tsv','expected.tsv','source-map.json','ast-inventory.json','sdk-before.json','sdk-after.json','bindings-before.json','bindings-after.json','commands-plan.json','freeze.json','preexecute.json','retained-proof.json']
  ps={OUT/n for n in fixed}
  if not admission:ps.add(OUT/'verifier-controls.json')
- ps|={OUT/(name+'.'+ext) for name in plan for ext in ('stdin','stdout','stderr','command.json')}
+ ps|={OUT/(name+'.'+ext) for name in plan for ext in ('stdin','stdout','stderr','started.json','command.json')}
  for v in VARIANTS:
   ps|={OUT/v/n for n in ['probe.cpp','selected.hpp','fixture.d','fixture.o','native','native.map','expanded-before.json','archive-tables.json','origin.json']}
   if v not in ('original','current'):ps.add(OUT/v/'mutant.hpp')
@@ -152,12 +188,16 @@ def verify(q=None,overrides=None,admission=False):
  before=js(OUT/'bindings-before.json');equal(q['bindings'],before,'fixed input bindings membership');equal(q['bindings'],{p:digest(p) for p in before},'source/dependency/tool input drift')
  equal(set(q['artifacts']),set(map(str,artifacts(plan,admission))),'fixed artifact membership');equal(q['artifacts'],{p:digest(p) for p in q['artifacts']},'artifact bytes drift')
  if not admission:
-  controls=json.loads(data(OUT/'verifier-controls.json'));equal([x['name'] for x in controls],['source','artifact','omitted-binding','typed-exit'],'required verifier controls');need(all(type(x['rejected'])is str and x['rejected'] for x in controls),'control rejections')
+  controls=decode(data(OUT/'verifier-controls.json'));equal([x['name'] for x in controls],['source','artifact','omitted-binding','typed-exit','typed-pid','owned-group'],'required verifier controls');need(all(type(x['rejected'])is str and x['rejected'] for x in controls),'control rejections')
  equal(data(OUT/'corpus.tsv').hex(),('\n'.join('\t'.join(map(str,row)) for row in model.corpus())+'\n').encode().hex(),'independent corpus membership')
  equal(data(OUT/'expected.tsv').hex(),model.expected().hex(),'independent expected model');equal(inventory.reconcile(data(OUT/'ast.stdout'),data(HERE/'StarLruCache.original.hpp')),js(OUT/'ast-inventory.json'),'compiler AST inventory')
  for name,args in plan.items():
-  row=json.loads(data(OUT/(name+'.command.json')));equal(row['argv'],args,'command argv');equal(row['cwd'],str(CM),'command cwd');equal(row['environment'],env(),'command env')
+  row=decode(data(OUT/(name+'.command.json')));equal(row['argv'],args,'command argv');equal(row['cwd'],str(CM),'command cwd');equal(row['environment'],env(),'command env')
   need(type(row['exit'])is int and row['exit']==0 and row['exit_type']=='normal','typed normal exit')
+  need(type(row['pid']) is int and row['pid']>0 and type(row['pgid']) is int and row['pgid']==row['pid'],'typed owned PID/PGID')
+  need(row['reaped'] is True and row['group_gone'] is True and row['timed_out'] is False,'normal reaped group completion')
+  need(all(type(row[k]) is int for k in ('started_ns','ended_ns','elapsed_ns')) and row['started_ns']<=row['ended_ns'] and 0<=row['elapsed_ns']<=100000000000,'bounded process interval')
+  equal(decode(data(OUT/(name+'.started.json'))),{k:row[k] for k in ('argv','cwd','environment','pid','pgid','started_ns')},'durable start identity')
   equal(row['tool_before'],tool(args[0]),'tool before live');equal(row['tool_after'],row['tool_before'],'tool after')
   for ext in ('stdin','stdout','stderr'):equal(row[ext],digest(OUT/(name+'.'+ext)),'command '+ext)
   expected_stdin=data(OUT/'corpus.tsv') if any(name==v+'-'+a+'-'+str(n) for v in VARIANTS for a in ALIASES for n in (1,2)) else b''
@@ -183,7 +223,7 @@ def run():
  invoke('native-deps',plan['native-deps'])
  for v in VARIANTS:invoke(v+'-deps',plan[v+'-deps'])
  paths=dep_paths(r)|set(map(Path,r['objects']))|{HERE/n for n in SOURCES}|{Path(sys.executable).resolve(),Path(NINJA),Path(r['compiler']),CM/'compile_commands.json',CM/'build.ninja',CM/'CMakeFiles/rules.ninja',CM/'CMakeCache.txt',CM/'.ninja_deps',OUT/'recipe.json',OUT/'corpus.tsv',OUT/'expected.tsv',OUT/'commands-plan.json',OUT/'sdk-before.json'}
- paths|={p for d in (HERE.parent/'path-embed-replay',) for p in d.glob('*.py')};paths|={HERE.parent/'native_artifacts.py',HERE.parent/'native_symbols.py',HERE.parent/'behavior/build_provenance.py'}
+ paths|={p for d in (HERE.parent/'path-embed-replay',) for p in d.glob('*.py')};paths|={HERE.parent/'native_artifacts.py',HERE.parent/'native_symbols.py',HERE.parent/'native_evidence_json.py',HERE.parent/'behavior/build_provenance.py'}
  paths|={Path(x) for x in r['libraries'] if Path(x).is_file()};paths|={ROOT/x for x in proof['source_files']};paths|={Path(x) for x in proof.get('compile_source_files',{})}
  before=hashes(paths);dump(OUT/'bindings-before.json',before);dump(OUT/'freeze.json',{'status':'PRECOMPILE_MODEL_SOURCE_DEPENDENCY_FREEZE','bindings':before,'model_cases':len(model.corpus()),'literal_checks':6,'constructor_units':4,'language_properties':model.PROPERTIES});print('FROZEN',len(before),'bindings',len(model.corpus()),'cases',flush=True)
  invoke('ast',plan['ast']);dump(OUT/'ast-inventory.json',inventory.reconcile((OUT/'ast.stdout').read_bytes(),(HERE/'StarLruCache.original.hpp').read_bytes()))
@@ -213,6 +253,8 @@ def run():
  artifact=OUT/'current/fixture.o';clone=OUT/'controls/corrupt-artifact.o';put(clone,artifact.read_bytes()+b'corrupt');rejected('artifact',q,{str(artifact):str(clone)})
  bad=copy.deepcopy(q);bad['bindings'].pop(str(src));rejected('omitted-binding',bad)
  receipt=OUT/'current-ordered-1.command.json';row=js(receipt);row['exit']=False;clone=OUT/'controls/typed-exit.json';dump(clone,row);bad=copy.deepcopy(q);bad['artifacts'][str(receipt)]=sha(clone);rejected('typed-exit',bad,{str(receipt):str(clone)})
+ for label,field,value in [('typed-pid','pid',False),('owned-group','pgid',-1)]:
+  row=js(receipt);row[field]=value;clone=OUT/('controls/'+label+'.json');dump(clone,row);bad=copy.deepcopy(q);bad['artifacts'][str(receipt)]=sha(clone);rejected(label,bad,{str(receipt):str(clone)})
  dump(OUT/'verifier-controls.json',controls);q['artifacts']=hashes(artifacts(plan));verify(q);dump(OUT/'report.json',q);print(q['status'],flush=True)
 
 if __name__=='__main__':
