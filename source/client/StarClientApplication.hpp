@@ -148,6 +148,7 @@ private:
   bool m_behaviorHostAddressRoom = false;
   Json m_behaviorHostAddressProof;
   bool m_behaviorPathEmbedRoom = false;
+  bool m_behaviorLruRoom = false;
   Json m_behaviorPathEmbedProof;
   // Both original normal Assets acquisitions survive through WorldPainter.
   ImageConstPtr m_behaviorPathEmbedBaseImage;

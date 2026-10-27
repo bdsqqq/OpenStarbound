@@ -1,0 +1,15 @@
+{
+  "metadata": {
+    "name": "behavior-lru-13",
+    "displayName": "LRU definition 13",
+    "species": "human",
+    "anchor": [],
+    "maxParts": 13,
+    "maxRadius": 100,
+    "protected": false,
+    "gravity": 23,
+    "breathable": true,
+    "labIndex": 13
+  },
+  "parts": []
+}

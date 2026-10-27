@@ -1,0 +1,6 @@
+{
+  "name": "behavior-lru-fixtures",
+  "friendlyName": "Issue-scoped actual DungeonDefinition inputs",
+  "description": "Empty-part dungeons exercise normal Assets JSON and DungeonDefinition construction, not world generation.",
+  "priority": 1100
+}

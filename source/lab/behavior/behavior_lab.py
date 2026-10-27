@@ -38,6 +38,7 @@ import text_scan_proof
 import compression_proof
 import zstd_proof
 import path_embed_proof
+import lru_proof
 import option_parser_proof
 import host_address_proof
 import data_stream_proof
@@ -51,7 +52,7 @@ ASSET_OVERLAYS = {
     "behavior-fixture": ROOT / "source/lab/behavior/assets",
 }
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,95}\Z")
-SCENARIOS = ("lighting-room", "raycast-room", "encoding-room", "sha256-room", "vlq-room", "bytes-room", "unicode-room", "shell-room", "jsonpath-room", "assetpath-room", "random-room", "jsonpatch-room", "text-room", "compression-room", "zstd-room", "option-parser-room", "host-address-room", "datastream-room", "buffer-room", "stringview-room", "path-embed-room")
+SCENARIOS = ("lighting-room", "raycast-room", "encoding-room", "sha256-room", "vlq-room", "bytes-room", "unicode-room", "shell-room", "jsonpath-room", "assetpath-room", "random-room", "jsonpatch-room", "text-room", "compression-room", "zstd-room", "option-parser-room", "host-address-room", "datastream-room", "buffer-room", "stringview-room", "path-embed-room", "lru-room")
 MAX_PIXELS = 16_777_216
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
 
@@ -232,6 +233,11 @@ def semantic_world_state(receipt: dict) -> dict:
             native["compressionProof"] = compression_proof.validate(receipt)
         except ValueError as error:
             raise LabError(str(error)) from error
+    if receipt.get("scenario") == "lru-room":
+        try:
+            native["lruProof"] = lru_proof.validate(receipt)
+        except ValueError as error:
+            raise LabError(str(error)) from error
     if receipt.get("scenario") == "path-embed-room":
         try:
             native["pathEmbedProof"] = path_embed_proof.validate(receipt)
@@ -369,6 +375,11 @@ def captures(directory: Path) -> dict:
                 compression_proof.visible(frame, receipt)
             except ValueError as error:
                 raise LabError(str(error)) from error
+        if receipt["scenario"] == "lru-room":
+            try:
+                lru_proof.visible(frame, receipt)
+            except ValueError as error:
+                raise LabError(str(error)) from error
         if receipt["scenario"] == "path-embed-room":
             try:
                 path_embed_proof.visible(frame, receipt)
@@ -405,7 +416,12 @@ def captures(directory: Path) -> dict:
         result[name] = {"receipt": receipt, "png": pngs[name], "dimensions": list(frame.size),
                         "pngSha256": sha(pngs[name]), "receiptSha256": sha(receipts[name]),
                         "pixelsSha256": hashlib.sha256(frame.tobytes()).hexdigest()}
-    if scenarios in ({"lighting-room"}, {"encoding-room"}, {"sha256-room"}, {"vlq-room"}, {"bytes-room"}, {"unicode-room"}, {"shell-room"}, {"jsonpath-room"}, {"assetpath-room"}, {"random-room"}, {"jsonpatch-room"}, {"text-room"}, {"compression-room"}, {"zstd-room"}, {"option-parser-room"}, {"host-address-room"}, {"datastream-room"}, {"buffer-room"}, {"stringview-room"}, {"path-embed-room"}):
+    if scenarios == {"lru-room"}:
+        try:
+            lru_proof.validate_sequence(result, SCENE_FIELDS)
+        except ValueError as error:
+            raise LabError(str(error)) from error
+    elif scenarios in ({"lighting-room"}, {"encoding-room"}, {"sha256-room"}, {"vlq-room"}, {"bytes-room"}, {"unicode-room"}, {"shell-room"}, {"jsonpath-room"}, {"assetpath-room"}, {"random-room"}, {"jsonpatch-room"}, {"text-room"}, {"compression-room"}, {"zstd-room"}, {"option-parser-room"}, {"host-address-room"}, {"datastream-room"}, {"buffer-room"}, {"stringview-room"}, {"path-embed-room"}):
         validate_lighting_sequence(result)
         if scenarios == {"encoding-room"}:
             proofs = [encoding_proof.validate(frame["receipt"]) for frame in result.values()]
@@ -704,6 +720,11 @@ def validated(directory: Path) -> tuple[dict, dict]:
             or proof.get("binary") != manifest["binary"]["path"]
             or not isinstance(proof.get("source_files"), dict) or not proof["source_files"]):
         raise LabError(f"missing source-bound build identity: {directory}")
+    if any(frame["receipt"]["scenario"] == "lru-room" for frame in frames.values()):
+        backend = next(iter(frames.values()))["receipt"]["lruProof"]["backend"]
+        cache = proof.get("build_identity", {}).get("cache", {})
+        if cache.get(lru_proof.SELECTOR) != ("ON" if backend == "rust" else "OFF"):
+            raise LabError("LRU selector receipt disagrees with evaluated CMake configuration")
     return frames, manifest
 
 
@@ -781,6 +802,12 @@ def pair_compare(reference: Path, candidate: Path, output: Path, same_backend=Fa
                 wanted = "cpp" if same_backend else "rust"
                 if ref_meta["optionParserProof"]["backend"] != "cpp" or cand_meta["optionParserProof"]["backend"] != wanted:
                     row["errors"].append("expected C++ reference and correct OptionParser backend")
+                if ref_meta["lightingBackend"] != "cpp" or (same_backend and cand_meta["lightingBackend"] != "cpp"):
+                    row["errors"].append("expected C++ reference lighting")
+            elif ref_meta["scenario"] == "lru-room":
+                wanted = "native" if same_backend else "rust"
+                if ref_meta["lruProof"]["backend"] != "native" or cand_meta["lruProof"]["backend"] != wanted:
+                    row["errors"].append("expected native reference and correct LRU backend")
                 if ref_meta["lightingBackend"] != "cpp" or (same_backend and cand_meta["lightingBackend"] != "cpp"):
                     row["errors"].append("expected C++ reference lighting")
             elif ref_meta["scenario"] == "path-embed-room":
@@ -967,6 +994,8 @@ def asset_overlays(scenario="lighting-room") -> dict:
         overlays["jsonpatch-fixture"] = ROOT / "source/lab/behavior/jsonpatch-assets"
     if scenario == "compression-room":
         overlays["compression-fixture"] = ROOT / "source/lab/behavior/compression-assets"
+    if scenario == "lru-room":
+        overlays["lru-fixture"] = ROOT / "source/lab/behavior/lru-assets"
     if scenario == "path-embed-room":
         overlays["path-embed-fixture"] = ROOT / "source/lab/behavior/path-embed-assets"
     if scenario == "zstd-room":

@@ -2,6 +2,9 @@
 
 #include "StarOrderedMap.hpp"
 #include "StarBlockAllocator.hpp"
+#ifdef STAR_USE_RUST_LRU_CACHE
+#include "StarLruCacheHost.hpp"
+#endif
 
 namespace Star {
 
@@ -50,6 +53,10 @@ public:
 private:
   OrderedMapType m_map;
   size_t m_maxSize;
+#ifdef STAR_USE_RUST_LRU_CACHE
+  template <uint32_t Mode>
+  using Context = LruCacheRust::Context<OrderedMapType, Mode>;
+#endif
 };
 
 template <typename Key, typename Value, typename Compare = std::less<Key>, typename Allocator = BlockAllocator<pair<Key const, Value>, 1024>>
@@ -60,48 +67,92 @@ using HashLruCache = LruCacheBase<OrderedHashMap<Key, Value, Hash, Equals, Alloc
 
 template <typename OrderedMapType>
 LruCacheBase<OrderedMapType>::LruCacheBase(size_t maxSize) {
+#ifdef STAR_USE_RUST_LRU_CACHE
+  Context<SB_LRU_CTOR> c(m_map, m_maxSize);
+  c.arg = maxSize;
+  c.execute();
+#else
   setMaxSize(maxSize);
+#endif
 }
 
 template <typename OrderedMapType>
 size_t LruCacheBase<OrderedMapType>::maxSize() const {
+#ifdef STAR_USE_RUST_LRU_CACHE
+  Context<SB_LRU_MAX> c(m_map, m_maxSize);
+  return c.execute().value;
+#else
   return m_maxSize;
+#endif
 }
 
 template <typename OrderedMapType>
 void LruCacheBase<OrderedMapType>::setMaxSize(size_t maxSize) {
+#ifdef STAR_USE_RUST_LRU_CACHE
+  Context<SB_LRU_LIMIT> c(m_map, m_maxSize);
+  c.arg = maxSize;
+  c.execute();
+#else
   m_maxSize = max<size_t>(maxSize, 1);
 
   while (m_map.size() > m_maxSize)
     m_map.removeFirst();
+#endif
 }
 
 template <typename OrderedMapType>
 size_t LruCacheBase<OrderedMapType>::currentSize() const {
+#ifdef STAR_USE_RUST_LRU_CACHE
+  Context<SB_LRU_SIZE> c(m_map, m_maxSize);
+  return c.execute().value;
+#else
   return m_map.size();
+#endif
 }
 
 template <typename OrderedMapType>
 auto LruCacheBase<OrderedMapType>::keys() const -> List<Key> {
+#ifdef STAR_USE_RUST_LRU_CACHE
+  Context<SB_LRU_KEYS> c(m_map, m_maxSize);
+  c.execute();
+#endif
+  // direct prvalue: no ABI-owned List or extra snapshot move.
   return m_map.keys();
 }
 
 template <typename OrderedMapType>
 auto LruCacheBase<OrderedMapType>::values() const -> List<Value> {
+#ifdef STAR_USE_RUST_LRU_CACHE
+  Context<SB_LRU_VALUES> c(m_map, m_maxSize);
+  c.execute();
+#endif
   return m_map.values();
 }
 
 template <typename OrderedMapType>
 auto LruCacheBase<OrderedMapType>::ptr(Key const& key) -> Value * {
+#ifdef STAR_USE_RUST_LRU_CACHE
+  Context<SB_LRU_PTR> c(m_map, m_maxSize);
+  c.key = &key;
+  c.execute();
+  return c.reference;
+#else
   auto i = m_map.find(key);
   if (i == m_map.end())
     return nullptr;
   i = m_map.toBack(i);
   return &i->second;
+#endif
 }
 
 template <typename OrderedMapType>
 void LruCacheBase<OrderedMapType>::set(Key const& key, Value value) {
+#ifdef STAR_USE_RUST_LRU_CACHE
+  Context<SB_LRU_SET> c(m_map, m_maxSize);
+  c.key = &key;
+  c.value = &value;
+  c.execute();
+#else
   auto i = m_map.find(key);
   if (i == m_map.end()) {
     m_map.add(key, std::move(value));
@@ -109,23 +160,49 @@ void LruCacheBase<OrderedMapType>::set(Key const& key, Value value) {
     i->second = std::move(value);
     m_map.toBack(i);
   }
+#endif
 }
 
 template <typename OrderedMapType>
 bool LruCacheBase<OrderedMapType>::remove(Key const& key) {
+#ifdef STAR_USE_RUST_LRU_CACHE
+  Context<SB_LRU_REMOVE> c(m_map, m_maxSize);
+  c.key = &key;
+  return c.execute().value;
+#else
   return m_map.remove(key);
+#endif
 }
 
 template <typename OrderedMapType>
 void LruCacheBase<OrderedMapType>::removeWhere(function<bool(Key const&, Value&)> filter) {
+#ifdef STAR_USE_RUST_LRU_CACHE
+  Context<SB_LRU_FILTER> c(m_map, m_maxSize);
+  c.filter = &filter;
+  c.execute();
+#else
   eraseWhere(m_map, [&filter](auto& p) {
       return filter(p.first, p.second);
     });
+#endif
 }
 
 template <typename OrderedMapType>
 template <typename Producer>
 auto LruCacheBase<OrderedMapType>::get(Key const& key, Producer producer) -> Value & {
+#ifdef STAR_USE_RUST_LRU_CACHE
+  Context<SB_LRU_GET> c(m_map, m_maxSize);
+  c.key = &key;
+  c.producer = &producer;
+  c.produce = [](Context<SB_LRU_GET>& frame) -> uint32_t {
+    auto& producer = *static_cast<Producer*>(frame.producer);
+    // keep the braced pair and producer prvalue in one native full expression;
+    // the continuation inserts before either temporary dies, even on failure.
+    return frame.withPair({*frame.key, producer(*frame.key)});
+  };
+  c.execute();
+  return *c.reference;
+#else
   while (m_map.size() > m_maxSize - 1)
     m_map.removeFirst();
 
@@ -136,11 +213,17 @@ auto LruCacheBase<OrderedMapType>::get(Key const& key, Producer producer) -> Val
     i = m_map.toBack(i);
 
   return i->second;
+#endif
 }
 
 template <typename OrderedMapType>
 void LruCacheBase<OrderedMapType>::clear() {
+#ifdef STAR_USE_RUST_LRU_CACHE
+  Context<SB_LRU_CLEAR> c(m_map, m_maxSize);
+  c.execute();
+#else
   m_map.clear();
+#endif
 }
 
 }

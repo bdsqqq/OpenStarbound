@@ -3020,6 +3020,16 @@
       "rule": "json-path-lab-contract"
     },
     {
+      "cmake_membership": [],
+      "disposition": "harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/base/StarLruCacheLab.hpp",
+      "rule": "lru-cache-lab-contract"
+    },
+    {
       "cmake_membership": [
         {
           "cmake": "source/base/CMakeLists.txt",
@@ -5314,6 +5324,16 @@
       "rule": "core-storage"
     },
     {
+      "cmake_membership": [],
+      "disposition": "ffi-adapter",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "foundation.storage",
+      "path": "source/core/StarLruCacheHost.hpp",
+      "rule": "rust-lru-cache-host"
+    },
+    {
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
@@ -6444,6 +6464,16 @@
       "module": "foundation.math-geometry",
       "path": "source/core/StarRustLine.h",
       "rule": "rust-line-query-abi"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "ffi-adapter",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "foundation.storage",
+      "path": "source/core/StarRustLruCache.h",
+      "rule": "rust-lru-cache-abi"
     },
     {
       "cmake_membership": [],
@@ -20402,6 +20432,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/lru_proof.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/behavior/option_parser_cli.py",
       "rule": "laboratories"
     },
@@ -20633,6 +20673,16 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/behavior/test_jsonpath_proof.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/test_lru_proof.py",
       "rule": "laboratories"
     },
     {
@@ -23079,6 +23129,46 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/lru-cache/run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/lru-production/check.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/lru-production/lazy.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/lru-production/native.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/lru-production/selected.hpp",
       "rule": "laboratories"
     },
     {
@@ -28868,7 +28958,7 @@
     },
     {
       "path": "source/CMakeLists.txt",
-      "sha256": "64d20eb7f37b6af333f7e6ca7bcffb95e36a83f4d330fad3233af20af4fdce18"
+      "sha256": "f537432c6d0f9a40f4a0aa225dc19c54f30b86fda801e62e3459c1cd505af820"
     },
     {
       "path": "source/application/CMakeLists.txt",
@@ -28892,7 +28982,7 @@
     },
     {
       "path": "source/application/StarBehaviorLab.hpp",
-      "sha256": "36ddb490dd100e62103cd3cc6bb1cbce55e4dd9dd58de1971e88574626615924"
+      "sha256": "d3d0cb294cf536ffc9d85a7337ee44548fa8367dde29b79ea56aebd63fbd8b94"
     },
     {
       "path": "source/application/StarDesktopService_pc_steam.cpp",
@@ -29199,6 +29289,10 @@
       "sha256": "86a35e59d721faa29e3433a6e4f2a29c56b11ef09f1f2b72062fda6c56d01248"
     },
     {
+      "path": "source/base/StarLruCacheLab.hpp",
+      "sha256": "6da68be757073d2a69d30826941a5a9230993cc07589339c50cd8e21d530a8d3"
+    },
+    {
       "path": "source/base/StarMemoryAssetSource.cpp",
       "sha256": "1a9f35b0a899ed87679e3db22d01e58b2043da2a1752c730ae954d2c3badbe53"
     },
@@ -29300,11 +29394,11 @@
     },
     {
       "path": "source/client/StarClientApplication.cpp",
-      "sha256": "d84cc624e377aa99223f6bfde9ccd1e9397b72bedee49283caa5803f5f70e17a"
+      "sha256": "d6ae18033b5608317843274bb91bbb89ff3a71b2a5c88981a4cdc7dbbf43357e"
     },
     {
       "path": "source/client/StarClientApplication.hpp",
-      "sha256": "dcbc001fa9ca0c931f89215911aab562b9266c4f89f2573f3227f23b8387eaf0"
+      "sha256": "388ed37e6450b0208f709fcec823ce04054f39e4898e6d23ae3ed6836dc75784"
     },
     {
       "path": "source/client/StarRenderingLuaBindings.cpp",
@@ -29744,7 +29838,11 @@
     },
     {
       "path": "source/core/StarLruCache.hpp",
-      "sha256": "b0ca8540168e7c90d375c9f7b327c568bd2e3d1d9c5df99febaee9f5658cadd7"
+      "sha256": "7164a91b0572cb0a75c699f09e39fef6c6802c7631c5edc32ea7a8dabfff1ddb"
+    },
+    {
+      "path": "source/core/StarLruCacheHost.hpp",
+      "sha256": "7dd90acffe3cedd57a67e5b23f8fe3ece0882f85caee7374919156de217a0526"
     },
     {
       "path": "source/core/StarLua.cpp",
@@ -30021,6 +30119,10 @@
     {
       "path": "source/core/StarRustLine.h",
       "sha256": "ee3deae3b745ae7037849a9accf82b88083819dd4f92451a00c7d05938172e0c"
+    },
+    {
+      "path": "source/core/StarRustLruCache.h",
+      "sha256": "00b03f1e3c385d79969a793c98d8ad49986900aafe7f1e8527d7dd1e0af68eff"
     },
     {
       "path": "source/core/StarRustOptionParser.h",
@@ -31384,7 +31486,7 @@
     },
     {
       "path": "source/game/StarDungeonGenerator.cpp",
-      "sha256": "60bdf4e3582a7b9fcb34f6a2105fb84c80ead5f4f913571392f7425b43618e7d"
+      "sha256": "bd1d669ebcf68b1004695106f18a5dc871303139350ce0b53db0097a468d0656"
     },
     {
       "path": "source/game/StarDungeonGenerator.hpp",
@@ -33200,7 +33302,7 @@
     },
     {
       "path": "source/lab/behavior/behavior_lab.py",
-      "sha256": "5ec23fa143a246b1c99079d2e3c1dcd49bab312c0f4b8ab4b8bda7fa98fd169e"
+      "sha256": "0406b5b85468e44833d0d2db922f20b98029bc97ad3b0710dfdcc070634821d7"
     },
     {
       "path": "source/lab/behavior/btree_padding.py",
@@ -33261,6 +33363,10 @@
     {
       "path": "source/lab/behavior/jsonpath_proof.py",
       "sha256": "a126b3ca75bf266ee975db910cb65508f429fb8c2668df4df979628c59d2da26"
+    },
+    {
+      "path": "source/lab/behavior/lru_proof.py",
+      "sha256": "39e4f0d6ab346c391e8d4f0c62aca81476d6778714aa2e6a1af83e8eac8460a4"
     },
     {
       "path": "source/lab/behavior/option_parser_cli.py",
@@ -33359,8 +33465,12 @@
       "sha256": "c6a3b1e98f74964916aa71fbdf22e67980e304e6e6c961c55b6da5db4e9f9a4a"
     },
     {
+      "path": "source/lab/behavior/test_lru_proof.py",
+      "sha256": "df7bd83a9631883df9da0f041c7de10ad0ae11cc6f47426f2b3c24799a48eac9"
+    },
+    {
       "path": "source/lab/behavior/test_native_scenario_contract.py",
-      "sha256": "26ade008d56cab1c299ec7e36162759311ca4ade4cf21a1414f42e0ccb1f9d02"
+      "sha256": "de055ae63ed3061e299d2351fa0623d1a4830e8413a488508f8b43779da4bcef"
     },
     {
       "path": "source/lab/behavior/test_option_parser_proof.py",
@@ -34284,7 +34394,7 @@
     },
     {
       "path": "source/lab/lru-boundary/host_api.h",
-      "sha256": "144b3d1056ef3a14efee2834c8d6074ceaac8e4dda2c237959d90a84a71b0d90"
+      "sha256": "2ecd7a47056542ab50e86e70e913ad2e2dbe87ca30aa6a9313d675400376235a"
     },
     {
       "path": "source/lab/lru-boundary/host_controller.cpp",
@@ -34317,6 +34427,22 @@
     {
       "path": "source/lab/lru-cache/run.py",
       "sha256": "733bed6fc462d6269c02362c484c211c2c368641dde230d551ed2ee5b34869c0"
+    },
+    {
+      "path": "source/lab/lru-production/check.py",
+      "sha256": "a83c0d42129e5c452531eac90faa135c8451c2a3e5c3528b1eb50fe44ede5a6e"
+    },
+    {
+      "path": "source/lab/lru-production/lazy.cpp",
+      "sha256": "49d640669bb6cc269fce402e0083042045782caa07f6c57360838e32019d5e61"
+    },
+    {
+      "path": "source/lab/lru-production/native.cpp",
+      "sha256": "6c607c19bd356d844a5023a08c697ea0ac3ef364fef1d8ec6630f96667e9602c"
+    },
+    {
+      "path": "source/lab/lru-production/selected.hpp",
+      "sha256": "d4c5fb388057660b15d908097b5cc8ce4a69122ba188ac88d95be7864abb8d77"
     },
     {
       "path": "source/lab/lru-rust/acquire.py",
@@ -34364,7 +34490,7 @@
     },
     {
       "path": "source/lab/migration/modules.json",
-      "sha256": "034f12b71b51bb2515bca3ef3c306c839e48cf468b0e465ad0ab3377c395526f"
+      "sha256": "ba981281a724f6255a95bd2c58c2a1ad37f04e125cb102ef4aac936b0ee28d22"
     },
     {
       "path": "source/lab/native_artifacts.py",
@@ -35976,12 +36102,12 @@
   },
   "summary": {
     "by_disposition": {
-      "ffi-adapter": 36,
-      "harness": 27,
+      "ffi-adapter": 38,
+      "harness": 28,
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 438,
+      "oracle/harness": 444,
       "retain-tooling": 20,
       "retained-third-party": 296,
       "rust-candidate": 26,
@@ -35998,7 +36124,7 @@
       "foundation.random": 12,
       "foundation.runtime": 46,
       "foundation.serialization": 56,
-      "foundation.storage": 23,
+      "foundation.storage": 25,
       "foundation.text": 20,
       "gameplay.ai": 32,
       "gameplay.combat": 22,
@@ -36022,14 +36148,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 35,
-      "validation.oracles-harness": 465,
+      "validation.oracles-harness": 472,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1905,
+    "files": 1914,
     "modules": 39,
-    "no_direct_target": 799
+    "no_direct_target": 808
   }
 }

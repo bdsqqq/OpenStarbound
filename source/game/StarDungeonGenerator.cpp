@@ -1,4 +1,5 @@
 #include "StarDungeonGenerator.hpp"
+#include "StarLruCacheLab.hpp"
 #include "StarCasting.hpp"
 #include "StarRandom.hpp"
 #include "StarLogging.hpp"
@@ -1315,12 +1316,22 @@ DungeonDefinitions::DungeonDefinitions() : m_paths(), m_cacheMutex(), m_definiti
 
 DungeonDefinitionConstPtr DungeonDefinitions::get(String const& name) const {
   MutexLocker locker(m_cacheMutex);
-  return m_definitionCache.get(name,
-      [this](String const& name) -> DungeonDefinitionPtr {
-        if (auto path = m_paths.maybe(name))
-          return readDefinition(*path);
-        throw DungeonException::format("Unknown dungeon: '{}'", name);
-      });
+  LruCacheLab::Scope observer(m_definitionCache, name);
+  try {
+    return m_definitionCache.get(name,
+        [this, &observer](String const& name) -> DungeonDefinitionPtr {
+          observer.producer();
+          if (auto path = m_paths.maybe(name))
+            return readDefinition(*path);
+          throw DungeonException::format("Unknown dungeon: '{}'", name);
+        });
+  } catch (std::exception const& e) {
+    observer.error("std::exception", strf("{}", outputException(e, false)));
+    throw;
+  } catch (...) {
+    observer.error("unknown", "");
+    throw;
+  }
 }
 
 JsonObject DungeonDefinitions::getMetadata(String const& name) const {

@@ -31,7 +31,7 @@ class NativeScenarioContractTests(unittest.TestCase):
             check_native_scenarios(source.replace(clause, "", 1), lab.SCENARIOS)
 
     def test_stringview_is_twentieth_and_overlay_is_isolated(self):
-        self.assertEqual(len(lab.SCENARIOS), 21)
+        self.assertEqual(len(lab.SCENARIOS), 22)
         self.assertEqual(lab.SCENARIOS[19], "stringview-room")
         overlay = lab.ROOT / "source/lab/behavior/string-view-assets"
         self.assertEqual(lab.asset_overlays("stringview-room")["string-view-fixture"], overlay)
@@ -40,14 +40,27 @@ class NativeScenarioContractTests(unittest.TestCase):
                 self.assertNotIn("string-view-fixture", lab.asset_overlays(scenario))
 
     def test_path_embed_is_twenty_first_and_overlay_is_isolated(self):
-        self.assertEqual(len(lab.SCENARIOS), 21)
-        self.assertEqual(lab.SCENARIOS[-1], "path-embed-room")
+        self.assertEqual(len(lab.SCENARIOS), 22)
+        self.assertEqual(lab.SCENARIOS[20], "path-embed-room")
         overlay = lab.ROOT / "source/lab/behavior/path-embed-assets"
         self.assertEqual(lab.asset_overlays("path-embed-room")["path-embed-fixture"], overlay)
-        for scenario in lab.SCENARIOS[:-1]:
-            self.assertNotIn("path-embed-fixture", lab.asset_overlays(scenario))
+        for scenario in lab.SCENARIOS:
+            if scenario != "path-embed-room":
+                self.assertNotIn("path-embed-fixture", lab.asset_overlays(scenario))
         source = (lab.ROOT / "source/client/StarClientApplication.cpp").read_text()
         clause = ' && scenario != "path-embed-room"'
+        self.assertEqual(source.count(clause), 1)
+        with self.assertRaisesRegex(ValueError, "startup scenario allowlist"):
+            check_native_scenarios(source.replace(clause, "", 1), lab.SCENARIOS)
+
+    def test_lru_is_twenty_second_and_overlay_is_isolated(self):
+        self.assertEqual(lab.SCENARIOS[21], "lru-room")
+        overlays = lab.asset_overlays("lru-room")
+        self.assertIn(lab.ROOT / "source/lab/behavior/lru-assets", overlays.values())
+        for scenario in lab.SCENARIOS[:21]:
+            self.assertNotIn(lab.ROOT / "source/lab/behavior/lru-assets", lab.asset_overlays(scenario).values())
+        source = (lab.ROOT / "source/client/StarClientApplication.cpp").read_text()
+        clause = ' && scenario != "lru-room"'
         self.assertEqual(source.count(clause), 1)
         with self.assertRaisesRegex(ValueError, "startup scenario allowlist"):
             check_native_scenarios(source.replace(clause, "", 1), lab.SCENARIOS)
