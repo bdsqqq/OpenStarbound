@@ -1,5 +1,8 @@
 //! The engine's single Rust static archive owns the unmangled C ABI exports.
 //! Kernels remain rlibs so linking another kernel cannot add another Rust runtime.
+mod lru_cache;
+pub use lru_cache::{sb_lru_count, sb_lru_run, SbLruHost, SbLruReply, SbLruRequest};
+
 mod string_view;
 pub use string_view::{star_string_view_call_count, star_string_view_run, StarStringViewHost};
 mod file;
