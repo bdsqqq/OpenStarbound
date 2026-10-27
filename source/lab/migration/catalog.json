@@ -24758,6 +24758,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-production/audit_runtime.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/ttl-production/game_build_admission.py",
       "rule": "laboratories"
     },
@@ -24799,6 +24809,16 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/ttl-production/run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-production/runtime.py",
       "rule": "laboratories"
     },
     {
@@ -35585,6 +35605,10 @@
       "sha256": "0d9d794b7ba4bbfecd5221cfa9b65b3231bc30e63f58012b4037617b56b1848f"
     },
     {
+      "path": "source/lab/ttl-production/audit_runtime.py",
+      "sha256": "286db0507960365f8cb128dd639f46f5cf0742b4245c245d925b805fc562708d"
+    },
+    {
       "path": "source/lab/ttl-production/game_build_admission.py",
       "sha256": "cba13a82fe6e9fd5e742de3ff9c1a190f559987cd3fe67d54d13646db76eaf00"
     },
@@ -35603,6 +35627,10 @@
     {
       "path": "source/lab/ttl-production/run.py",
       "sha256": "6ffebbe74b4fd3ee6164f52ec4e73c476864db7a12df49053036e696b6a80b78"
+    },
+    {
+      "path": "source/lab/ttl-production/runtime.py",
+      "sha256": "4ece092010ef3e70158c75d59926bb230514f7cb5e508253f5a6510b765d8b22"
     },
     {
       "path": "source/lab/ttl-production/verify.py",
@@ -36807,7 +36835,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 484,
+      "oracle/harness": 486,
       "retain-tooling": 26,
       "retained-third-party": 296,
       "rust-candidate": 27,
@@ -36848,14 +36876,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 41,
-      "validation.oracles-harness": 513,
+      "validation.oracles-harness": 515,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1964,
+    "files": 1966,
     "modules": 39,
-    "no_direct_target": 858
+    "no_direct_target": 860
   }
 }
