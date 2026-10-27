@@ -24758,7 +24758,37 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-production/audit_auxiliary.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/ttl-production/audit_runtime.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-production/auxiliary.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-production/capture_schema.py",
       "rule": "laboratories"
     },
     {
@@ -24789,6 +24819,16 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/ttl-production/probe.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/ttl-production/qualify.py",
       "rule": "laboratories"
     },
     {
@@ -35605,8 +35645,20 @@
       "sha256": "0d9d794b7ba4bbfecd5221cfa9b65b3231bc30e63f58012b4037617b56b1848f"
     },
     {
+      "path": "source/lab/ttl-production/audit_auxiliary.py",
+      "sha256": "2ec26cee08fce9bb2fc0c522df8f85eef74e0bad455302f879ce22b50090b7f4"
+    },
+    {
       "path": "source/lab/ttl-production/audit_runtime.py",
       "sha256": "286db0507960365f8cb128dd639f46f5cf0742b4245c245d925b805fc562708d"
+    },
+    {
+      "path": "source/lab/ttl-production/auxiliary.py",
+      "sha256": "31845924465f549be406af73d92dbb28711b41622373fbf30b5f00bb0f52af1b"
+    },
+    {
+      "path": "source/lab/ttl-production/capture_schema.py",
+      "sha256": "9609b37d4a4c98cf41c1fbd55b5e30253eb4b26e59329717974a4997eaa43537"
     },
     {
       "path": "source/lab/ttl-production/game_build_admission.py",
@@ -35619,6 +35671,10 @@
     {
       "path": "source/lab/ttl-production/probe.cpp",
       "sha256": "48914ad9b4074472bb2d745824a42c56100f6f5d45a66c29f9face8125b002a7"
+    },
+    {
+      "path": "source/lab/ttl-production/qualify.py",
+      "sha256": "9b349c018cc800b3ea40c3f4c3e6e31722eeb9eaa41002b0d0177c7bec72bc5c"
     },
     {
       "path": "source/lab/ttl-production/refresh.py",
@@ -36835,7 +36891,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 486,
+      "oracle/harness": 490,
       "retain-tooling": 26,
       "retained-third-party": 296,
       "rust-candidate": 27,
@@ -36876,14 +36932,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 41,
-      "validation.oracles-harness": 515,
+      "validation.oracles-harness": 519,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 1966,
+    "files": 1970,
     "modules": 39,
-    "no_direct_target": 860
+    "no_direct_target": 864
   }
 }
