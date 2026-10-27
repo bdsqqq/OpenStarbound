@@ -19,6 +19,9 @@ if [[ "$mode" == ttl-cache-combined ]]; then
     fi
   done
   python3 "$root/scripts/cleanup-migration-artifacts.py" budget
+  [[ -n "${STAR_TTL_BUILD_ADMISSION:-}" && -n "${STAR_TTL_BUILD_ADMISSION_SHA:-}" ]] || { printf '%s\n' 'TTL requires externally pinned complete tool/source admission before configuration' >&2; exit 2; }
+  python3 "$root/source/lab/ttl-production/game_build_admission.py" before \
+    --plan "$STAR_TTL_BUILD_ADMISSION" --sha "$STAR_TTL_BUILD_ADMISSION_SHA"
 fi
 if [[ "$(uname -s)" != Darwin || "$(uname -m)" != arm64 ]]; then
   printf '%s\n' 'this build recipe is verified for native apple silicon only' >&2
@@ -36,6 +39,13 @@ cc="$(/usr/bin/xcrun --find clang)"
 cxx="$(/usr/bin/xcrun --find clang++)"
 # Nix collection can invalidate cached absolute tool paths between lab runs.
 ninja="$(command -v ninja)" || { printf '%s\n' 'missing ninja (run inside the build-tool Nix shell)' >&2; exit 2; }
+cmake="$(command -v cmake)"
+tool_args=()
+if [[ "$mode" == ttl-cache-combined ]]; then
+  admission_dir="${STAR_TTL_BUILD_ADMISSION%/*}"
+  while IFS= read -r argument; do tool_args+=("$argument"); done < "$admission_dir/tool-args.txt"
+  { IFS= read -r cmake; IFS= read -r ninja; IFS= read -r SDKROOT; } < "$admission_dir/launcher-paths.txt"
+fi
 cd "$root/source"
 for backend in reference candidate; do
   rust=OFF
@@ -147,12 +157,13 @@ for backend in reference candidate; do
     # This generation consumes preinstalled offline dependencies only.
     extra+=("-DVCPKG_MANIFEST_INSTALL=OFF")
   fi
+  if [[ "$mode" == ttl-cache-combined ]]; then extra+=("${tool_args[@]}"); fi
   # Snapshot before configuration: a successful stale executable is not proof
   # that the current source was compiled. Seal only after this build succeeds.
   provenance="$root/source/lab/behavior/build_provenance.py"
   snapshot="$base/$backend/build-inputs.json"
   python3 "$provenance" begin --source-root "$root" --build-dir "$build" --snapshot "$snapshot"
-  cmake --preset macos-arm-release -B "$build" \
+  "$cmake" --preset macos-arm-release -B "$build" \
     "-DCMAKE_C_COMPILER=$cc" "-DCMAKE_CXX_COMPILER=$cxx" "-DCMAKE_MAKE_PROGRAM=$ninja" \
     "-DCMAKE_OSX_SYSROOT=$SDKROOT" -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON \
     -DCMAKE_VERBOSE_MAKEFILE=OFF -DBUILD_TESTING=OFF \
@@ -162,6 +173,10 @@ for backend in reference candidate; do
     "-DSTAR_USE_RUST_LINE_QUERY=OFF" "-DSTAR_USE_RUST_ENCODE=$encode" \
     "-DSTAR_USE_RUST_SHA256=$sha256" "-DSTAR_USE_RUST_VLQ=$vlq" "-DSTAR_USE_RUST_BYTES=$bytes" "-DSTAR_USE_RUST_UNICODE=$unicode" "-DSTAR_USE_RUST_SHELL=$shell" "-DSTAR_USE_RUST_JSON_PATH=$jsonpath" "-DSTAR_USE_RUST_ASSET_PATH=$assetpath" "-DSTAR_USE_RUST_RANDOM_MWC=$random_mwc" "-DSTAR_USE_RUST_JSON_PATCH=$jsonpatch" "-DSTAR_USE_RUST_TEXT_SCAN=$textscan" "-DSTAR_USE_RUST_COMPRESSION=$compression" "-DSTAR_USE_RUST_ZSTD=$zstd" "-DSTAR_USE_RUST_OPTION_PARSER=$option_parser" "-DSTAR_USE_RUST_HOST_ADDRESS=$host_address" "-DSTAR_USE_RUST_DATA_STREAM=$data_stream" "-DSTAR_USE_RUST_BUFFER=$buffer" "-DSTAR_USE_RUST_IO_DEVICE=$io_device" "-DSTAR_USE_RUST_BYTE_ARRAY=$byte_array" "-DSTAR_USE_RUST_STRING_VIEW=$string_view" "-DSTAR_USE_RUST_FILE=$file" "-DSTAR_USE_RUST_PATH_EMBED=$path_embed" "-DSTAR_USE_RUST_LRU_CACHE=$lru_cache" "-DSTAR_USE_RUST_TTL_CACHE=$ttl_cache" \
     "-DSTAR_RUNTIME_OUTPUT_DIRECTORY=$base/$backend/bin" "${extra[@]}"
+  if [[ "$mode" == ttl-cache-combined ]]; then
+    python3 "$root/source/lab/ttl-production/game_build_admission.py" configured \
+      --plan "$STAR_TTL_BUILD_ADMISSION" --sha "$STAR_TTL_BUILD_ADMISSION_SHA" --build "$build"
+  fi
   # Configuration creates sources outside the repository source tree. Bind
   # them and the evaluated command database BEFORE any compilation starts.
   python3 "$provenance" configured --source-root "$root" --snapshot "$snapshot"
@@ -170,7 +185,11 @@ for backend in reference candidate; do
     jobs="${CMAKE_BUILD_PARALLEL_LEVEL:-6}"
     [[ "$jobs" =~ ^[1-6]$ ]] || { printf '%s\n' 'isolated behavior build requires 1–6 jobs' >&2; exit 2; }
   fi
-  cmake --build "$build" --target starbound --parallel "$jobs"
+  "$cmake" --build "$build" --target starbound --parallel "$jobs"
+  if [[ "$mode" == ttl-cache-combined ]]; then
+    python3 "$root/source/lab/ttl-production/game_build_admission.py" before \
+      --plan "$STAR_TTL_BUILD_ADMISSION" --sha "$STAR_TTL_BUILD_ADMISSION_SHA"
+  fi
   python3 "$provenance" seal --source-root "$root" --snapshot "$snapshot" \
     --binary "$base/$backend/bin/starbound" > /dev/null
 done
