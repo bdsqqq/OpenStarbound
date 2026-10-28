@@ -299,6 +299,213 @@ class RetentionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'codec projection'):
             self.audit()
 
+    def source_epoch_fixture(self, relative='cmake/Rust.cmake'):
+        original = self.repo / relative
+        original.parent.mkdir(parents=True, exist_ok=True)
+        original.write_bytes(b'original source bytes')
+        expected = pin(original)
+        aux = json.loads(self.aux.read_text())
+        aux['witness']['files'][str(original)] = expected
+        self.closure['protection']['auxiliaryAdmissionSha256'] = write_json(self.aux, aux)
+        retained = self.repo / 'build/weighted-pool-source-epoch-r1/bytes' / expected / relative
+        retained.parent.mkdir(parents=True, exist_ok=True)
+        retained.write_bytes(original.read_bytes())
+        self.versions = dict(version=1,
+            certificateSha256=self.closure['protection']['certificateSha256'],
+            closureSha256=write_json(self.closure_path, self.closure),
+            entries=[dict(path=str(original), copy=str(retained), sha256=expected,
+                          size=original.stat().st_size)],
+            historicalVerifierSources=[{'path': 'not a mapping'}], scope='source bytes only')
+        self.versions_path = self.repo / 'build/weighted-pool-source-epoch-r1/source-versions.json'
+        return original, retained
+
+    def epoch_audit(self, archived=False):
+        cp = write_json(self.closure_path, self.closure)
+        mp = write_json(self.manifest_path, self.manifest) if archived else None
+        vp = write_json(self.versions_path, self.versions)
+        return V.verify(self.closure_path, cp, self.repo,
+                        self.manifest_path if archived else None, mp,
+                        (self.versions_path, vp))
+
+    def test_source_drift_strict_without_mapping(self):
+        original, _ = self.source_epoch_fixture()
+        original.write_bytes(b'new source bytes')
+        with self.assertRaisesRegex(ValueError, 'protected bytes changed'):
+            self.audit()
+
+    def test_source_drift_exact_mapping(self):
+        original, _ = self.source_epoch_fixture()
+        original.write_bytes(b'new source bytes')
+        result = self.epoch_audit()
+        self.assertEqual(result['versionedSourceBindings'], self.versions['entries'])
+        self.assertEqual(result['sourceVersions'], pin(self.versions_path))
+        self.assertFalse(result['currentGlobalAllocationMeasured'])
+        self.assertEqual(original.read_bytes(), b'new source bytes')
+
+    def test_archived_source_drift_exact_mapping(self):
+        original, _ = self.source_epoch_fixture('source/rust/ffi/src/lib.rs')
+        original.write_bytes(b'new rust source')
+        self.archive_fixture()
+        self.assertEqual(len(self.epoch_audit(True)['versionedSourceBindings']), 1)
+
+    def test_source_mapping_unchanged_original(self):
+        self.source_epoch_fixture()
+        self.assertEqual(self.epoch_audit()['versionedSourceBindings'], [])
+
+    def test_source_mapping_read_only(self):
+        original, _ = self.source_epoch_fixture()
+        original.write_bytes(b'changed')
+        # Materialize JSON first so the verification itself cannot hide writes.
+        vp = write_json(self.versions_path, self.versions)
+        before = {str(p): V.fingerprint(p) for p in self.repo.rglob('*')}
+        V.verify(self.closure_path, pin(self.closure_path), self.repo,
+                 source_versions=(self.versions_path, vp))
+        self.assertEqual(before, {str(p): V.fingerprint(p) for p in self.repo.rglob('*')})
+
+    def test_source_mapping_rejects_non_source(self):
+        for relative in ('external-tool', 'SDK/include/tool.hpp', 'build/product.cpp',
+                         'scripts/tool.py', 'lib/vendor.hpp', 'source/tools/tool.cpp',
+                         'source/SDK/tool.hpp', 'cmake/README.md'):
+            with self.subTest(relative=relative):
+                self.source_epoch_fixture(relative)
+                with self.assertRaisesRegex(ValueError, 'first-party source'):
+                    self.epoch_audit()
+
+    def test_source_mapping_wrong_external_pin(self):
+        self.source_epoch_fixture()
+        write_json(self.versions_path, self.versions)
+        with self.assertRaisesRegex(ValueError, 'pin mismatch'):
+            V.verify(self.closure_path, pin(self.closure_path), self.repo,
+                     source_versions=(self.versions_path, '0' * 64))
+
+    def test_source_mapping_wrong_certificate(self):
+        self.source_epoch_fixture()
+        self.versions['certificateSha256'] = '0' * 64
+        with self.assertRaisesRegex(ValueError, 'source versions identity'):
+            self.epoch_audit()
+
+    def test_source_mapping_wrong_closure(self):
+        self.source_epoch_fixture()
+        self.versions['closureSha256'] = '0' * 64
+        with self.assertRaisesRegex(ValueError, 'source versions identity'):
+            self.epoch_audit()
+
+    def test_source_mapping_unbound_original(self):
+        original, _ = self.source_epoch_fixture()
+        aux = json.loads(self.aux.read_text())
+        del aux['witness']['files'][str(original)]
+        self.closure['protection']['auxiliaryAdmissionSha256'] = write_json(self.aux, aux)
+        self.versions['closureSha256'] = write_json(self.closure_path, self.closure)
+        with self.assertRaisesRegex(ValueError, 'unbound/conflicting source pin'):
+            self.epoch_audit()
+
+    def test_source_mapping_conflicting_original_pin(self):
+        self.source_epoch_fixture()
+        self.versions['entries'][0]['sha256'] = '0' * 64
+        with self.assertRaisesRegex(ValueError, 'unbound/conflicting source pin'):
+            self.epoch_audit()
+
+    def test_source_mapping_duplicate_original(self):
+        self.source_epoch_fixture()
+        self.versions['entries'] *= 2
+        with self.assertRaisesRegex(ValueError, 'duplicate source original'):
+            self.epoch_audit()
+
+    def test_source_mapping_missing_copy_even_when_original_unchanged(self):
+        _, retained = self.source_epoch_fixture()
+        retained.unlink()
+        with self.assertRaises(FileNotFoundError):
+            self.epoch_audit()
+
+    def test_source_mapping_bad_copy_even_when_original_unchanged(self):
+        _, retained = self.source_epoch_fixture()
+        retained.write_bytes(b'X' * retained.stat().st_size)
+        with self.assertRaisesRegex(ValueError, 'source copy bytes mismatch'):
+            self.epoch_audit()
+
+    def test_source_mapping_wrong_size(self):
+        self.source_epoch_fixture()
+        self.versions['entries'][0]['size'] += 1
+        with self.assertRaisesRegex(ValueError, 'source copy size mismatch'):
+            self.epoch_audit()
+
+    def test_source_mapping_size_bound(self):
+        self.source_epoch_fixture()
+        self.versions['entries'][0]['size'] = V.SOURCE_COPY_CAP + 1
+        with self.assertRaisesRegex(ValueError, 'source copy size bound'):
+            self.epoch_audit()
+
+    def test_source_mapping_wrong_layout(self):
+        self.source_epoch_fixture()
+        self.versions['entries'][0]['copy'] = str(self.external)
+        with self.assertRaisesRegex(ValueError, 'source copy layout'):
+            self.epoch_audit()
+
+    def test_source_mapping_path_escape(self):
+        self.source_epoch_fixture()
+        self.versions['entries'][0]['path'] = str(self.repo / 'source/../cmake/Rust.cmake')
+        with self.assertRaisesRegex(ValueError, 'source original scope'):
+            self.epoch_audit()
+
+    def test_source_mapping_symlink_copy(self):
+        original, retained = self.source_epoch_fixture()
+        retained.unlink()
+        retained.symlink_to(original)
+        with self.assertRaisesRegex(ValueError, 'aliased physical'):
+            self.epoch_audit()
+
+    def test_source_mapping_hardlink_copy(self):
+        original, retained = self.source_epoch_fixture()
+        retained.unlink()
+        os.link(original, retained)
+        with self.assertRaisesRegex(ValueError, 'source copy hardlink alias'):
+            self.epoch_audit()
+
+    def test_source_mapping_symlink_original(self):
+        original, _ = self.source_epoch_fixture()
+        original.unlink()
+        original.symlink_to(self.external)
+        with self.assertRaisesRegex(ValueError, 'aliased physical'):
+            self.epoch_audit()
+
+    def test_source_mapping_does_not_waive_complement_snapshot(self):
+        self.source_epoch_fixture()
+        self.compact.write_bytes(b'changed complement')
+        with self.assertRaisesRegex(ValueError, 'snapshot changed'):
+            self.epoch_audit()
+
+    def test_source_mapping_keeps_current_original_inode_protected(self):
+        original, _ = self.source_epoch_fixture()
+        original.unlink()
+        os.link(self.large, original)
+        self.closure['entries'][0]['fingerprint'] = V.fingerprint(self.large)
+        self.versions['closureSha256'] = write_json(self.closure_path, self.closure)
+        with self.assertRaisesRegex(ValueError, 'protected selection overlap'):
+            self.epoch_audit()
+
+    def test_source_mapping_certificate_binding(self):
+        original, _ = self.source_epoch_fixture()
+        cert = json.loads(self.cert.read_text())
+        cert['bindings'][str(original.relative_to(self.repo))] = pin(original)
+        self.closure['protection']['certificateSha256'] = write_json(self.cert, cert)
+        self.versions['certificateSha256'] = pin(self.cert)
+        self.versions['closureSha256'] = write_json(self.closure_path, self.closure)
+        original.write_bytes(b'changed source')
+        self.assertEqual(len(self.epoch_audit()['versionedSourceBindings']), 1)
+
+    def test_source_mapping_does_not_waive_archived_complement(self):
+        self.source_epoch_fixture()
+        self.archive_fixture()
+        self.compact.write_bytes(b'changed archived complement')
+        with self.assertRaisesRegex(ValueError, 'snapshot changed'):
+            self.epoch_audit(True)
+
+    def test_source_mapping_does_not_waive_tool_drift(self):
+        self.source_epoch_fixture()
+        self.external.write_bytes(b'changed tool')
+        with self.assertRaisesRegex(ValueError, 'protected bytes changed'):
+            self.epoch_audit()
+
     def test_audit_hook_rejects_process_events(self):
         for event in ('subprocess.Popen', 'os.system', 'os.posix_spawn', 'os.fork', 'os.exec'):
             with self.subTest(event=event), self.assertRaisesRegex(ValueError, 'process creation'):

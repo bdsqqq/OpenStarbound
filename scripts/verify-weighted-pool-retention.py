@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Read-only, externally pinned WeightedPool byte conservation audit.
 
-No restore, source substitution, semantic replay, or historical live-origin
-renewal. The closure is a retention snapshot, not retroactive producer evidence.
+No restore, runtime source/executable substitution, semantic replay, or historical live-origin
+renewal. Optional source epochs conserve exact historical first-party bytes only. The closure is a retention snapshot, not retroactive producer evidence.
 """
 import argparse
 import gzip
@@ -20,6 +20,10 @@ MAX_JSON = 64 * CHUNK
 MIN_BYTES = 2 * CHUNK
 ARCHIVE_CAP = 16 * 1024**3
 LIVE_CAP = 4 * 1024**3
+SOURCE_COPY_CAP = 64 * CHUNK
+SOURCE_TOTAL_CAP = 128 * CHUNK
+SOURCE_EXTENSIONS = {'.cpp', '.hpp', '.cc', '.hh', '.c', '.h', '.mm', '.rs',
+                     '.toml', '.lock', '.cmake', '.in', '.inc', '.S'}
 
 
 def need(condition, message):
@@ -148,7 +152,61 @@ def codec_size(path):
     return counter.size
 
 
-def verify(closure_path, closure_sha, repo=None, archive_manifest=None, archive_manifest_sha=None):
+def source_bindings(repo, specification, closure_sha, certificate_sha, protected):
+    """Resolve retained bytes, never renew the original source's live origin.
+
+    Validate every declared copy, including currently unchanged originals. The
+    fixed owned store and first-party allowlist cannot resolve tools or products.
+    Historical verifier snapshots are metadata, not protected-source mappings.
+    """
+    if specification is None:
+        return {}, None
+    need(isinstance(specification, (tuple, list)) and len(specification) == 2,
+         'source versions require path and SHA256')
+    path, pin = specification
+    manifest = pinned(Path(path).absolute(), pin)
+    need(type(manifest['version']) is int and manifest['version'] == 1 and
+         manifest['closureSha256'] == closure_sha and
+         manifest['certificateSha256'] == certificate_sha, 'source versions identity')
+    entries = manifest['entries']
+    need(type(entries) is list and len(entries) <= 200000, 'source versions entry bound')
+    bindings, copies, total = {}, set(), 0
+    for row in entries:
+        name = row['path']
+        need(isinstance(name, str), 'source original path')
+        original = Path(name)
+        need(original.is_absolute() and str(original) == name and
+             '..' not in original.parts and original.is_relative_to(repo), 'source original scope')
+        rel = original.relative_to(repo)
+        need(len(rel.parts) >= 2 and rel.parts[0] in {'source', 'cmake'} and
+             not any(part.lower() in {'scripts', 'lib', 'sdk', 'tools', 'build', 'products'}
+                     for part in rel.parts[:-1]) and
+             (rel.suffix in SOURCE_EXTENSIONS or rel.name == 'CMakeLists.txt'),
+             'first-party source required')
+        physical(original)
+        expected = sha(row['sha256'])
+        need(original not in bindings, 'duplicate source original')
+        need(original in protected and protected[original] == expected,
+             'unbound/conflicting source pin')
+        size = integer(row['size'])
+        total += size
+        need(size <= SOURCE_COPY_CAP and total <= SOURCE_TOTAL_CAP, 'source copy size bound')
+        retained = repo / 'build/weighted-pool-source-epoch-r1/bytes' / expected / rel
+        need(row['copy'] == str(retained) and retained not in copies, 'source copy layout/alias')
+        physical(retained)
+        before = fingerprint(retained)
+        need(before[6] == 1, 'source copy hardlink alias')
+        need(before[2] == size, 'source copy size mismatch')
+        with retained.open('rb') as stream:
+            need(digest(stream, size) == (expected, size), 'source copy bytes mismatch')
+        need(fingerprint(retained) == before, 'source copy changed during hashing')
+        copies.add(retained)
+        bindings[original] = dict(path=name, copy=str(retained), sha256=expected, size=size)
+    return bindings, pin
+
+
+def verify(closure_path, closure_sha, repo=None, archive_manifest=None, archive_manifest_sha=None,
+           source_versions=None):
     repo = Path(repo if repo is not None else Path(__file__).resolve().parents[1]).absolute()
     physical(repo, 'directory')
     closure_path = Path(closure_path).absolute()
@@ -220,6 +278,9 @@ def verify(closure_path, closure_sha, repo=None, archive_manifest=None, archive_
         sha(pin)
         need(p not in protected or protected[p] == pin, 'conflicting protected pins')
         protected[p] = pin
+    versions, source_versions_sha = source_bindings(
+        repo, source_versions, closure_sha, protection['certificateSha256'], protected)
+    versioned = []
     protected_inodes, protected_paths, cache = set(), set(), {}
     for p, pin in protected.items():
         canonical = p.resolve(strict=True)
@@ -227,7 +288,12 @@ def verify(closure_path, closure_sha, repo=None, archive_manifest=None, archive_
         stamp = tuple(fingerprint(canonical))
         if stamp not in cache:
             cache[stamp] = file_digest(canonical)[0]
-        need(cache[stamp] == pin, 'protected bytes changed: ' + str(p))
+        if cache[stamp] != pin:
+            need(p in versions, 'protected bytes changed: ' + str(p))
+            # The validated retained bytes match this SAME original pin. Keep
+            # protecting the current original path/inode, not the copy's inode.
+            need(versions[p]['sha256'] == pin, 'source original pin mismatch')
+            versioned.append(versions[p])
         protected_inodes.add(stamp[:2])
     for name, target in aux['witness']['aliases'].items():
         p, target_path = Path(name), Path(target)
@@ -325,8 +391,9 @@ def verify(closure_path, closure_sha, repo=None, archive_manifest=None, archive_
                 selectedFiles=len(selected), selectedBytes=sum(rows[key]['size'] for key in selected),
                 complementFiles=len(rows) - len(selected), observedAliases=len(aliases),
                 protectedPaths=len(protected), reconstructedBlobs=len(verified_blobs),
+                sourceVersions=source_versions_sha, versionedSourceBindings=versioned,
                 projectionChecked=True, currentGlobalAllocationMeasured=False,
-                limits=c['limits'] + ['retention only; no semantic replay, source substitution, restore, or old live-origin/inode/ctime renewal',
+                limits=c['limits'] + ['retention only; exact historical source bytes are not live-source qualification; no semantic replay, runtime source/executable substitution, restore, or old live-origin/inode/ctime renewal',
                                       'allocation projection checked against fixed caps; current global allocation is not measured'])
 
 
@@ -342,10 +409,12 @@ def main():
     parser.add_argument('--repo', type=Path)
     parser.add_argument('--archive-manifest', type=Path)
     parser.add_argument('--archive-manifest-sha')
+    parser.add_argument('--source-versions', nargs=2, metavar=('PATH', 'SHA256'))
     args = parser.parse_args()
     sys.addaudithook(forbid_process)
     print(json.dumps(verify(args.closure, args.closure_sha, args.repo,
-                            args.archive_manifest, args.archive_manifest_sha), sort_keys=True, indent=2))
+                            args.archive_manifest, args.archive_manifest_sha,
+                            args.source_versions), sort_keys=True, indent=2))
 
 
 if __name__ == '__main__':

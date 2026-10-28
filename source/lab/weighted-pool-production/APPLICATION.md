@@ -2,7 +2,7 @@
 
 the game snapshot pins `README.md` as a conservative source input. leave that original document byte-exact; current application evidence lives here rather than weakening its source guard.
 
-`build/weighted-pool-final-qualification-r1/certificate.json`, sha256 `2823cd71306a24bfcc9f3671367206f9f513be53e90fee13d319fefcb2491492`:
+historical compiled-source epoch `2aa0c6e0`: `build/weighted-pool-final-qualification-r1/certificate.json`, sha256 `2823cd71306a24bfcc9f3671367206f9f513be53e90fee13d319fefcb2491492`. its original replay below deliberately rejects the later `cmake/Rust.cmake` compiler-environment change; do not rebind that old live/source guard.
 
 ```sh
 python3 -B source/lab/weighted-pool-production/qualify.py --certificate-sha 2823cd71306a24bfcc9f3671367206f9f513be53e90fee13d319fefcb2491492
@@ -23,7 +23,9 @@ python3 -B scripts/verify-weighted-pool-retention.py \
   --closure build/weighted-pool-retention-r1/closure.json \
   --closure-sha aba0b63721540f86056ae6310f9f7afa418750b4d3d199df010364520dfe7d8d \
   --archive-manifest build/migration-evidence-archive/runs/20261028-weighted-completion-retire-labs-r1/manifest.json \
-  --archive-manifest-sha a4f700b9d4db967a2cfb51a443f4c0f57567a0945529790f4b927e41ff51937e
+  --archive-manifest-sha a4f700b9d4db967a2cfb51a443f4c0f57567a0945529790f4b927e41ff51937e \
+  --source-versions build/weighted-pool-source-epoch-r1/source-versions.json \
+  4738f3af8ca521bba3fae4e0f16b1a5a205898bc481ce773827921b030e52054
 ```
 
-archived lab executables/maps/admissions retain their exact bytes, not their old live-path/inode/ctime guards. the unchanged application certificate and earlier ttl/lru retention proofs pass after pruning. full39 migration remains open.
+archived lab executables/maps/admissions retain their exact bytes, not their old live-path/inode/ctime guards. the unchanged application certificate and earlier ttl/lru retention proofs passed after pruning. after the subsequent cmake recipe edit, source-only retention serves the exact old first-party recipe, never tools/sdk/products or renewed live origin. full39 migration remains open.

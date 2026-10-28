@@ -40,6 +40,7 @@ file(GLOB_RECURSE STAR_RUST_SOURCES CONFIGURE_DEPENDS
 add_custom_command(
   OUTPUT "${STAR_RUST_ARCHIVE}"
   COMMAND "${CMAKE_COMMAND}" -E env "CARGO_TARGET_DIR=${STAR_RUST_TARGET_DIR}"
+    "RUSTC=${STAR_RUSTC_EXECUTABLE}"
     "${STAR_CARGO_EXECUTABLE}" build --manifest-path "${STAR_RUST_SOURCE}/Cargo.toml"
     --package star-engine-ffi --target "${STAR_RUST_HOST}" --release --locked --offline
   DEPENDS ${STAR_RUST_SOURCES}

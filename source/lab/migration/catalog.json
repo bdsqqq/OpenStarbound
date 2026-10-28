@@ -24184,6 +24184,16 @@
     {
       "cmake_membership": [],
       "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/rust-cmake/run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
       "language": "c/c++",
       "line": 1,
       "membership_status": "no-direct-target-found",
@@ -29632,7 +29642,7 @@
     },
     {
       "path": "cmake/Rust.cmake",
-      "sha256": "d2a07074c05620f0ca296305c63f131ddcb0c56e884cb978780fdd5ad5266747"
+      "sha256": "0a7717138f1f8778746e54c1beeba2112ec4605e9f3791aea8b10ba625dcc0d8"
     },
     {
       "path": "cmake/RustLighting.cmake",
@@ -30312,7 +30322,7 @@
     },
     {
       "path": "scripts/test_verify_weighted_pool_retention.py",
-      "sha256": "bb268aa5a507d3714ed07c34605a2dff703d53acd974f7df44a1129b254b2232"
+      "sha256": "7111035d5c379cf47faa31411a376f9df9528d5e4790a723bfad70530ca3df5d"
     },
     {
       "path": "scripts/verify-lru-retention.py",
@@ -30324,7 +30334,7 @@
     },
     {
       "path": "scripts/verify-weighted-pool-retention.py",
-      "sha256": "bb23ffdf2ed8fb5412bfac4008b772e57b540432995741ffb6ca597040bd4aa5"
+      "sha256": "f3fe3692dcb65d17ef5fd2ca8dd3bbe0698a484eb867b61ceaa33bb8d2e69561"
     },
     {
       "path": "source/CMakeLists.txt",
@@ -36187,6 +36197,10 @@
       "sha256": "e2436003739ed578f1241fccebd087e4bd02ba48f09a68e71591e45262765f51"
     },
     {
+      "path": "source/lab/rust-cmake/run.py",
+      "sha256": "e4a987db94348ec48c1c32f986954f3797a9dd81f3baa6c16716509c08e0fb4b"
+    },
+    {
       "path": "source/lab/sha256/StarSha256.original.cpp",
       "sha256": "8a4d67bbbd7e6bcc54356dbc59429cf16076064a6b8c4b5427363df79beb5b3b"
     },
@@ -37969,7 +37983,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 560,
+      "oracle/harness": 561,
       "retain-tooling": 30,
       "retained-third-party": 296,
       "rust-candidate": 28,
@@ -38010,14 +38024,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 45,
-      "validation.oracles-harness": 589,
+      "validation.oracles-harness": 590,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2047,
+    "files": 2048,
     "modules": 39,
-    "no_direct_target": 941
+    "no_direct_target": 942
   }
 }
