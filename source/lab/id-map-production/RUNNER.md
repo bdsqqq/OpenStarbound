@@ -1,15 +1,31 @@
-# scene-25 successor frontend — implementation pending
+# scene-25 successor frontend — source gate only
 
 keep the acquired 24-scene runner and contract tests byte-exact. merely appending
 a scenario is unsafe: legacy receipt discovery treats restoration json as a
 frame; sequence and comparison dispatch otherwise fall back to unrelated paths.
 
-next bounded implementation should add a new, explicitly admitted frontend at
-`source/lab/behavior/behavior_lab_id_map.py`, not relabel scene24 or substitute
-new bytes at the old tool path. reuse frozen public helpers for supervision,
-ownership, identities, images and exact full-frame comparison.
+`source/lab/behavior/behavior_lab_id_map.py` now uses a private, hash-checked
+legacy instance with additive adapters, not a renamed scene24 or replacement at
+an old tool path. old24 decoding stays delegated; scene25 validates restoration,
+process/configuration, visible and invisible state, exact pixels and explicit
+backends. 24 successor, 9 proof and all42 legacy tests pass (synthetic only).
 
-if required, use a private hash-checked legacy module instance with narrowly
+review caught an oversized-image error-reporting regression. a real oversized
+png header reproduced failure before repair; comparison and cli now catch the
+same Pillow exception as the frozen runner, with a passing regression.
+
+the frozen native contract's fixed24 allowlist fails current native25, as
+expected; original bytes remain untouched. successor tests use its unchanged
+checker with25 and reject a removed25 clause. this is not a historical tool pass.
+
+completion `build/id-map-frontend-r1/completion.json` sha256
+`cb595e9361a0241d820357250b2d9724db8a03bd2d97a3383648fbfb57edd2db`.
+
+capture deliberately ALWAYS fails closed. `id_map_origin.py` and new actual
+origin/launch-admission/sidecar producers remain unimplemented. no game ran and
+no positive native origin is inferred from monkeypatched synthetic fixtures.
+
+the source contract for remaining integration: use narrowly
 scoped additive adapters for `SCENARIOS`, `asset_overlays`, `captures`,
 `validated`, and `verified_build`. preserve original behavior for all old24;
 never catch/ignore old validation failures. the scene25 decoder must require:
