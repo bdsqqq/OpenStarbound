@@ -1819,6 +1819,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "tools.release",
+      "path": "scripts/test_verify_weighted_pool_retention.py",
+      "rule": "release-scripts"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "retain-tooling",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "tools.release",
       "path": "scripts/verify-lru-retention.py",
       "rule": "release-scripts"
     },
@@ -1830,6 +1840,16 @@
       "membership_status": "no-direct-target-found",
       "module": "tools.release",
       "path": "scripts/verify-ttl-retention.py",
+      "rule": "release-scripts"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "retain-tooling",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "tools.release",
+      "path": "scripts/verify-weighted-pool-retention.py",
       "rule": "release-scripts"
     },
     {
@@ -30291,12 +30311,20 @@
       "sha256": "3308cba36dbc9931bb46f2bfd07559e351f68f6abf129cdf56d21dfa54734f65"
     },
     {
+      "path": "scripts/test_verify_weighted_pool_retention.py",
+      "sha256": "bb268aa5a507d3714ed07c34605a2dff703d53acd974f7df44a1129b254b2232"
+    },
+    {
       "path": "scripts/verify-lru-retention.py",
       "sha256": "4c16a71d9abaf350d86a2e6ef05cc04a61136a960790e6ec3cdddbb0273b646e"
     },
     {
       "path": "scripts/verify-ttl-retention.py",
       "sha256": "83ca36173da412ba408a074c724a2ec7ac96a341c3a502acde0c9cb82564e204"
+    },
+    {
+      "path": "scripts/verify-weighted-pool-retention.py",
+      "sha256": "bb23ffdf2ed8fb5412bfac4008b772e57b540432995741ffb6ca597040bd4aa5"
     },
     {
       "path": "source/CMakeLists.txt",
@@ -37942,7 +37970,7 @@
       "migrate": 960,
       "migrate-adapter": 24,
       "oracle/harness": 560,
-      "retain-tooling": 28,
+      "retain-tooling": 30,
       "retained-third-party": 296,
       "rust-candidate": 28,
       "test": 57
@@ -37981,15 +38009,15 @@
       "sessions.orchestration": 47,
       "sessions.persistence": 6,
       "tools.inactive": 21,
-      "tools.release": 43,
+      "tools.release": 45,
       "validation.oracles-harness": 589,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2045,
+    "files": 2047,
     "modules": 39,
-    "no_direct_target": 939
+    "no_direct_target": 941
   }
 }
