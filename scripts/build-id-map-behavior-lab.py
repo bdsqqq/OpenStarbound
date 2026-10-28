@@ -236,7 +236,8 @@ def build_pair(plan_path, pin, run=supervise):
         ad.dump(root / 'completion.json', dict(status='ADMITTED_PAIR_BUILT_NOT_GAME_QUALIFIED',
                 admissionSha256=pin, backends={r: identity(root / r / 'id-map-build.json') for r in ('reference', 'candidate')}))
     except BaseException as error:
-        ad.dump(root / 'failure.json', dict(status='FAILED_NOT_RESUMABLE', error=str(error), admissionSha256=pin))
+        ad.dump(root / 'failure.json', dict(status='FAILED_NOT_RESUMABLE', error=str(error),
+                allocationObservation=getattr(error, 'observation', None), admissionSha256=pin))
         raise
     return root
 

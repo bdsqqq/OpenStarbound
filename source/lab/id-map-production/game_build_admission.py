@@ -34,7 +34,6 @@ closure = _generic.closure
 unchanged = _generic.unchanged
 tree_members = _generic.tree_members
 native = _generic.native
-allocated = _generic.allocated
 physical = _generic.physical
 no_symlink_parents = _generic.no_symlink_parents
 auxiliary_tools = _generic.auxiliary_tools
@@ -45,6 +44,7 @@ sha = _generic.sha
 check_no_old_bins = _generic.check_no_old_bins
 _retention = _load('_id_map_product_retention', ROOT / 'scripts/verify-weighted-pool-retention.py')
 retired_product_bindings = _retention.retired_product_bindings
+_allocation = _load('_id_map_game_allocation', Path(__file__).resolve().with_name('allocation.py'))
 
 SELECTORS = tuple('STAR_USE_RUST_' + name for name in (
     'LIGHTING BLOCKS_ALONG_LINE LINE_QUERY ENCODE SHA256 VLQ BYTES UNICODE SHELL '
@@ -93,15 +93,12 @@ def build_root(generation):
 
 
 def check_budget(root):
-    archive = allocated(ROOT / 'build/migration-evidence-archive')
-    live = allocated(ROOT / 'build') - archive
-    current = allocated(root)
-    need(0 <= archive <= CAPS['archiveBytes'], 'fixed 16 GiB archive cap')
-    need(0 <= current <= CAPS['newRootBytes'] and 0 <= live <= CAPS['liveBytes'],
-         'fixed live/new-root cap')
-    need(live - current + CAPS['newRootBytes'] <= CAPS['liveBytes'],
-         'new-root reservation exceeds fixed 4 GiB live cap')
-    return dict(liveBytes=live, archiveBytes=archive, newRootBytes=current)
+    need(_allocation.CAPS == CAPS, 'allocation helper must retain fixed admission caps')
+    observation = _allocation.enforce(ROOT, root)
+    # Keep the original admission interface while retaining the direct category
+    # totals and interval. AllocationError propagates its failed observation.
+    return dict(liveBytes=observation['liveBytes'], archiveBytes=observation['archiveBytes'],
+                newRootBytes=observation['activeRootBytes'], observation=observation)
 
 
 def check_retirement(path, pin):
@@ -256,6 +253,7 @@ def validate(plan):
     for path in (ROOT / 'scripts/build-id-map-behavior-lab.py',
                  ROOT / 'source/lab/behavior/build_provenance.py', Path(__file__).resolve()):
         _require_pin(witness, path, 'actual builder/provenance/admission tool')
+    _require_pin(witness, Path(_allocation.__file__).resolve(), 'actual allocation helper')
     unchanged(witness)
     check_deadline(plan)
     return root
@@ -289,7 +287,8 @@ def prepare(output, checkpoint, generation, retirement, retirement_sha,
     auxiliary = auxiliary_tools()
     for path in auxiliary:
         native(path)
-    _pin(witness, list(tools.values()) + auxiliary + objects + [tool_plan] +
+    _pin(witness, list(tools.values()) + auxiliary + objects +
+         [tool_plan, Path(_allocation.__file__).resolve()] +
          [r for r in roots if Path(r).is_file()])
     header = ROOT / HEADER
     plan = dict(stage=STAGE, scope=SCOPE, caps=dict(CAPS), deadlines=dict(DEADLINES),
@@ -305,7 +304,11 @@ def prepare(output, checkpoint, generation, retirement, retirement_sha,
     plan['commands'] = {role: commands(plan, role) for role in profiles()}
     validate(plan)
     output.mkdir(parents=False)
-    dump(output / 'plan.json', plan)
+    # Full SDK/tree witnesses repeat long paths. Persist every binding without
+    # pretty-print padding; metadata must not consume the reserved build budget.
+    with (output / 'plan.json').open('x') as stream:
+        json.dump(plan, stream, sort_keys=True, separators=(',', ':'))
+        stream.write('\n')
     return plan
 
 

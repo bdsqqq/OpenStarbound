@@ -157,6 +157,8 @@ class BuilderTests(unittest.TestCase):
         def run(argv, cwd, env, output, plan):
             calls.append((argv, str(cwd), env))
             if fail:
+                if isinstance(fail, BaseException):
+                    raise fail
                 raise ValueError('SYNTHETIC FAILED CONFIGURE')
             if len(argv) > 2 and argv[1] == str(Path(b.bp.__file__).resolve()):
                 phase = argv[2]
@@ -197,6 +199,16 @@ class BuilderTests(unittest.TestCase):
         native = json.loads((root / 'reference/id-map-build.json').read_text())
         self.assertIsNone(native['archive'])
         self.assertIn('NOT game', native['limitations'][0])
+
+    def test_failed_allocation_retains_totals_and_interval(self):
+        observation = dict(outsideBytes=99, startedUTC='synthetic-start', finishedUTC='synthetic-end')
+        error = b.ad._allocation.AllocationError('synthetic allocation denial', observation)
+        with self.assertRaises(b.ad._allocation.AllocationError):
+            self.orchestrate(fail=error)
+        failure = json.loads((self.build / 'failure.json').read_text())
+        self.assertEqual(failure['allocationObservation'], observation)
+        self.assertEqual(failure['status'], 'FAILED_NOT_RESUMABLE')
+        self.assertFalse((self.build / 'completion.json').exists())
 
     def test_failed_phase_preserved_not_retried(self):
         with self.assertRaisesRegex(ValueError, 'SYNTHETIC FAILED'):

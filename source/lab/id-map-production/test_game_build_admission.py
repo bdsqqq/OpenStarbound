@@ -6,7 +6,10 @@ import gzip
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
+import stat
+from types import SimpleNamespace
 import sys
 import tempfile
 import unittest
@@ -100,6 +103,13 @@ class AdmissionTests(unittest.TestCase):
         self.assertTrue((self.output / 'plan.json').is_file())
         self.assertEqual(plan['compiledHeader']['path'], str(self.header))
         self.assertIn('not yet compiled', plan['compiledHeader']['role'])
+
+    def test_full_plan_is_persisted_compactly_without_dropping_bindings(self):
+        plan = self.prepare()
+        raw = (self.output / 'plan.json').read_text()
+        self.assertEqual(json.loads(raw), plan)
+        self.assertEqual(raw, json.dumps(plan, sort_keys=True, separators=(',', ':')) + '\n')
+        self.assertLess(len(raw), len(json.dumps(plan, sort_keys=True, indent=2)))
 
     def test_exact_real_source_selector_schema_read_only(self):
         # The only real repository-data test reads the source selector tuple.
@@ -426,21 +436,93 @@ class AdmissionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, '113 reference'):
             ORIGINAL_OBJECTS()
 
-    def test_actual_budget_math_fixed_caps_and_reservation(self):
-        root = self.root / 'build/behavior/id-map-combined-r1'
-        archive = self.root / 'build/migration-evidence-archive'
+    def budget_fixture(self):
         build = self.root / 'build'
-        original = ORIGINAL_BUDGET
-        for counts, accepted in (({archive: 0, build: 2 * 1024 ** 3, root: 0}, True),
-                                 ({archive: 0, build: 3 * 1024 ** 3, root: 0}, False),
-                                 ({archive: 17 * 1024 ** 3, build: 17 * 1024 ** 3, root: 0}, False),
-                                 ({archive: 0, build: 2 * 1024 ** 3, root: 2 * 1024 ** 3}, False)):
-            with self.subTest(counts=counts), patch.object(a, 'allocated', side_effect=lambda p: counts[p]):
-                if accepted:
-                    self.assertEqual(original(root)['newRootBytes'], 0)
+        build.mkdir(exist_ok=True)
+        root = build / 'behavior/id-map-combined-r1'
+        root.mkdir(parents=True)
+        archive = build / 'migration-evidence-archive'
+        archive.mkdir()
+        return root, archive
+
+    def test_budget_calls_actual_helper_and_preserves_old_output_keys(self):
+        root, archive = self.budget_fixture()
+        for directory in (root, archive, self.root / 'build'):
+            (directory / 'data').write_bytes(b'x' * 8192)
+        with patch.object(a._allocation, 'enforce', wraps=a._allocation.enforce) as enforce:
+            result = ORIGINAL_BUDGET(root)
+        enforce.assert_called_once_with(self.root, root)
+        observation = result['observation']
+        self.assertEqual(result['liveBytes'], observation['outsideBytes'] + observation['activeRootBytes'])
+        self.assertEqual(result['archiveBytes'], observation['archiveBytes'])
+        self.assertEqual(result['newRootBytes'], observation['activeRootBytes'])
+        self.assertTrue({'liveBytes', 'archiveBytes', 'newRootBytes'} <= result.keys())
+        self.assertGreater(result['newRootBytes'], 0)
+        self.assertTrue(observation['complete'])
+        self.assertLessEqual(observation['startedUTC'], observation['finishedUTC'])
+
+    def test_budget_cross_category_failure_propagates_actual_observation(self):
+        root, archive = self.budget_fixture()
+        data = root / 'data'
+        data.write_bytes(b'fixture')
+        os.link(data, archive / 'alias')
+        with self.assertRaisesRegex(a._allocation.AllocationError, 'crosses') as caught:
+            ORIGINAL_BUDGET(root)
+        detail = caught.exception.observation
+        self.assertFalse(detail['complete'])
+        self.assertEqual(set(detail['categories']), {'archiveBytes', 'activeRootBytes'})
+        self.assertIn('startedUTC', detail)
+        self.assertIn('finishedUTC', detail)
+
+    def test_budget_actual_enforcement_boundary_without_large_allocation(self):
+        root, _ = self.budget_fixture()
+        outside = a.CAPS['liveBytes'] - a.CAPS['newRootBytes']
+        # Synthetic lstat blocks drive the REAL partition/check/enforce chain;
+        # no multi-GiB allocation or cap override is needed for this boundary.
+        for growth in (0, 512):
+            info = SimpleNamespace(st_mode=stat.S_IFREG, st_blocks=(outside + growth) // 512,
+                                   st_dev=1, st_ino=1)
+            with self.subTest(growth=growth), patch.object(a._allocation, '_entries',
+                    return_value=iter([(self.root / 'build/outside', info)])):
+                if not growth:
+                    result = ORIGINAL_BUDGET(root)
+                    self.assertEqual(result['observation']['reservedLiveBytes'], a.CAPS['liveBytes'])
+                    self.assertEqual(result['newRootBytes'], 0)
                 else:
-                    with self.assertRaises(ValueError):
-                        original(root)
+                    with self.assertRaisesRegex(a._allocation.AllocationError, 'reservation') as caught:
+                        ORIGINAL_BUDGET(root)
+                    self.assertEqual(caught.exception.observation['outsideBytes'], outside + growth)
+                    self.assertTrue(caught.exception.observation['complete'])
+
+    def test_budget_helper_failure_precedes_prepare_output_and_witness(self):
+        self.budget.side_effect = ORIGINAL_BUDGET
+        error = a._allocation.AllocationError('fixture denied', {'complete': False})
+        with patch.object(a._allocation, 'enforce', side_effect=error) as enforce:
+            with self.assertRaises(a._allocation.AllocationError) as caught:
+                self.prepare()
+        self.assertIs(caught.exception, error)
+        enforce.assert_called_once_with(self.root, a.build_root(1))
+        self.assertFalse(self.output.exists())
+        a.closure.assert_not_called()
+
+    def test_allocation_helper_is_explicitly_pinned_and_checked(self):
+        plan = self.prepare()
+        helper = Path(a._allocation.__file__).resolve()
+        self.assertEqual(plan['witness']['aliases'][str(helper)], a.physical(helper))
+        self.assertEqual(plan['witness']['files'][a.physical(helper)], a.sha(helper))
+        for value in (None, '0' * 64):
+            bad = copy.deepcopy(plan)
+            if value is None:
+                del bad['witness']['files'][a.physical(helper)]
+            else:
+                bad['witness']['files'][a.physical(helper)] = value
+            with self.subTest(value=value):
+                self.assert_invalid(bad, 'actual allocation helper')
+
+    def test_budget_rejects_helper_cap_drift(self):
+        with patch.object(a._allocation, 'CAPS', dict(a.CAPS, newRootBytes=1)):
+            with self.assertRaisesRegex(ValueError, 'fixed admission caps'):
+                ORIGINAL_BUDGET(a.build_root(1))
 
 
 ORIGINAL_RETIREMENT = a.check_retirement

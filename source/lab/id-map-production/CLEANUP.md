@@ -1,5 +1,32 @@
 # prebuild cleanup — not module completion
 
+## closed partial experiment, 2026-10-28 23:12 utc
+
+original648e remains failed/expired. before a new current-source experiment,
+1,006 files from its reference/candidate CMake product directories and reference
+bin directory, plus its one expired69MB admission, were conserved with the
+UNCHANGED existing archiver under its exclusive lock. every blob reconstructed
+before pruning; parent independently rechecked every entry and live complement.
+all1,079 protected files stayed unchanged, including original compact commands,
+eight successful phase receipts, root failure, canonical Rust archive and113
+original reference objects. no old receipt or deadline was rewritten.
+
+- closure `build/id-map-closed-run-retention-r1/closure.json`:
+  `7b3e696f393e4d31634be8d171c8fcb35aa3730508b854f1d8c4c6e34c2a4767`
+- product manifest `20261028-id-map-closed-partial-products-r1/manifest.json`:
+  `e23dd39535980c145a64d7b8b725d597dba434ba5eb21e67f00f482140dd9102`
+- expired-admission manifest `20261028-id-map-expired-admission-r1/manifest.json`:
+  `6458c4d60badc8f8ec15c9a9149ce4a550efa025d80f0cf6f9a2e54941a9f716`
+- completion `build/id-map-closed-run-retention-r1/completion.json`:
+  `4fd3f617ef7ed1073bb170596bcb0d1f889abeef8eb368988b8958fd26405b06`
+
+291,426,304 allocated bytes retired; archive grew33,411,072 within42,270,720
+bound. original live-path/inode/ctime/native-origin replay is UNAVAILABLE_ARCHIVED;
+bytes are data, not replacement source/SDK/tools. an unused full-tree proposal
+was narrowed BEFORE execution to keep compact evidence live. no current runnable
+migration pair remains. fresh generation2 must use current source, corrected
+disjoint accounting, unchanged caps/reservation and its own original deadline.
+
 ## old game pair, 2026-10-28 21:51 utc
 
 exactly the two old WeightedPool `bin/starbound` files were separately archived,

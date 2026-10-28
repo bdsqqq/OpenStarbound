@@ -30970,7 +30970,7 @@
     },
     {
       "path": "scripts/test_build_id_map_behavior_lab.py",
-      "sha256": "fc2e4bf173bb5be0bce1cda8292310b6d0ebfcac2df0a646b38e794ff32b48bc"
+      "sha256": "fd0e6a35bc041336e758b32540f37dfbd6ce9ca0a2bdaf24eeeacc42920d12c8"
     },
     {
       "path": "scripts/test_cleanup_migration_artifacts.py",
@@ -36298,7 +36298,7 @@
     },
     {
       "path": "source/lab/id-map-production/game_build_admission.py",
-      "sha256": "425b2af22837623c0682c2efe80929778ff0d60d565e8fcd387cbc619140921f"
+      "sha256": "ada9cf20328a4f8a823147fdf593c2f3e18f2d362934624625e27271e97002c0"
     },
     {
       "path": "source/lab/id-map-production/game_origin.py",
@@ -36310,7 +36310,7 @@
     },
     {
       "path": "source/lab/id-map-production/test_allocation.py",
-      "sha256": "ab535740623b55c69d602a24be709dda12ad170a37c86d93caa5b1b65b4eb917"
+      "sha256": "1a4e66c73794d7ede25055f444f40ccf9f4b2e3caba1517fde33887890ca8765"
     },
     {
       "path": "source/lab/id-map-production/test_cache_retention.py",
@@ -36318,7 +36318,7 @@
     },
     {
       "path": "source/lab/id-map-production/test_game_build_admission.py",
-      "sha256": "73ca010d78db34b85054466aab69642dab91d8c658290d2c374e962f3076d570"
+      "sha256": "77f0b187aec913df9cc3282bacb2dfe57e6335fa15fe72c41e1ec491a3c18053"
     },
     {
       "path": "source/lab/id-map-production/test_game_origin.py",

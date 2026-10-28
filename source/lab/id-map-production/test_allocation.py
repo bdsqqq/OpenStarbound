@@ -121,10 +121,22 @@ class AllocationTests(unittest.TestCase):
                 a.check(self.observation(**change))
 
     def test_known_old_subtractive_race_and_new_disjoint_invariant(self):
-        # Execute the actual old function with synthetic observations. This is a
-        # demonstrated susceptibility, NOT evidence of the historical incident.
-        path = Path(__file__).with_name('game_build_admission.py')
-        tree = ast.parse(path.read_text())
+        # Historical function fixture from pre-integration admission 425b…;
+        # keep the regression independent of the now-repaired live function.
+        # Synthetic observations demonstrate susceptibility, not incident cause.
+        path = '<historical subtractive allocation fixture>'
+        tree = ast.parse('''
+def check_budget(root):
+    archive = allocated(ROOT / 'build/migration-evidence-archive')
+    live = allocated(ROOT / 'build') - archive
+    current = allocated(root)
+    need(0 <= archive <= CAPS['archiveBytes'], 'fixed 16 GiB archive cap')
+    need(0 <= current <= CAPS['newRootBytes'] and 0 <= live <= CAPS['liveBytes'],
+         'fixed live/new-root cap')
+    need(live - current + CAPS['newRootBytes'] <= CAPS['liveBytes'],
+         'new-root reservation exceeds fixed 4 GiB live cap')
+    return dict(liveBytes=live, archiveBytes=archive, newRootBytes=current)
+''')
         fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'check_budget')
         outside = a.CAPS['liveBytes'] - a.CAPS['newRootBytes'] - 1024**2
         active_before, active_after = 2 * 1024**2, 0

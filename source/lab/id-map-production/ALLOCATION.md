@@ -26,3 +26,21 @@ original admission648e and its failed controller remain immutable and EXPIRED.
 this helper is NOT retroactively substituted into it. reference six and candidate
 two successful phases remain evidence, not a complete pair. no new native command
 or old-deadline renewal occurred; game qualification and all39 remain open.
+
+## fresh-admission integration
+
+following explicit user resumption, CURRENT `game_build_admission.py` calls this
+helper and requires its actual source hash in the fresh input witness. its legacy
+return keys remain compatible; additive `observation` carries direct totals and
+interval. build failure records retain allocation observations, including failures
+before subprocess creation. caps, reservation, flags and fresh-root rules remain
+unchanged. 91 hermetic checks pass (14 allocation,37 admission,17 builder,
+23 unchanged origin-reader tests). fresh plans serialize the COMPLETE witness
+compactly instead of persisting pretty-print padding; a round-trip test requires
+every binding to survive unchanged.
+
+this changes future experiments, not the expired648e procedure. compact original
+commands/receipts/failure remain live; closed native product directories and the
+large expired admission are conserved before a new current-source pair. both new
+backends use the same current Git-derived version through normal CMake, not an
+old forced identifier. no archived tools/source/SDK are executed as replacements.
