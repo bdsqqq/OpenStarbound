@@ -22382,6 +22382,46 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/id-map/edge_model.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/id-map/edge_run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/id-map/edge_verify.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/id-map/edges.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/id-map/map_bytes.py",
       "rule": "laboratories"
     },
@@ -22423,6 +22463,16 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/id-map/run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/id-map/test_edge_model.py",
       "rule": "laboratories"
     },
     {
@@ -35585,6 +35635,22 @@
       "sha256": "ff8b48f3931efedf8e5b19bc074b84a04f04329aedabbfd3eeb7b7b6ffeaad62"
     },
     {
+      "path": "source/lab/id-map/edge_model.py",
+      "sha256": "2c7f567934d28041c7688c90c5c65dd7d508c5292e6a62726b56ed1bd4ef336f"
+    },
+    {
+      "path": "source/lab/id-map/edge_run.py",
+      "sha256": "0fc7e4db37ab7511e6fb0ac26e912d4ca073515d1d95fea166fe2c49a357c52a"
+    },
+    {
+      "path": "source/lab/id-map/edge_verify.py",
+      "sha256": "7f85037f665b69844c4b3aebef1805e396bedcb5234fed75c5265de9b782de57"
+    },
+    {
+      "path": "source/lab/id-map/edges.cpp",
+      "sha256": "6a6d8e6d367e7efc52f08926e4c298dbea83a8bc6f01ef467a46fa7e4bca4567"
+    },
+    {
       "path": "source/lab/id-map/map_bytes.py",
       "sha256": "c13fcdbb6a5c8f09604252a9666aa11c74a6bc0abce8b3d5ab7de046ac61186e"
     },
@@ -35603,6 +35669,10 @@
     {
       "path": "source/lab/id-map/run.py",
       "sha256": "2ace96f0a36ce9b27790ce8f7358952c882f231ef6d6460c430531568e201fb7"
+    },
+    {
+      "path": "source/lab/id-map/test_edge_model.py",
+      "sha256": "10e473135cc84e1591a2ddb503e8eb39d41b3f0d5481c3afb7c80640e50c5f84"
     },
     {
       "path": "source/lab/id-map/test_map_bytes.py",
@@ -38123,7 +38193,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 571,
+      "oracle/harness": 576,
       "retain-tooling": 30,
       "retained-third-party": 296,
       "rust-candidate": 28,
@@ -38164,14 +38234,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 45,
-      "validation.oracles-harness": 600,
+      "validation.oracles-harness": 605,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2058,
+    "files": 2063,
     "modules": 39,
-    "no_direct_target": 952
+    "no_direct_target": 957
   }
 }
