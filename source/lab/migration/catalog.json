@@ -1789,6 +1789,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "tools.release",
+      "path": "scripts/test_build_id_map_behavior_lab.py",
+      "rule": "release-scripts"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "retain-tooling",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "tools.release",
       "path": "scripts/test_cleanup_migration_artifacts.py",
       "rule": "release-scripts"
     },
@@ -22702,6 +22712,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/id-map-production/game_build_admission.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/id-map-production/game_origin.py",
       "rule": "laboratories"
     },
@@ -22713,6 +22733,16 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/id-map-production/test_cache_retention.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/id-map-production/test_game_build_admission.py",
       "rule": "laboratories"
     },
     {
@@ -30859,6 +30889,10 @@
       "sha256": "15792866d691684843d42ad7ee87ada12ebbffc7cac10a40ceaaa71d3f57b8fb"
     },
     {
+      "path": "scripts/test_build_id_map_behavior_lab.py",
+      "sha256": "ab237ba725a395969a384f498f11be67225dabf0a25d184974f39a82ee1810a2"
+    },
+    {
       "path": "scripts/test_cleanup_migration_artifacts.py",
       "sha256": "431ebf748e78e75437fe5acef925319a2ea7b7d81d806c4c7a442701f7c8e451"
     },
@@ -36163,12 +36197,20 @@
       "sha256": "d2065e60473a6b9e0d795fe64fd07353aa3c1179f05a918a6dd14cd960b2d0ef"
     },
     {
+      "path": "source/lab/id-map-production/game_build_admission.py",
+      "sha256": "425b2af22837623c0682c2efe80929778ff0d60d565e8fcd387cbc619140921f"
+    },
+    {
       "path": "source/lab/id-map-production/game_origin.py",
       "sha256": "bc8620fdfef093a66288fc7098d0ce2fd6c78185d14ef0935d9b026ad7367c46"
     },
     {
       "path": "source/lab/id-map-production/test_cache_retention.py",
       "sha256": "5d6392cfc03e3a0478fee1273a14c3c2e89aa48e48a5b2469aa8d4e6e895caed"
+    },
+    {
+      "path": "source/lab/id-map-production/test_game_build_admission.py",
+      "sha256": "73ca010d78db34b85054466aab69642dab91d8c658290d2c374e962f3076d570"
     },
     {
       "path": "source/lab/id-map-production/test_game_origin.py",
@@ -38753,8 +38795,8 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 613,
-      "retain-tooling": 30,
+      "oracle/harness": 615,
+      "retain-tooling": 31,
       "retained-third-party": 296,
       "rust-candidate": 29,
       "test": 57
@@ -38793,15 +38835,15 @@
       "sessions.orchestration": 47,
       "sessions.persistence": 6,
       "tools.inactive": 21,
-      "tools.release": 45,
-      "validation.oracles-harness": 642,
+      "tools.release": 46,
+      "validation.oracles-harness": 644,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2103,
+    "files": 2106,
     "modules": 39,
-    "no_direct_target": 997
+    "no_direct_target": 1000
   }
 }
