@@ -49,8 +49,12 @@ cxx="$(/usr/bin/xcrun --find clang++)"
 ninja="$(command -v ninja)" || { printf '%s\n' 'missing ninja (run inside the build-tool Nix shell)' >&2; exit 2; }
 cmake="$(command -v cmake)"
 tool_args=()
-if [[ "$mode" == ttl-cache-combined ]]; then
-  admission_dir="${STAR_TTL_BUILD_ADMISSION%/*}"
+if [[ "$mode" == ttl-cache-combined || "$mode" == weighted-pool-combined ]]; then
+  if [[ "$mode" == weighted-pool-combined ]]; then
+    admission_dir="${STAR_WEIGHTED_POOL_BUILD_ADMISSION%/*}"
+  else
+    admission_dir="${STAR_TTL_BUILD_ADMISSION%/*}"
+  fi
   while IFS= read -r argument; do tool_args+=("$argument"); done < "$admission_dir/tool-args.txt"
   { IFS= read -r cmake; IFS= read -r ninja; IFS= read -r SDKROOT; } < "$admission_dir/launcher-paths.txt"
 fi
@@ -169,7 +173,7 @@ for backend in reference candidate; do
     # This generation consumes preinstalled offline dependencies only.
     extra+=("-DVCPKG_MANIFEST_INSTALL=OFF")
   fi
-  if [[ "$mode" == ttl-cache-combined ]]; then extra+=("${tool_args[@]}"); fi
+  if [[ "$mode" == ttl-cache-combined || "$mode" == weighted-pool-combined ]]; then extra+=("${tool_args[@]}"); fi
   # Snapshot before configuration: a successful stale executable is not proof
   # that the current source was compiled. Seal only after this build succeeds.
   provenance="$root/source/lab/behavior/build_provenance.py"

@@ -25474,6 +25474,16 @@
     {
       "cmake_membership": [],
       "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-production/game_build_admission.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
       "language": "c/c++",
       "line": 1,
       "membership_status": "no-direct-target-found",
@@ -25539,6 +25549,16 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/weighted-pool-production/scene_syntax.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-production/test_game_build_admission.py",
       "rule": "laboratories"
     },
     {
@@ -36573,6 +36593,10 @@
       "sha256": "9238964ad914da9c5661d1d8361d6bdf03f2429b86052c35bf51c1d3c4fbc904"
     },
     {
+      "path": "source/lab/weighted-pool-production/game_build_admission.py",
+      "sha256": "550febf006239977234d32b7d0e79113830b1685d00e63314eb8ae53b71c45fe"
+    },
+    {
       "path": "source/lab/weighted-pool-production/integration.cpp",
       "sha256": "91e21f54de2dabaa2f639989be4debcd0af7a7e2a1f937d3520b4868ffcf0950"
     },
@@ -36599,6 +36623,10 @@
     {
       "path": "source/lab/weighted-pool-production/scene_syntax.py",
       "sha256": "c361bdd25a797e571cc57e22913d35daf85387bbe6ec01a72efd6c9319b8f1ce"
+    },
+    {
+      "path": "source/lab/weighted-pool-production/test_game_build_admission.py",
+      "sha256": "00a1bc0544aee7bc1f93d42918c90f51ecc40aa5756970bb5a63082c8afa7c42"
     },
     {
       "path": "source/lab/weighted-pool-production/verify.py",
@@ -37787,7 +37815,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 549,
+      "oracle/harness": 551,
       "retain-tooling": 28,
       "retained-third-party": 296,
       "rust-candidate": 28,
@@ -37828,14 +37856,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 43,
-      "validation.oracles-harness": 578,
+      "validation.oracles-harness": 580,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2034,
+    "files": 2036,
     "modules": 39,
-    "no_direct_target": 928
+    "no_direct_target": 930
   }
 }
