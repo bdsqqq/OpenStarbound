@@ -31,6 +31,44 @@ SOURCE_SUFFIXES = {".cpp", ".hpp", ".cc", ".hh", ".c", ".h", ".mm", ".rs", ".tom
 ROOT_FILES = {"CMakeLists.txt", "CMakePresets.json", "CMakeUserPresets.json", "vcpkg.json", "vcpkg-configuration.json", "flake.nix", "flake.lock"}
 
 
+# Scene24 admission only; historical scene receipts retain their original schema.
+WEIGHTED_POOL_SELECTORS = tuple('STAR_USE_RUST_' + name for name in (
+    'LIGHTING', 'BLOCKS_ALONG_LINE', 'LINE_QUERY', 'ENCODE', 'SHA256', 'VLQ',
+    'BYTES', 'UNICODE', 'SHELL', 'JSON_PATH', 'ASSET_PATH', 'RANDOM_MWC',
+    'JSON_PATCH', 'TEXT_SCAN', 'COMPRESSION', 'ZSTD', 'OPTION_PARSER',
+    'HOST_ADDRESS', 'DATA_STREAM', 'BUFFER', 'IO_DEVICE', 'BYTE_ARRAY',
+    'STRING_VIEW', 'FILE', 'PATH_EMBED', 'LRU_CACHE', 'TTL_CACHE', 'WEIGHTED_POOL'))
+WEIGHTED_POOL_SOURCES = (
+    'source/client/StarClientApplication.cpp', 'source/application/StarBehaviorLab.hpp',
+    'source/core/StarWeightedPool.hpp', 'source/core/StarWeightedPoolHost.hpp',
+    'source/core/StarRustWeightedPool.h', 'source/rust/ffi/src/weighted_pool.rs',
+    'source/game/StarTreasure.cpp', 'source/game/StarItemDatabase.cpp',
+    'source/game/StarItemDescriptor.cpp', 'source/game/scripting/StarRootLuaBindings.cpp')
+
+
+def validate_weighted_pool_origin(proof: dict, backend: str) -> None:
+    """Require complete selector/source origins without relabeling older builds."""
+    import re
+    if backend not in ('native', 'rust'):
+        raise ProvenanceError('WeightedPool invalid backend')
+    if (not isinstance(proof, dict) or proof.get('schema') != SCHEMA or not isinstance(proof.get('binary'), str)
+            or not proof['binary'] or not isinstance(proof.get('binary_sha256'), str)
+            or re.fullmatch(r'[0-9a-f]{64}', proof['binary_sha256']) is None):
+        raise ProvenanceError('WeightedPool binary origin missing')
+    build = proof.get('build_identity')
+    cache = build.get('cache') if isinstance(build, dict) else None
+    if not isinstance(cache, dict) or any(cache.get(key) not in ('ON', 'OFF') for key in WEIGHTED_POOL_SELECTORS):
+        raise ProvenanceError('WeightedPool complete 28-selector configuration missing')
+    for key in WEIGHTED_POOL_SELECTORS:
+        expected = 'ON' if backend == 'rust' and key != 'STAR_USE_RUST_LINE_QUERY' else 'OFF'
+        if cache[key] != expected:
+            raise ProvenanceError('WeightedPool combined backend/selector mismatch: ' + key)
+    sources = proof.get('source_files', {})
+    if not isinstance(sources, dict) or any(not isinstance(sources.get(key), str)
+           or re.fullmatch(r'[0-9a-f]{64}', sources[key]) is None for key in WEIGHTED_POOL_SOURCES):
+        raise ProvenanceError('WeightedPool production source origin missing')
+
+
 def _hash(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:

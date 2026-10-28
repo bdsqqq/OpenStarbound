@@ -20932,6 +20932,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/test_weighted_pool_proof.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/behavior/test_zstd_proof.py",
       "rule": "laboratories"
     },
@@ -20983,6 +20993,16 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/behavior/vlq_proof.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/weighted_pool_proof.py",
       "rule": "laboratories"
     },
     {
@@ -25478,6 +25498,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-production/native_link.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/weighted-pool-production/probe.cpp",
       "rule": "laboratories"
     },
@@ -25508,7 +25538,27 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-production/scene_syntax.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/weighted-pool-production/verify.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-production/verify_scene.py",
       "rule": "laboratories"
     },
     {
@@ -30164,7 +30214,7 @@
     },
     {
       "path": "source/application/StarBehaviorLab.hpp",
-      "sha256": "8a32acc85b447c3d6c5204a258c9b026ee355450b00a38af6ff66544b507f641"
+      "sha256": "9adf1de3f2e48d557e2a98e838fb8a53662a0f06ff13c1f94cd033b6a9032233"
     },
     {
       "path": "source/application/StarDesktopService_pc_steam.cpp",
@@ -30580,7 +30630,7 @@
     },
     {
       "path": "source/client/StarClientApplication.cpp",
-      "sha256": "f5a1bb9101660184eb7dfe48271aba92b39c96d859788f1f40a3706672b2d9be"
+      "sha256": "37c2c7818eb996e0f954cb0db3310257adc0e86b67dbab68c49d655d1a15134b"
     },
     {
       "path": "source/client/StarClientApplication.hpp",
@@ -34504,7 +34554,7 @@
     },
     {
       "path": "source/lab/behavior/behavior_lab.py",
-      "sha256": "8c132adf822bc5c8fed0849cf524544ce4c3e2b8003e5666e05b90eeb26a6b9f"
+      "sha256": "f59670736610be310b6b591b78cc7e4ade2e3c9bfb20b9ba5b6b53eabc05fe32"
     },
     {
       "path": "source/lab/behavior/btree_padding.py",
@@ -34516,7 +34566,7 @@
     },
     {
       "path": "source/lab/behavior/build_provenance.py",
-      "sha256": "a597fc1b7d1180153f307bd325708889228d805c04d420c01c43f7fdeac44ff1"
+      "sha256": "c400ea1a47aa9a5d2b6ee2512996056beb26046da2c391dd2b030df82ed21924"
     },
     {
       "path": "source/lab/behavior/byte_array_proof.py",
@@ -34668,11 +34718,11 @@
     },
     {
       "path": "source/lab/behavior/test_lru_proof.py",
-      "sha256": "c7cad75961b2a3584d93ab6eab72bb5066ebeb3acc3e0f40c0414f7ccce3ca5b"
+      "sha256": "6630e5794a371e1f0ba5a91c5ebbd2f2a5845e4e509cc5c92a5b5d7b020e87cb"
     },
     {
       "path": "source/lab/behavior/test_native_scenario_contract.py",
-      "sha256": "272513714601dba6ff13ce6b55e5f08a426c55636067c48553730007c1ef0fd9"
+      "sha256": "67c8df97ee69a4d6f79c8b8afa934f83192fb5e25f9b09270447397d40653391"
     },
     {
       "path": "source/lab/behavior/test_option_parser_proof.py",
@@ -34704,7 +34754,7 @@
     },
     {
       "path": "source/lab/behavior/test_ttl_proof.py",
-      "sha256": "c7d14fd395a0fc23562a38cf739a2ce75b52cc0a3ca4e23da3cad427ae4c31f9"
+      "sha256": "9294cb9ed6603a707defd84c797457a0bdb85085ae3c06ca6afcb48aee82818e"
     },
     {
       "path": "source/lab/behavior/test_unicode_proof.py",
@@ -34713,6 +34763,10 @@
     {
       "path": "source/lab/behavior/test_vlq_proof.py",
       "sha256": "d65d3ec6a42932dd318d4c66f56623ca7adee0d0b5948963ff6ef0db4d55cecd"
+    },
+    {
+      "path": "source/lab/behavior/test_weighted_pool_proof.py",
+      "sha256": "7a646f5da81a90ba76fd8ff52b9f728d9471b76dd5513325f07e594a438146aa"
     },
     {
       "path": "source/lab/behavior/test_zstd_proof.py",
@@ -34737,6 +34791,10 @@
     {
       "path": "source/lab/behavior/vlq_proof.py",
       "sha256": "f037a11621219541ebadd087a8375edee955c6256f4d2d83d1353b9ab54f30a2"
+    },
+    {
+      "path": "source/lab/behavior/weighted_pool_proof.py",
+      "sha256": "801976a4257464ce1fc25833ab2af8c1f0564f080212b4c173f880a7b9ec4d4f"
     },
     {
       "path": "source/lab/behavior/zstd_image_lifetime_probe.cpp",
@@ -36523,6 +36581,10 @@
       "sha256": "e39e1307d139954814eb42418d038aafc1bd8239c10f9f2ccdd9da7b1be99533"
     },
     {
+      "path": "source/lab/weighted-pool-production/native_link.cpp",
+      "sha256": "3e494c19e1252feca515186f98bf72d09ea924a2a2d6b35f7f7c664c21e18fd3"
+    },
+    {
       "path": "source/lab/weighted-pool-production/probe.cpp",
       "sha256": "171dcb49e5a332d46a6029784db2d588a51a62652cfb709dd45b3c6f8097231d"
     },
@@ -36535,8 +36597,16 @@
       "sha256": "f6e30a73b6f4d1b508255b68a665b38db93347170d760e908697ffa283a953bb"
     },
     {
+      "path": "source/lab/weighted-pool-production/scene_syntax.py",
+      "sha256": "c361bdd25a797e571cc57e22913d35daf85387bbe6ec01a72efd6c9319b8f1ce"
+    },
+    {
       "path": "source/lab/weighted-pool-production/verify.py",
       "sha256": "b38ba923507de77cb21102b953ab215adb79fd6ab7b7948310f42ade352a7b66"
+    },
+    {
+      "path": "source/lab/weighted-pool-production/verify_scene.py",
+      "sha256": "eb8f516aa51b22c33141b0e1a7af1a2011ee2cdd0f56487996d00ba9c2c522c1"
     },
     {
       "path": "source/lab/weighted-pool/StarWeightedPool.original.hpp",
@@ -37717,7 +37787,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 544,
+      "oracle/harness": 549,
       "retain-tooling": 28,
       "retained-third-party": 296,
       "rust-candidate": 28,
@@ -37758,14 +37828,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 43,
-      "validation.oracles-harness": 573,
+      "validation.oracles-harness": 578,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2029,
+    "files": 2034,
     "modules": 39,
-    "no_direct_target": 923
+    "no_direct_target": 928
   }
 }

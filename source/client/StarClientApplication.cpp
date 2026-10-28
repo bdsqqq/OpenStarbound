@@ -24,6 +24,9 @@
 #include "StarPathEmbedLab.hpp"
 #include "StarLruCacheLab.hpp"
 #include "StarTtlCacheLab.hpp"
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+#include "StarRustWeightedPool.h"
+#endif
 #include "StarTenantDatabase.hpp"
 #include "StarLua.hpp"
 #include "StarRootLuaBindings.hpp"
@@ -604,6 +607,10 @@ void ClientApplication::render() {
           && BehaviorLab::ttlReady(m_behaviorStage))
         BehaviorLab::prepareTtlFrame(m_renderData, m_behaviorStage);
 
+      if (BehaviorLab::weightedPoolScene() && m_behaviorReady
+          && !BehaviorLab::hasPendingFrame() && !m_renderData.isFullbright)
+        BehaviorLab::prepareWeightedPoolFrame(m_renderData, m_behaviorStage);
+
       if (BehaviorLab::enabled() && m_behaviorStringViewRoom && m_behaviorReady
           && !BehaviorLab::hasPendingFrame() && !m_renderData.isFullbright) {
         // The immutable overlay PNG follows the ordinary world image path.
@@ -685,6 +692,10 @@ void ClientApplication::render() {
           && !BehaviorLab::hasPendingFrame() && !m_renderData.isFullbright
           && BehaviorLab::ttlFramePrepared(m_behaviorStage))
         BehaviorLab::renderTtlLabel(*m_guiContext);
+      if (BehaviorLab::weightedPoolScene() && m_behaviorReady
+          && !BehaviorLab::hasPendingFrame() && !m_renderData.isFullbright
+          && BehaviorLab::weightedPoolFramePrepared(m_behaviorStage))
+        BehaviorLab::renderWeightedPoolLabel(*m_guiContext);
       if (m_behaviorTextScanRoom)
         renderBehaviorTextScanFrame();
       if (m_behaviorStringViewRoom)
@@ -1714,6 +1725,105 @@ Json BehaviorLab::ttlProof() {
   return ttlConsumer().proof;
 }
 
+namespace {
+struct WeightedPoolConsumer {
+  int stage = -1;
+  Json proof;
+};
+WeightedPoolConsumer& weightedPoolConsumer() { static WeightedPoolConsumer value; return value; }
+uint64_t weightedPoolCounter(unsigned mode, unsigned stage) {
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+  return sb_wp_count(mode, stage);
+#else
+  return 0;
+#endif
+}
+Json weightedPoolCounters() {
+  JsonArray modes;
+  for (unsigned mode = 0; mode < 19; ++mode) {
+    JsonArray stages;
+    for (unsigned stage = 0; stage < 4; ++stage)
+      stages.append(strf("{:016x}", weightedPoolCounter(mode, stage)));
+    modes.append(std::move(stages));
+  }
+  return modes;
+}
+}
+bool BehaviorLab::weightedPoolScene() {
+  return enabled() && configuration().getString("scenario", "") == "weighted-pool-room";
+}
+bool BehaviorLab::weightedPoolFramePrepared(unsigned stage) {
+  return weightedPoolConsumer().stage == int(stage);
+}
+void BehaviorLab::prepareWeightedPoolFrame(WorldRenderData& renderData, unsigned stage) {
+  lruRequire(weightedPoolScene() && stage < 3 && !renderData.isFullbright,
+      "BehaviorLab: invalid WeightedPool scene");
+  auto& consumer = weightedPoolConsumer();
+  if (!weightedPoolFramePrepared(stage)) {
+    lruRequire(int(stage) == consumer.stage + 1, "BehaviorLab: skipped WeightedPool stage");
+    auto assets = Root::singleton().assets();
+    auto engine = LuaEngine::create();
+    auto context = engine->createContext();
+    context.setCallbacks("root", LuaBindings::makeRootCallbacks());
+    context.load(*assets->bytes("/behaviorlab/weighted-consumer.lua"), "/behaviorlab/weighted-consumer.lua");
+    // Warm lazy Root databases before the bracket: constructor/add observations
+    // are startup work, NOT phase coverage. Do not sample treasure here.
+    Root::singleton().treasureDatabase();
+    Root::singleton().itemDatabase();
+    // Main Lua-calling-thread ABI counters bracket ONLY the real callback run.
+    auto before = weightedPoolCounters();
+    Json visual = context.invokePath<Json>("proof", stage);
+    auto after = weightedPoolCounters();
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+    char const* backend = "rust";
+    unsigned nonfiltered = stage == 1 ? 2 : 3;
+    for (unsigned mode : {9u, 12u, 17u, 18u}) {
+      auto lo = std::stoull(before.get(mode).getString(0).utf8(), nullptr, 16);
+      auto hi = std::stoull(after.get(mode).getString(0).utf8(), nullptr, 16);
+      lruRequire(uint64_t(hi - lo) >= (mode == 9 ? nonfiltered + 1 : 3 * nonfiltered),
+          "BehaviorLab: normal treasure WeightedPool root minimum missing");
+    }
+#else
+    char const* backend = "native";
+#endif
+    auto color = visual.getArray("color");
+    lruRequire(color.size() == 4, "BehaviorLab: missing WeightedPool color");
+    auto image = assets->image(visual.getString("imagePath"));
+    lruRequire(image->size() == Vec2U(16, 16), "BehaviorLab: WeightedPool image dimensions");
+    Vec4B expected(color[0].toUInt(), color[1].toUInt(), color[2].toUInt(), color[3].toUInt());
+    for (unsigned y = 0; y < 16; ++y)
+      for (unsigned x = 0; x < 16; ++x)
+        lruRequire(image->get(x, y) == expected, "BehaviorLab: WeightedPool Assets color differs");
+    consumer.proof = JsonObject{{"version", 1}, {"backend", backend},
+        {"selector", "STAR_USE_RUST_WEIGHTED_POOL"}, {"scopeThread", "lua-calling-thread"},
+        {"phase", stage}, {"countersBefore", before}, {"countersAfter", after}, {"visual", visual},
+        {"consumer", "normal-root.createTreasure-TreasureDatabase-WeightedPool-ItemDatabase"},
+        {"imageConsumer", "normal-Assets-WorldPainter"}, {"labelConsumer", "normal-Font-TextPainter"},
+        {"configuration", configuration()}};
+    consumer.stage = int(stage);
+  }
+  lruRequire(weightedPoolFramePrepared(stage), "BehaviorLab: WeightedPool overlay not prepared");
+  auto drawable = Drawable::makeImage(consumer.proof.get("visual").getString("imagePath"),
+      2.0f / TilePixels, true, Vec2F(64, 48));
+  drawable.fullbright = true;
+  renderData.foregroundOverlays.append(std::move(drawable));
+}
+void BehaviorLab::renderWeightedPoolLabel(GuiContext& gui) {
+  auto const& proof = weightedPoolConsumer().proof;
+  lruRequire(weightedPoolScene() && !proof.isNull(), "BehaviorLab: missing WeightedPool Font proof");
+  gui.clearTextStyle(); gui.setDefaultFont(); gui.setFontSize(8, 1.0f);
+  gui.setFontColor(Vec4B(255, 255, 255, 255)); gui.setFontMode(FontMode::Normal);
+  gui.setFontProcessingDirectives("");
+  gui.renderText(proof.get("visual").getString("label"),
+      TextPositioning(Vec2F(gui.windowSize()) * 0.5f + Vec2F(-35, 70)));
+  gui.clearTextStyle();
+}
+Json BehaviorLab::weightedPoolProof() {
+  lruRequire(weightedPoolScene() && !weightedPoolConsumer().proof.isNull(),
+      "BehaviorLab: missing WeightedPool proof");
+  return weightedPoolConsumer().proof;
+}
+
 void ClientApplication::validateBehaviorStorage() {
   auto const& config = BehaviorLab::configuration();
   auto scenario = config.getString("scenario", "lighting-room");
@@ -1722,7 +1832,7 @@ void ClientApplication::validateBehaviorStorage() {
       && scenario != "unicode-room" && scenario != "shell-room" && scenario != "jsonpath-room" && scenario != "assetpath-room"
       && scenario != "random-room" && scenario != "jsonpatch-room" && scenario != "text-room"
       && scenario != "compression-room" && scenario != "zstd-room" && scenario != "option-parser-room"
-      && scenario != "host-address-room" && scenario != "datastream-room" && scenario != "buffer-room" && scenario != "stringview-room" && scenario != "path-embed-room" && scenario != "lru-room" && scenario != "ttl-room")
+      && scenario != "host-address-room" && scenario != "datastream-room" && scenario != "buffer-room" && scenario != "stringview-room" && scenario != "path-embed-room" && scenario != "lru-room" && scenario != "ttl-room" && scenario != "weighted-pool-room")
     throw StarException("BehaviorLab: unsupported scenario");
   m_behaviorRaycastRoom = scenario == "raycast-room";
   m_behaviorEncodingRoom = scenario == "encoding-room";
@@ -1865,7 +1975,7 @@ void ClientApplication::updateBehaviorScenario() {
       return;
     if (m_behaviorStage == 2) {
       Logger::info("BehaviorLab: {} completed (three acknowledged world frames)",
-          BehaviorLab::ttlScene() ? "ttl-room" : m_behaviorLruRoom ? "lru-room" : m_behaviorPathEmbedRoom ? "path-embed-room" : m_behaviorStringViewRoom ? "stringview-room" : m_behaviorBufferRoom ? "buffer-room" : m_behaviorDataStreamRoom ? "datastream-room" : m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
+          BehaviorLab::weightedPoolScene() ? "weighted-pool-room" : BehaviorLab::ttlScene() ? "ttl-room" : m_behaviorLruRoom ? "lru-room" : m_behaviorPathEmbedRoom ? "path-embed-room" : m_behaviorStringViewRoom ? "stringview-room" : m_behaviorBufferRoom ? "buffer-room" : m_behaviorDataStreamRoom ? "datastream-room" : m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
       m_behaviorPhase = 5;
       appController()->quit();
       return;
@@ -4205,6 +4315,8 @@ void ClientApplication::renderBehaviorScenario() {
     return;
   // A deadline can cross BETWEEN overlay preparation and framebuffer queuing.
   // A second clock read must not authorize capturing the previous phase's proof.
+  if (BehaviorLab::weightedPoolScene() && !BehaviorLab::weightedPoolFramePrepared(m_behaviorStage))
+    return;
   if (BehaviorLab::ttlScene() && !BehaviorLab::ttlFramePrepared(m_behaviorStage))
     return;
   auto world = m_universeClient->worldClient();
@@ -4242,7 +4354,7 @@ void ClientApplication::renderBehaviorScenario() {
       {"layout", "row-major-rgb-f32-bits"}, {"bits", std::move(lightmapBits)}};
   Json metadata = JsonObject{
       {"lightingDiagnostics", std::move(lightmapDiagnostic)},
-      {"scenario", BehaviorLab::ttlScene() ? "ttl-room" : m_behaviorLruRoom ? "lru-room" : m_behaviorPathEmbedRoom ? "path-embed-room" : m_behaviorStringViewRoom ? "stringview-room" : m_behaviorBufferRoom ? "buffer-room" : m_behaviorDataStreamRoom ? "datastream-room" : m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
+      {"scenario", BehaviorLab::weightedPoolScene() ? "weighted-pool-room" : BehaviorLab::ttlScene() ? "ttl-room" : m_behaviorLruRoom ? "lru-room" : m_behaviorPathEmbedRoom ? "path-embed-room" : m_behaviorStringViewRoom ? "stringview-room" : m_behaviorBufferRoom ? "buffer-room" : m_behaviorDataStreamRoom ? "datastream-room" : m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
       {"worldState", JsonObject{
           {"worldId", printWorldId(m_universeClient->clientContext()->playerWorldId())},
           {"worldSize", jsonFromVec2U(world->geometry().size())},
@@ -4393,6 +4505,8 @@ void ClientApplication::renderBehaviorScenario() {
     metadata = metadata.set("lruProof", BehaviorLab::lruProof());
   if (BehaviorLab::ttlScene())
     metadata = metadata.set("ttlProof", BehaviorLab::ttlProof());
+  if (BehaviorLab::weightedPoolScene())
+    metadata = metadata.set("weightedPoolProof", BehaviorLab::weightedPoolProof());
   BehaviorLab::queueFrame(m_behaviorCapture, std::move(metadata));
   m_behaviorReady = false;
   m_behaviorPhase = 4;

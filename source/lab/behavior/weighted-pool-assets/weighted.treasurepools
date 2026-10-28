@@ -1,0 +1,25 @@
+{
+  "behaviorWeightedRepeat": [[0, {
+    "poolRounds": 2, "allowDuplication": true,
+    "pool": [
+      {"weight": 0, "item": ["behaviorweightedtoken", 1, {"tag": "zero"}]},
+      {"weight": -1, "item": ["behaviorweightedtoken", 1, {"tag": "negative"}]},
+      {"weight": 1, "item": ["behaviorweightedtoken", 1, {"tag": "kept"}]}
+    ]
+  }]],
+  "behaviorWeightedUnique": [[0, {
+    "poolRounds": 2, "allowDuplication": false,
+    "pool": [
+      {"weight": 0, "item": ["behaviorweightedtoken", 1, {"tag": "zero"}]},
+      {"weight": -1, "item": ["behaviorweightedtoken", 1, {"tag": "negative"}]},
+      {"weight": 1, "item": ["behaviorweightedtoken", 1, {"tag": "kept"}]}
+    ]
+  }]],
+  "behaviorWeightedFiltered": [[0, {
+    "poolRounds": 2, "allowDuplication": true,
+    "pool": [
+      {"weight": 0, "item": ["behaviorweightedtoken", 1, {"tag": "zero"}]},
+      {"weight": -1, "item": ["behaviorweightedtoken", 1, {"tag": "negative"}]}
+    ]
+  }]]
+}

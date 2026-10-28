@@ -1,0 +1,10 @@
+{
+  "itemName": "behaviorweightedtoken",
+  "price": 0,
+  "rarity": "Common",
+  "category": "craftingMaterial",
+  "inventoryIcon": "/behaviorlab/weighted-white.png",
+  "description": "Issue-scoped WeightedPool normal treasure-route fixture.",
+  "shortdescription": "Weighted fixture token",
+  "maxStack": 1000
+}

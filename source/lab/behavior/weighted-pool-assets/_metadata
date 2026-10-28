@@ -1,0 +1,6 @@
+{
+  "name": "behavior-weighted-pool-fixture",
+  "friendlyName": "Issue-scoped WeightedPool behavior fixture",
+  "version": "1",
+  "description": "Only loaded by weighted-pool-room. Script-free item, literal treasure pools and normal Root Lua consumer."
+}

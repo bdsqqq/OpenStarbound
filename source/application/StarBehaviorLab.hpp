@@ -31,6 +31,11 @@ public:
   static void prepareTtlFrame(WorldRenderData& renderData, unsigned stage);
   static void renderTtlLabel(GuiContext& gui);
   static Json ttlProof();
+  static bool weightedPoolScene();
+  static bool weightedPoolFramePrepared(unsigned stage);
+  static void prepareWeightedPoolFrame(WorldRenderData& renderData, unsigned stage);
+  static void renderWeightedPoolLabel(GuiContext& gui);
+  static Json weightedPoolProof();
 };
 
 }

@@ -197,7 +197,7 @@ class TtlModel(unittest.TestCase):
         client = (root / 'source/client/StarClientApplication.cpp').read_text()
         self.assertIn('const_cast<TenantDatabase&>(*Root::singleton().tenantDatabase()).cleanup()', client)
         self.assertIn('entry.getInt("stamp") + last.get("after").getInt("ttl") + 1', client)
-        self.assertEqual(lab.SCENARIOS[-1], 'ttl-room')
+        self.assertEqual(lab.SCENARIOS[22], 'ttl-room')
         for scenario in lab.SCENARIOS:
             self.assertEqual('ttl-fixture' in lab.asset_overlays(scenario), scenario == 'ttl-room')
         self.assertEqual(json.loads((root / 'source/lab/behavior/newttl-assets/tenants/behavior-ttl-a.tenant').read_text()), p.META)

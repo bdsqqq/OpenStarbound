@@ -40,6 +40,7 @@ import zstd_proof
 import path_embed_proof
 import lru_proof
 import ttl_proof
+import weighted_pool_proof
 import option_parser_proof
 import host_address_proof
 import data_stream_proof
@@ -53,7 +54,7 @@ ASSET_OVERLAYS = {
     "behavior-fixture": ROOT / "source/lab/behavior/assets",
 }
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,95}\Z")
-SCENARIOS = ("lighting-room", "raycast-room", "encoding-room", "sha256-room", "vlq-room", "bytes-room", "unicode-room", "shell-room", "jsonpath-room", "assetpath-room", "random-room", "jsonpatch-room", "text-room", "compression-room", "zstd-room", "option-parser-room", "host-address-room", "datastream-room", "buffer-room", "stringview-room", "path-embed-room", "lru-room", "ttl-room")
+SCENARIOS = ("lighting-room", "raycast-room", "encoding-room", "sha256-room", "vlq-room", "bytes-room", "unicode-room", "shell-room", "jsonpath-room", "assetpath-room", "random-room", "jsonpatch-room", "text-room", "compression-room", "zstd-room", "option-parser-room", "host-address-room", "datastream-room", "buffer-room", "stringview-room", "path-embed-room", "lru-room", "ttl-room", "weighted-pool-room")
 MAX_PIXELS = 16_777_216
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
 
@@ -277,6 +278,11 @@ def semantic_world_state(receipt: dict) -> dict:
             native["compressionProof"] = compression_proof.validate(receipt)
         except ValueError as error:
             raise LabError(str(error)) from error
+    if receipt.get("scenario") == "weighted-pool-room":
+        try:
+            native["weightedPoolProof"] = weighted_pool_proof.observation(receipt)
+        except ValueError as error:
+            raise LabError(str(error)) from error
     if receipt.get("scenario") == "ttl-room":
         try:
             native["ttlProof"] = ttl_proof.observation(receipt)
@@ -424,6 +430,11 @@ def captures(directory: Path) -> dict:
                 compression_proof.visible(frame, receipt)
             except ValueError as error:
                 raise LabError(str(error)) from error
+        if receipt["scenario"] == "weighted-pool-room":
+            try:
+                weighted_pool_proof.visible(frame, receipt)
+            except ValueError as error:
+                raise LabError(str(error)) from error
         if receipt["scenario"] == "ttl-room":
             try:
                 ttl_proof.visible(frame, receipt)
@@ -470,7 +481,12 @@ def captures(directory: Path) -> dict:
         result[name] = {"receipt": receipt, "png": pngs[name], "dimensions": list(frame.size),
                         "pngSha256": sha(pngs[name]), "receiptSha256": sha(receipts[name]),
                         "pixelsSha256": hashlib.sha256(frame.tobytes()).hexdigest()}
-    if scenarios == {"ttl-room"}:
+    if scenarios == {"weighted-pool-room"}:
+        try:
+            weighted_pool_proof.validate_sequence(result, SCENE_FIELDS)
+        except ValueError as error:
+            raise LabError(str(error)) from error
+    elif scenarios == {"ttl-room"}:
         try:
             ttl_proof.validate_sequence(result, SCENE_FIELDS)
         except ValueError as error:
@@ -779,6 +795,19 @@ def validated(directory: Path) -> tuple[dict, dict]:
             or proof.get("binary") != manifest["binary"]["path"]
             or not isinstance(proof.get("source_files"), dict) or not proof["source_files"]):
         raise LabError(f"missing source-bound build identity: {directory}")
+    if any(frame["receipt"]["scenario"] == "weighted-pool-room" for frame in frames.values()):
+        backend = next(iter(frames.values()))["receipt"]["weightedPoolProof"]["backend"]
+        try:
+            build_provenance.validate_weighted_pool_origin(proof, backend)
+        except build_provenance.ProvenanceError as error:
+            raise LabError(str(error)) from error
+        validate_process_binding(directory, manifest)
+        actual_config = Path(manifest["configuration"]["path"])
+        if identity(actual_config) != manifest["configuration"]:
+            raise LabError("WeightedPool capture configuration identity changed")
+        for frame in frames.values():
+            if not weighted_pool_proof.same(frame["receipt"]["weightedPoolProof"]["configuration"], load(actual_config)):
+                raise LabError("WeightedPool source/capture configuration binding differs")
     if any(frame["receipt"]["scenario"] == "ttl-room" for frame in frames.values()):
         backend = next(iter(frames.values()))["receipt"]["ttlProof"]["backend"]
         cache = proof.get("build_identity", {}).get("cache", {})
@@ -874,6 +903,12 @@ def pair_compare(reference: Path, candidate: Path, output: Path, same_backend=Fa
                 wanted = "cpp" if same_backend else "rust"
                 if ref_meta["optionParserProof"]["backend"] != "cpp" or cand_meta["optionParserProof"]["backend"] != wanted:
                     row["errors"].append("expected C++ reference and correct OptionParser backend")
+                if ref_meta["lightingBackend"] != "cpp" or (same_backend and cand_meta["lightingBackend"] != "cpp"):
+                    row["errors"].append("expected C++ reference lighting")
+            elif ref_meta["scenario"] == "weighted-pool-room":
+                wanted = "native" if same_backend else "rust"
+                if ref_meta["weightedPoolProof"]["backend"] != "native" or cand_meta["weightedPoolProof"]["backend"] != wanted:
+                    row["errors"].append("expected native reference and correct WeightedPool backend")
                 if ref_meta["lightingBackend"] != "cpp" or (same_backend and cand_meta["lightingBackend"] != "cpp"):
                     row["errors"].append("expected C++ reference lighting")
             elif ref_meta["scenario"] == "ttl-room":
@@ -1072,6 +1107,8 @@ def asset_overlays(scenario="lighting-room") -> dict:
         overlays["jsonpatch-fixture"] = ROOT / "source/lab/behavior/jsonpatch-assets"
     if scenario == "compression-room":
         overlays["compression-fixture"] = ROOT / "source/lab/behavior/compression-assets"
+    if scenario == "weighted-pool-room":
+        overlays["weighted-pool-fixture"] = ROOT / "source/lab/behavior/weighted-pool-assets"
     if scenario == "ttl-room":
         overlays["ttl-fixture"] = ROOT / "source/lab/behavior/newttl-assets"
     if scenario == "lru-room":
