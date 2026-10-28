@@ -81,6 +81,11 @@
 #include "StarRoot.hpp"
 #include "StarVersionOptionParser.hpp"
 #include "StarPlayer.hpp"
+#include "StarStatusController.hpp"
+#include "StarStatusControllerLuaBindings.hpp"
+#ifdef STAR_USE_RUST_ID_MAP
+#include "StarRustIdMap.h"
+#endif
 #include "StarPlayerStorage.hpp"
 #include "StarPlayerLog.hpp"
 #include "StarAssets.hpp"
@@ -256,6 +261,7 @@ void ClientApplication::startup(StringList const& cmdLineArgs) {
 }
 
 void ClientApplication::shutdown() {
+  if (BehaviorLab::idMapScene()) BehaviorLab::restoreIdMapStatus();
   // Clear HTTP trust request callback
   LuaBindings::clearHttpTrustRequestCallback();
 
@@ -607,6 +613,9 @@ void ClientApplication::render() {
           && BehaviorLab::ttlReady(m_behaviorStage))
         BehaviorLab::prepareTtlFrame(m_renderData, m_behaviorStage);
 
+      if (BehaviorLab::idMapScene() && m_behaviorReady
+          && !BehaviorLab::hasPendingFrame() && !m_renderData.isFullbright)
+        BehaviorLab::prepareIdMapFrame(m_renderData, m_behaviorStage, m_universeClient->mainPlayer());
       if (BehaviorLab::weightedPoolScene() && m_behaviorReady
           && !BehaviorLab::hasPendingFrame() && !m_renderData.isFullbright)
         BehaviorLab::prepareWeightedPoolFrame(m_renderData, m_behaviorStage);
@@ -696,6 +705,9 @@ void ClientApplication::render() {
           && !BehaviorLab::hasPendingFrame() && !m_renderData.isFullbright
           && BehaviorLab::weightedPoolFramePrepared(m_behaviorStage))
         BehaviorLab::renderWeightedPoolLabel(*m_guiContext);
+      if (BehaviorLab::idMapScene() && m_behaviorReady
+          && !BehaviorLab::hasPendingFrame() && !m_renderData.isFullbright)
+        BehaviorLab::renderIdMapLabel(*m_guiContext);
       if (m_behaviorTextScanRoom)
         renderBehaviorTextScanFrame();
       if (m_behaviorStringViewRoom)
@@ -833,6 +845,7 @@ void ClientApplication::changeState(MainAppState newState) {
   }
 
   if (oldState > MainAppState::Title && m_state <= MainAppState::Title) {
+    if (BehaviorLab::idMapScene()) BehaviorLab::restoreIdMapStatus();
     if (m_universeClient)
       m_universeClient->disconnect();
 
@@ -1824,6 +1837,8 @@ Json BehaviorLab::weightedPoolProof() {
   return weightedPoolConsumer().proof;
 }
 
+#include "../lab/behavior/id_map_scene.hpp"
+
 void ClientApplication::validateBehaviorStorage() {
   auto const& config = BehaviorLab::configuration();
   auto scenario = config.getString("scenario", "lighting-room");
@@ -1832,7 +1847,7 @@ void ClientApplication::validateBehaviorStorage() {
       && scenario != "unicode-room" && scenario != "shell-room" && scenario != "jsonpath-room" && scenario != "assetpath-room"
       && scenario != "random-room" && scenario != "jsonpatch-room" && scenario != "text-room"
       && scenario != "compression-room" && scenario != "zstd-room" && scenario != "option-parser-room"
-      && scenario != "host-address-room" && scenario != "datastream-room" && scenario != "buffer-room" && scenario != "stringview-room" && scenario != "path-embed-room" && scenario != "lru-room" && scenario != "ttl-room" && scenario != "weighted-pool-room")
+      && scenario != "host-address-room" && scenario != "datastream-room" && scenario != "buffer-room" && scenario != "stringview-room" && scenario != "path-embed-room" && scenario != "lru-room" && scenario != "ttl-room" && scenario != "weighted-pool-room" && scenario != "id-map-room")
     throw StarException("BehaviorLab: unsupported scenario");
   m_behaviorRaycastRoom = scenario == "raycast-room";
   m_behaviorEncodingRoom = scenario == "encoding-room";
@@ -1974,8 +1989,9 @@ void ClientApplication::updateBehaviorScenario() {
     if (!BehaviorLab::frameCaptured(m_behaviorCapture))
       return;
     if (m_behaviorStage == 2) {
+      if (BehaviorLab::idMapScene()) BehaviorLab::restoreIdMapStatus();
       Logger::info("BehaviorLab: {} completed (three acknowledged world frames)",
-          BehaviorLab::weightedPoolScene() ? "weighted-pool-room" : BehaviorLab::ttlScene() ? "ttl-room" : m_behaviorLruRoom ? "lru-room" : m_behaviorPathEmbedRoom ? "path-embed-room" : m_behaviorStringViewRoom ? "stringview-room" : m_behaviorBufferRoom ? "buffer-room" : m_behaviorDataStreamRoom ? "datastream-room" : m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
+          BehaviorLab::idMapScene() ? "id-map-room" : BehaviorLab::weightedPoolScene() ? "weighted-pool-room" : BehaviorLab::ttlScene() ? "ttl-room" : m_behaviorLruRoom ? "lru-room" : m_behaviorPathEmbedRoom ? "path-embed-room" : m_behaviorStringViewRoom ? "stringview-room" : m_behaviorBufferRoom ? "buffer-room" : m_behaviorDataStreamRoom ? "datastream-room" : m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
       m_behaviorPhase = 5;
       appController()->quit();
       return;
@@ -4315,6 +4331,8 @@ void ClientApplication::renderBehaviorScenario() {
     return;
   // A deadline can cross BETWEEN overlay preparation and framebuffer queuing.
   // A second clock read must not authorize capturing the previous phase's proof.
+  if (BehaviorLab::idMapScene() && !BehaviorLab::idMapFramePrepared(m_behaviorStage))
+    return;
   if (BehaviorLab::weightedPoolScene() && !BehaviorLab::weightedPoolFramePrepared(m_behaviorStage))
     return;
   if (BehaviorLab::ttlScene() && !BehaviorLab::ttlFramePrepared(m_behaviorStage))
@@ -4354,7 +4372,7 @@ void ClientApplication::renderBehaviorScenario() {
       {"layout", "row-major-rgb-f32-bits"}, {"bits", std::move(lightmapBits)}};
   Json metadata = JsonObject{
       {"lightingDiagnostics", std::move(lightmapDiagnostic)},
-      {"scenario", BehaviorLab::weightedPoolScene() ? "weighted-pool-room" : BehaviorLab::ttlScene() ? "ttl-room" : m_behaviorLruRoom ? "lru-room" : m_behaviorPathEmbedRoom ? "path-embed-room" : m_behaviorStringViewRoom ? "stringview-room" : m_behaviorBufferRoom ? "buffer-room" : m_behaviorDataStreamRoom ? "datastream-room" : m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
+      {"scenario", BehaviorLab::idMapScene() ? "id-map-room" : BehaviorLab::weightedPoolScene() ? "weighted-pool-room" : BehaviorLab::ttlScene() ? "ttl-room" : m_behaviorLruRoom ? "lru-room" : m_behaviorPathEmbedRoom ? "path-embed-room" : m_behaviorStringViewRoom ? "stringview-room" : m_behaviorBufferRoom ? "buffer-room" : m_behaviorDataStreamRoom ? "datastream-room" : m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room"}, {"stage", m_behaviorCapture}, {"stageIndex", m_behaviorStage},
       {"worldState", JsonObject{
           {"worldId", printWorldId(m_universeClient->clientContext()->playerWorldId())},
           {"worldSize", jsonFromVec2U(world->geometry().size())},
@@ -4507,6 +4525,8 @@ void ClientApplication::renderBehaviorScenario() {
     metadata = metadata.set("ttlProof", BehaviorLab::ttlProof());
   if (BehaviorLab::weightedPoolScene())
     metadata = metadata.set("weightedPoolProof", BehaviorLab::weightedPoolProof());
+  if (BehaviorLab::idMapScene())
+    metadata = metadata.set("idMapProof", BehaviorLab::idMapProof());
   BehaviorLab::queueFrame(m_behaviorCapture, std::move(metadata));
   m_behaviorReady = false;
   m_behaviorPhase = 4;

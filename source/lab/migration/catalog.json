@@ -20572,6 +20572,26 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/id_map_proof.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/id_map_scene.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/behavior/io_device_proof.py",
       "rule": "laboratories"
     },
@@ -20813,6 +20833,16 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/behavior/test_host_address_proof.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/test_id_map_proof.py",
       "rule": "laboratories"
     },
     {
@@ -30822,7 +30852,7 @@
     },
     {
       "path": "source/application/StarBehaviorLab.hpp",
-      "sha256": "9adf1de3f2e48d557e2a98e838fb8a53662a0f06ff13c1f94cd033b6a9032233"
+      "sha256": "fcb8d23877c5e64fb2d1d02b6168df9a610bfcd94ce675f2c70ce650ca41c0d3"
     },
     {
       "path": "source/application/StarDesktopService_pc_steam.cpp",
@@ -31238,7 +31268,7 @@
     },
     {
       "path": "source/client/StarClientApplication.cpp",
-      "sha256": "37c2c7818eb996e0f954cb0db3310257adc0e86b67dbab68c49d655d1a15134b"
+      "sha256": "ba3d8d1e23e0376d8d6022ea9ab665415e12ca3648991d7a96d8e9e729913029"
     },
     {
       "path": "source/client/StarClientApplication.hpp",
@@ -35221,6 +35251,14 @@
       "sha256": "b9f3953aef82c241d03487e7ab2e8bd785819b702553611d6c6d831771951f5c"
     },
     {
+      "path": "source/lab/behavior/id_map_proof.py",
+      "sha256": "504ea842de4ad5f99720566cb873d88b94f5e7cb7bf1eb30aad5b0e848081326"
+    },
+    {
+      "path": "source/lab/behavior/id_map_scene.hpp",
+      "sha256": "5300f1c90a679cd8095566b2e94c3f0b8897508e58ab3e6136c1d30fe4b3fe29"
+    },
+    {
       "path": "source/lab/behavior/io_device_proof.py",
       "sha256": "1782a5568b59c6b3be074a7f897100b72dc60d3004392e2b6a8a835072bd51e5"
     },
@@ -35319,6 +35357,10 @@
     {
       "path": "source/lab/behavior/test_host_address_proof.py",
       "sha256": "466320b5ef84373501aeb977f3beacee3e3c33dda8d805d80058384783905c93"
+    },
+    {
+      "path": "source/lab/behavior/test_id_map_proof.py",
+      "sha256": "af4877314c2417adf541221834b19330c3c198c37bd5fbeb660018787136cfbe"
     },
     {
       "path": "source/lab/behavior/test_io_device_proof.py",
@@ -38627,7 +38669,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 604,
+      "oracle/harness": 607,
       "retain-tooling": 30,
       "retained-third-party": 296,
       "rust-candidate": 29,
@@ -38668,14 +38710,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 45,
-      "validation.oracles-harness": 633,
+      "validation.oracles-harness": 636,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2094,
+    "files": 2097,
     "modules": 39,
-    "no_direct_target": 988
+    "no_direct_target": 991
   }
 }

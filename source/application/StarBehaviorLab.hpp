@@ -7,6 +7,7 @@ namespace Star {
 
 struct WorldRenderData;
 class GuiContext;
+STAR_CLASS(Player);
 
 // Test-only process opt-in. No filesystem reads/capture/work in ordinary runs.
 // The client queues captures on the main thread; the SDL host fulfills them
@@ -36,6 +37,12 @@ public:
   static void prepareWeightedPoolFrame(WorldRenderData& renderData, unsigned stage);
   static void renderWeightedPoolLabel(GuiContext& gui);
   static Json weightedPoolProof();
+  static bool idMapScene();
+  static bool idMapFramePrepared(unsigned stage);
+  static void prepareIdMapFrame(WorldRenderData& renderData, unsigned stage, PlayerPtr const& player);
+  static void renderIdMapLabel(GuiContext& gui);
+  static Json idMapProof();
+  static void restoreIdMapStatus();
 };
 
 }
