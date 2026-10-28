@@ -1,5 +1,30 @@
 # prebuild cleanup — not module completion
 
+## old game pair, 2026-10-28 21:51 utc
+
+exactly the two old WeightedPool `bin/starbound` files were separately archived,
+reconstructed before pruning, and checked with the strict retired-product reader.
+1,037 remaining game/provider files and all113 original reference objects stayed
+unchanged. prior50 native-product blobs were independently reconstructed again.
+
+- closure `build/id-map-game-retirement-r1/closure.json`:
+  `6199bd682ddbd0cfeac67ce9c59c42293a112e5c2a828a5e275414777f5986bf`
+- archive `20261028-id-map-prebuild-retire-weighted-bins-r1/manifest.json`:
+  `0410f3f45507c7cd5b1ac7c4ab87b7ab44cddcf8b5ca0e99610f079d4dcaa1aa`
+- completion `build/id-map-game-retirement-r1/completion.json`:
+  `ad7c7b02d8ad5f548b0bb477057c12c9f6d01e3406ae31a825b39326df42c115`
+
+119,305,712 logical /119,312,384 allocated bytes retired. archive grew38,608,896,
+below39,682,048 bound. Weighted/TTL/LRU byte-retention passed before and after;
+Weighted's default correctly rejects the missing originals, while its exact-two
+pinned opt-in passes and reports archived origins unavailable. historical closure
+limits are now explicitly historical metadata, not current live-pair assertions;
+guards unchanged and77 tests pass. old report/tool bytes remain retained.
+
+fixed4/16gib caps and UNCHANGED1536mib reservation now pass. no current runnable
+migration pair remains; only ONE fresh admitted IdMap pair may be built next.
+no actual build/runtime qualification or original live-origin renewal occurred.
+
 ## native proof products, 2026-10-28 21:34 utc
 
 50 inactive generated products under exactly seven IdMap lab roots were archived

@@ -30966,7 +30966,7 @@
     },
     {
       "path": "scripts/test_verify_weighted_pool_retention.py",
-      "sha256": "1e2e4dc1bbe40ecb35b3ca353c84b9389255b670add3399e659f96d1284521e0"
+      "sha256": "663ab7b4d617bba674d4dfed42c2afbcaeff69519d4eaa22add42a378c9d22af"
     },
     {
       "path": "scripts/verify-lru-retention.py",
@@ -30978,7 +30978,7 @@
     },
     {
       "path": "scripts/verify-weighted-pool-retention.py",
-      "sha256": "4cd9d3333736ee4d08cb1e0a5461ff7235c5189b806ab510a7b3a1409ecbfdd9"
+      "sha256": "03a6421039fb14d8257b1fd37f933d9d4e2dfe544dba5ccd0803443c10b181ab"
     },
     {
       "path": "source/CMakeLists.txt",

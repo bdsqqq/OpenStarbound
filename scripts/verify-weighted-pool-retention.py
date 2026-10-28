@@ -455,7 +455,9 @@ def verify(closure_path, closure_sha, repo=None, archive_manifest=None, archive_
                 retiredProductsManifest=retired_sha, retiredProducts=list(retired.values()),
                 retiredProductOriginState='UNAVAILABLE_ARCHIVED' if retired else 'NONE_RETIRED',
                 projectionChecked=True, currentGlobalAllocationMeasured=False,
-                limits=c['limits'] + ['retention only; exact historical source bytes are not live-source qualification; no semantic replay, runtime source/executable substitution, restore, or old live-origin/inode/ctime renewal',
+                historicalClosureLimits=c['limits'],
+                limits=['original closure limits are historical metadata, not renewed current live-origin assertions',
+                        'retention only; exact historical source bytes are not live-source qualification; no semantic replay, runtime source/executable substitution, restore, or old live-origin/inode/ctime renewal',
                                       'allocation projection checked against fixed caps; current global allocation is not measured'])
 
 

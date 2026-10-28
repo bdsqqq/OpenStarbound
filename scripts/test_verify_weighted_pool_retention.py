@@ -603,6 +603,8 @@ class RetentionTests(unittest.TestCase):
         self.assertEqual(len(result['retiredProducts']), 2)
         self.assertEqual(result['retiredProductsManifest'], pin(self.product_manifest_path))
         self.assertFalse(result['currentGlobalAllocationMeasured'])
+        self.assertEqual(result['historicalClosureLimits'], self.closure['limits'])
+        self.assertNotIn('current necessary sole runnable game pair', ' '.join(result['limits']))
 
     def test_retired_pair_and_original_lab_archive(self):
         self.retired_pair_fixture()
