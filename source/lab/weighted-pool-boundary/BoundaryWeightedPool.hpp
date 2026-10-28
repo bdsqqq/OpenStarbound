@@ -54,8 +54,9 @@ private:
     using Pool=std::conditional_t<(Mode<=3),BoundaryWeightedPool,BoundaryWeightedPool const>;
     Pool* pool; uint64_t a,b; RandomSource* random; Item* value; void const* borrowed=nullptr;
     NativeFrame(Pool* p,uint64_t x=0,uint64_t y=0,RandomSource* r=nullptr,Item* v=nullptr):pool(p),a(x),b(y),random(r),value(v){
-      this->allowed=[this](uint32_t op,uint64_t arg){return permits(op,arg);};
-      this->leaf=[this](uint32_t op,uint64_t arg){return perform(op,arg);};
+      this->payload=this;
+      this->allowed=[](void* p,uint32_t op,uint64_t arg){return static_cast<NativeFrame*>(p)->permits(op,arg);};
+      this->leaf=[](void* p,uint32_t op,uint64_t arg){return static_cast<NativeFrame*>(p)->perform(op,arg);};
     }
     bool permits(uint32_t op,uint64_t arg){
       if(op==SB_WP_ARG)return arg==0&&(Mode==2||Mode==6||Mode==7||Mode==8||Mode==12||Mode==14||Mode==17||Mode==18);
@@ -126,9 +127,9 @@ template <typename Container>
 BoundaryWeightedPool<Item>::BoundaryWeightedPool(Container container)
   : BoundaryWeightedPool() {
 #if WP_BOUNDARY_ON
-WpBoundary::Frame root;
-root.allowed=[](uint32_t op,uint64_t a){return op==SB_WP_CONTAINER_SCOPE&&!a;};
-root.leaf=[&](uint32_t,uint64_t){
+auto root=WpBoundary::makeFrame(
+[](uint32_t op,uint64_t a){return op==SB_WP_CONTAINER_SCOPE&&!a;},
+[&](uint32_t,uint64_t){
  // These generic lambdas retain the enclosing WeightedPool access context.
  auto memberBegin=[](auto& c)->decltype(c.begin()){return c.begin();};
  auto memberEnd=[](auto& c)->decltype(c.end()){return c.end();};
@@ -136,10 +137,10 @@ root.leaf=[&](uint32_t,uint64_t){
  auto cursor=[&](){if constexpr(members)return memberBegin(container);else return WpBoundary::Adl::first(container);}();
  auto finish=[&](){if constexpr(members)return memberEnd(container);else return WpBoundary::Adl::last(container);}();
  auto phase=WpBoundary::CursorPhase::condition;
- WpBoundary::Frame loop;
- loop.allowed=[&](uint32_t op,uint64_t a){if(a)return false;using P=WpBoundary::CursorPhase;return(op==SB_WP_CONTAINER_END&&phase==P::condition)||(op==SB_WP_CONTAINER_ADD_EXPRESSION&&phase==P::value)||(op==SB_WP_CONTAINER_NEXT&&phase==P::next);};
- loop.leaf=[&](uint32_t op,uint64_t){using P=WpBoundary::CursorPhase;if(op==SB_WP_CONTAINER_END){bool more=static_cast<bool>(cursor!=finish);phase=more?P::value:P::ended;return WpBoundary::reply(SB_WP_BOOL,!more);}if(op==SB_WP_CONTAINER_NEXT){++cursor;phase=P::condition;return WpBoundary::reply();} {auto const& pair=*cursor;add(get<0>(pair),get<1>(pair));}phase=P::next;return WpBoundary::reply();};
- loop.run(1,1);return WpBoundary::reply();};root.run(1);
+ auto loop=WpBoundary::makeFrame(
+ [&](uint32_t op,uint64_t a){if(a)return false;using P=WpBoundary::CursorPhase;return(op==SB_WP_CONTAINER_END&&phase==P::condition)||(op==SB_WP_CONTAINER_ADD_EXPRESSION&&phase==P::value)||(op==SB_WP_CONTAINER_NEXT&&phase==P::next);},
+ [&](uint32_t op,uint64_t){using P=WpBoundary::CursorPhase;if(op==SB_WP_CONTAINER_END){bool more=static_cast<bool>(cursor!=finish);phase=more?P::value:P::ended;return WpBoundary::reply(SB_WP_BOOL,!more);}if(op==SB_WP_CONTAINER_NEXT){++cursor;phase=P::condition;return WpBoundary::reply();} {auto const& pair=*cursor;add(get<0>(pair),get<1>(pair));}phase=P::next;return WpBoundary::reply();});
+ loop.run(1,1);return WpBoundary::reply();});root.run(1);
 #else
 
   for (auto const& pair : container)
@@ -299,16 +300,16 @@ List<Item> BoundaryWeightedPool<Item>::selectUniques(size_t desiredCount, uint64
 #if WP_BOUNDARY_ON
 NativeFrame<14> root(this,desiredCount);size_t targetCount=root.run(14).value;
 Set<size_t> indices;
-WpBoundary::Frame collect;
-collect.allowed=[&](uint32_t op,uint64_t a){return (op==SB_WP_ARG&&a<2)||(op==SB_WP_UNIQUE_SET_SIZE&&!a)||op==SB_WP_CALL_INDEX_SEED||(op==SB_WP_UNIQUE_SET_ADD&&a<m_items.size());};
-collect.leaf=[&](uint32_t op,uint64_t a){if(op==SB_WP_ARG)return WpBoundary::reply(SB_WP_U64,a?seed:targetCount);if(op==SB_WP_UNIQUE_SET_SIZE)return WpBoundary::reply(SB_WP_U64,indices.size());if(op==SB_WP_CALL_INDEX_SEED)return WpBoundary::reply(SB_WP_U64,selectIndex(a));indices.add(a);return WpBoundary::reply();};
+auto collect=WpBoundary::makeFrame(
+[&](uint32_t op,uint64_t a){return (op==SB_WP_ARG&&a<2)||(op==SB_WP_UNIQUE_SET_SIZE&&!a)||op==SB_WP_CALL_INDEX_SEED||(op==SB_WP_UNIQUE_SET_ADD&&a<m_items.size());},
+[&](uint32_t op,uint64_t a){if(op==SB_WP_ARG)return WpBoundary::reply(SB_WP_U64,a?seed:targetCount);if(op==SB_WP_UNIQUE_SET_SIZE)return WpBoundary::reply(SB_WP_U64,indices.size());if(op==SB_WP_CALL_INDEX_SEED)return WpBoundary::reply(SB_WP_U64,selectIndex(a));indices.add(a);return WpBoundary::reply();});
 collect.run(14,2);
 List<Item> result;
 auto cursor=indices.begin();auto finish=indices.end();
 auto phase=WpBoundary::CursorPhase::condition;
-WpBoundary::Frame append;
-append.allowed=[&](uint32_t op,uint64_t a){if(a)return false;using P=WpBoundary::CursorPhase;return(op==SB_WP_UNIQUE_END&&phase==P::condition)||(op==SB_WP_UNIQUE_APPEND_EXPRESSION&&phase==P::value&&*cursor<m_items.size())||(op==SB_WP_UNIQUE_NEXT&&phase==P::next);};
-append.leaf=[&](uint32_t op,uint64_t){using P=WpBoundary::CursorPhase;if(op==SB_WP_UNIQUE_END){bool more=static_cast<bool>(cursor!=finish);phase=more?P::value:P::ended;return WpBoundary::reply(SB_WP_BOOL,!more);}if(op==SB_WP_UNIQUE_NEXT){++cursor;phase=P::condition;return WpBoundary::reply();}result.append(m_items[*cursor].second);phase=P::next;return WpBoundary::reply();};
+auto append=WpBoundary::makeFrame(
+[&](uint32_t op,uint64_t a){if(a)return false;using P=WpBoundary::CursorPhase;return(op==SB_WP_UNIQUE_END&&phase==P::condition)||(op==SB_WP_UNIQUE_APPEND_EXPRESSION&&phase==P::value&&*cursor<m_items.size())||(op==SB_WP_UNIQUE_NEXT&&phase==P::next);},
+[&](uint32_t op,uint64_t){using P=WpBoundary::CursorPhase;if(op==SB_WP_UNIQUE_END){bool more=static_cast<bool>(cursor!=finish);phase=more?P::value:P::ended;return WpBoundary::reply(SB_WP_BOOL,!more);}if(op==SB_WP_UNIQUE_NEXT){++cursor;phase=P::condition;return WpBoundary::reply();}result.append(m_items[*cursor].second);phase=P::next;return WpBoundary::reply();});
 append.run(14,3);return result;
 #else
 
