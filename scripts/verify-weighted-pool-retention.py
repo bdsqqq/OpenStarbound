@@ -181,7 +181,11 @@ def source_bindings(repo, specification, closure_sha, certificate_sha, protected
         need(len(rel.parts) >= 2 and rel.parts[0] in {'source', 'cmake'} and
              not any(part.lower() in {'scripts', 'lib', 'sdk', 'tools', 'build', 'products'}
                      for part in rel.parts[:-1]) and
-             (rel.suffix in SOURCE_EXTENSIONS or rel.name == 'CMakeLists.txt'),
+             (rel.suffix in SOURCE_EXTENSIONS or rel.name == 'CMakeLists.txt' or
+              # This noncompiled inventory changes as migration members are added.
+              # Its ORIGINAL protected hash still binds the retained copy; this
+              # is not permission for arbitrary JSON, tools or generated products.
+              rel == Path('source/lab/migration/modules.json')),
              'first-party source required')
         physical(original)
         expected = sha(row['sha256'])

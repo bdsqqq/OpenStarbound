@@ -1,4 +1,4 @@
-# production integration — blocked before mutation
+# production integration — source inventory wall repaired
 
 Actual native/Rust interop is committed at `02a9fa95`; its certificate is
 `9f6b9a534b5cad5c7533ced744767831d587d9a37b1b20f181195c71f373310a`.
@@ -28,17 +28,25 @@ externally pinned original auxiliary admission, not guessed. They are retained
 as **metadata only**, with no resolver binding or historical-origin renewal:
 `build/id-map-production-r1/inventory-blocker.json`.
 
-## permission boundary
+## narrow repair after explicit autonomous continuation
 
-The approved WeightedPool resolver currently accepts code only, not JSON.
-Continuing requires authorization for an exception limited to the exact
-noncompiled first-party inventory path `source/lab/migration/modules.json`.
-Do not silently broaden this to arbitrary JSON, scripts, tools, SDKs or products.
-Preserve the acquired verifier before changing it; test exact original pins,
-copy ownership/layout, rejection of other JSON and unchanged tool/product bans.
-Then replay all retention gates before production mutation.
+The resolver now permits only that exact noncompiled inventory path in addition
+ to existing code inputs. Its original external hash, fixed owned copy layout,
+copy bytes, inode exclusions and all tool/product/SDK protections remain strict.
+Arbitrary and sibling JSON paths are rejected. The acquired verifier/test bytes
+were retained before editing; an isolated diagnostic confirms the frozen policy
+rejects this exact inventory fixture. All 65 hermetic tests and actual
+WeightedPool/TTL/LRU byte-retention replays pass.
 
-After authorization/gates: promote the qualified inline frames, keep original
+Current WeightedPool source manifest:
+`build/weighted-pool-source-epoch-r1/source-versions-id-map-inventory-r1.json`,
+sha256 `b62592840c7439bafe4c0263dee4beecd757a7c836f771650306be3b44a07837`.
+Completion `build/id-map-inventory-epoch-r1/completion.json`, sha256
+`bbefabb5d89a76ff6aa47c1d2122e7154124e0d3db7243bb4cd1179c1647f205`.
+The earlier failed guard remains failed; no old source/live-origin proof was
+rebound. No production code was changed by this repair.
+
+Next: promote the qualified inline frames, keep original
 OFF bodies/public declarations/three fields, add default-OFF
 `STAR_USE_RUST_ID_MAP` in **source/CMakeLists.txt** (not cmake/Rust.cmake), and run
 production OFF/ON/native consumer/configuration checks. Application qualification

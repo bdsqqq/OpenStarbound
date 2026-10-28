@@ -365,11 +365,64 @@ class RetentionTests(unittest.TestCase):
     def test_source_mapping_rejects_non_source(self):
         for relative in ('external-tool', 'SDK/include/tool.hpp', 'build/product.cpp',
                          'scripts/tool.py', 'lib/vendor.hpp', 'source/tools/tool.cpp',
-                         'source/SDK/tool.hpp', 'cmake/README.md'):
+                         'source/SDK/tool.hpp', 'cmake/README.md',
+                         'source/lab/migration/catalog.json', 'source/other/modules.json',
+                         'cmake/modules.json', 'build/products/modules.json'):
             with self.subTest(relative=relative):
                 self.source_epoch_fixture(relative)
                 with self.assertRaisesRegex(ValueError, 'first-party source'):
                     self.epoch_audit()
+
+    def test_exact_inventory_epoch(self):
+        original, retained = self.source_epoch_fixture('source/lab/migration/modules.json')
+        historical = retained.read_bytes()
+        original.write_bytes(b'current inventory with new classifiers')
+        with self.assertRaisesRegex(ValueError, 'protected bytes changed'):
+            self.audit()
+        result = self.epoch_audit()
+        self.assertEqual(result['versionedSourceBindings'], self.versions['entries'])
+        self.assertEqual(retained.read_bytes(), historical)
+        self.assertEqual(original.read_bytes(), b'current inventory with new classifiers')
+        self.assertFalse(result['currentGlobalAllocationMeasured'])
+
+    def test_exact_inventory_epoch_after_archive(self):
+        original, _ = self.source_epoch_fixture('source/lab/migration/modules.json')
+        original.write_bytes(b'current inventory')
+        self.archive_fixture()
+        result = self.epoch_audit(True)
+        self.assertEqual(result['mode'], 'ARCHIVED_BYTES_RETAINED_NO_LIVE_ORIGIN_RENEWAL')
+        self.assertEqual(len(result['versionedSourceBindings']), 1)
+
+    def test_inventory_cannot_rebind_original_pin(self):
+        original, retained = self.source_epoch_fixture('source/lab/migration/modules.json')
+        original.write_bytes(b'current inventory')
+        retained.write_bytes(original.read_bytes())
+        self.versions['entries'][0].update(sha256=pin(retained), size=retained.stat().st_size)
+        with self.assertRaisesRegex(ValueError, 'unbound/conflicting source pin'):
+            self.epoch_audit()
+
+    def test_inventory_copy_hardlink_rejected(self):
+        original, retained = self.source_epoch_fixture('source/lab/migration/modules.json')
+        retained.unlink()
+        os.link(original, retained)
+        with self.assertRaisesRegex(ValueError, 'source copy hardlink alias'):
+            self.epoch_audit()
+
+    def test_inventory_epoch_keeps_tool_bytes_strict(self):
+        original, _ = self.source_epoch_fixture('source/lab/migration/modules.json')
+        original.write_bytes(b'current inventory')
+        self.external.write_bytes(b'changed tool')
+        with self.assertRaisesRegex(ValueError, 'protected bytes changed'):
+            self.epoch_audit()
+
+    def test_inventory_epoch_is_read_only(self):
+        original, _ = self.source_epoch_fixture('source/lab/migration/modules.json')
+        original.write_bytes(b'current inventory')
+        vp = write_json(self.versions_path, self.versions)
+        before = {str(p): V.fingerprint(p) for p in self.repo.rglob('*')}
+        V.verify(self.closure_path, pin(self.closure_path), self.repo,
+                 source_versions=(self.versions_path, vp))
+        self.assertEqual(before, {str(p): V.fingerprint(p) for p in self.repo.rglob('*')})
 
     def test_source_mapping_wrong_external_pin(self):
         self.source_epoch_fixture()
