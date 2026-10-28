@@ -6,9 +6,21 @@ linked function identities for `sb_idmap_run`, `sb_idmap_count` and rust eh, plu
 an encoded native `Star::RustIdMapDetail::Frame::run()` → `sb_idmap_run` branch.
 
 current generic macho/archive parsers stay unchanged; weighted-pool owner/tool
-selection is not reused. this source gate accepts only the previously understood
-relocation types2/3/4/8. tlvp and unknown types block, without fitting new opcode
-masks. normalized page targets remain a data-provenance limitation.
+selection is not reused. relocation types2/3/4/8 remain zero-addend only. type9
+now uses ONLY the unchanged, independently sourced apple ld64-951.9 local-tlvp
+rule: complete defined descriptors in both artifacts and exact linked offset,
+registers and encoding. no blanket mask or future game observation was used.
+normalized page targets remain a data-provenance limitation.
+
+this pre-build extension passes24 IdMap,19 generic and23 whole-origin tests.
+a literal two-segment synthetic macho positive failed the preserved old policy
+before extension, then passed; wrong offset/register/opcode/addend, missing/wrong/
+short descriptors and invalid relocations still fail. authoritative source is
+`apple-ld64-951.9-OutputFile.cpp:2185–2200`, sha256
+`885ecee52272d46076af3402af032ee578590165c09355b3675ee76a497cbc2a`.
+completion `build/id-map-tlvp-r1/completion.json` sha256
+`3401800a2ac0633fc973b0d0a40826748b1775601454e590617f1941c9d7dbde`.
+no actual new game, linker or compiler ran.
 
 20 synthetic tests pass. both externally pinned old game executables were also
 rejected against the actual current canonical idmap archive: native has four

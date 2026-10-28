@@ -23,9 +23,9 @@ no actual process was launched by these tests.
 85 tests pass:26 frontend,20 producer,23 origin,16 builder. positives are synthetic,
 including mocked process launches; actual frame/state/audio/save/network/cli and
 module cleanup remain OPEN. current game origin fails closed because no fresh
-IdMap pair exists. the new emitted-code leaf still rejects TLVP type9: independently
-sourced normalization must be resolved BEFORE fresh build admission. then artifact
-accounting, old-pair conservation/retirement and the unchanged1536mib reservation
+IdMap pair exists. the emitted-code leaf now reuses the independently apple-sourced
+exact local TLVP rule BEFORE fresh admission (`ORIGIN.md`); no observed game result
+was fitted. artifact accounting, old-pair conservation/retirement and the unchanged1536mib reservation
 must pass. **no new game generation or archived proof renewal occurred.**
 
 completion `build/id-map-launch-source-r1/completion.json`, sha256

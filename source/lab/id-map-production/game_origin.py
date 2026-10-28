@@ -56,15 +56,17 @@ def native_edges(image):
 
 
 def strict_compare(obj, image, name):
-    """Preflight before unchanged compare_function, excluding its TLVP waiver.
+    """Preflight before the unchanged ABI-derived generic comparer.
 
-    The old generic comparer now has an Apple TLVP relaxation rule. IdMap has
-    no such admitted rule: type 9, like every other unknown type, remains the
-    original generic UnsupportedRelocation with the offending bytes attached.
+    Type9 is ONLY its Apple ld64-951.9 local TLVP LDR-to-ADD rule: defined,
+    complete 24-byte descriptors in both artifacts and exact target offset and
+    registers. Source SHA885ecee52272d46076af3402af032ee578590165c09355b3675ee76a497cbc2a,
+    OutputFile.cpp2185–2200; this is not an inferred opcode mask. All other
+    unknown types retain UnsupportedRelocation and the original byte evidence.
     """
     original, linked = obj.function(name), image.function(name)
     for reloc in obj.relocations(original):
-        if reloc['type'] not in (2, 3, 4, 8):
+        if reloc['type'] not in (2, 3, 4, 8, 9):
             offset = reloc['offset']
             require(offset % 4 == 0 and offset + 4 <= len(original['code']),
                     'overlapping/unaligned relocation')
@@ -95,7 +97,7 @@ def attest(game: bytes, archive: bytes) -> dict:
                   functions=[], providers=[], native_call_edges=[], blockers=[],
                   verifier_path=str(Path(__file__).resolve()),
                   verifier_sha256=sha(Path(__file__).read_bytes()), imported_helper_sha256={},
-                  relocation_contract='unchanged generic compare_function; only types 2/3/4/8; zero addends; NO TLVP relaxation',
+                  relocation_contract='unchanged generic compare_function; types 2/3/4/8 zero addends; type9 ONLY Apple ld64-951.9 exact local TLVP descriptor LDR-to-ADD',
                   limitations=[
                       'finite emitted-code identity only; not semantic equivalence or whole-game qualification',
                       'page relocation data targets are normalized, NOT full data-object provenance',

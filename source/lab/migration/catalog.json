@@ -36258,7 +36258,7 @@
     },
     {
       "path": "source/lab/id-map-production/game_origin.py",
-      "sha256": "bc8620fdfef093a66288fc7098d0ce2fd6c78185d14ef0935d9b026ad7367c46"
+      "sha256": "d4cf0af844c01ea63e71f929ed47759f7b42c0d1123a18b825936aff4016aa5e"
     },
     {
       "path": "source/lab/id-map-production/test_cache_retention.py",
@@ -36270,7 +36270,7 @@
     },
     {
       "path": "source/lab/id-map-production/test_game_origin.py",
-      "sha256": "c0ecfa953807676adb8f36847624187d1cb2009915b79a916193e749c7be6099"
+      "sha256": "46ab07f592836c29958ae21448ef9d3acef787374659818ae628137f7f9e1afe"
     },
     {
       "path": "source/lab/id-map-production/test_verify.py",
