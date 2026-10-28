@@ -25304,6 +25304,26 @@
     {
       "cmake_membership": [],
       "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/rust_bridge.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-boundary/rust_qualify.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
       "language": "c/c++",
       "line": 1,
       "membership_status": "no-direct-target-found",
@@ -36265,6 +36285,14 @@
       "sha256": "2c0e0b29eb744048fcc29f1114e92c680bd21efcbb29f19caaf8198cb0ef22b3"
     },
     {
+      "path": "source/lab/weighted-pool-boundary/rust_bridge.py",
+      "sha256": "58d1814e6940d055250f373b81fdf2ac563ed9538e0425b701cab83d353c420e"
+    },
+    {
+      "path": "source/lab/weighted-pool-boundary/rust_qualify.py",
+      "sha256": "8f9a75d6e67605a87238f634dfa40efa98b6b3b0e60d565545c71d6005903c97"
+    },
+    {
       "path": "source/lab/weighted-pool-boundary/scalar.cpp",
       "sha256": "bca65fdb0d4fb8b3920e27cbaad6fea6101028f3d802b4b3c561a96f572b3c2e"
     },
@@ -37451,7 +37479,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 526,
+      "oracle/harness": 528,
       "retain-tooling": 28,
       "retained-third-party": 296,
       "rust-candidate": 28,
@@ -37492,14 +37520,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 43,
-      "validation.oracles-harness": 555,
+      "validation.oracles-harness": 557,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2010,
+    "files": 2012,
     "modules": 39,
-    "no_direct_target": 904
+    "no_direct_target": 906
   }
 }
