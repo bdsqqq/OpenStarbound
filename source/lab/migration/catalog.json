@@ -6551,6 +6551,16 @@
       "language": "c/c++",
       "line": 1,
       "membership_status": "no-direct-target-found",
+      "module": "foundation.collections",
+      "path": "source/core/StarRustIdMap.h",
+      "rule": "rust-id-map-abi"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "ffi-adapter",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
       "module": "foundation.serialization",
       "path": "source/core/StarRustJsonPatch.h",
       "rule": "rust-json-patch-abi"
@@ -22372,6 +22382,56 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/id-map-boundary/abi.c",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/id-map-boundary/abi.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/id-map-boundary/test_schema.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/id-map-boundary/test_verify_policy.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/id-map-boundary/verify_policy.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/id-map/StarIdMap.original.hpp",
       "rule": "laboratories"
     },
@@ -26696,6 +26756,16 @@
       "module": "foundation.runtime",
       "path": "source/rust/ffi/src/host_address.rs",
       "rule": "rust-host-address"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "rust-candidate",
+      "language": "rust",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "foundation.collections",
+      "path": "source/rust/ffi/src/id_map.rs",
+      "rule": "rust-id-map"
     },
     {
       "cmake_membership": [],
@@ -31643,6 +31713,10 @@
       "sha256": "967905b716a8b3b419cf3d1038034552a060ff6f3e0407160199172604ef5230"
     },
     {
+      "path": "source/core/StarRustIdMap.h",
+      "sha256": "8ca0dc8bd42736263a5558305c17a2b28b12f71d7bac8f36faeafb5307b23146"
+    },
+    {
       "path": "source/core/StarRustJsonPatch.h",
       "sha256": "e6f30cf94bb34242cd36f315ec8c97715fe4489a1f2911e192ad134308879b44"
     },
@@ -35631,6 +35705,26 @@
       "sha256": "42979e67f476fdc20073850c9940e42907dbc8c288371f6290e66d5c9576bc18"
     },
     {
+      "path": "source/lab/id-map-boundary/abi.c",
+      "sha256": "48e22ea6d1bd56005c09246f66ad8d76db62283af29fc97e605bd338ae4ad80a"
+    },
+    {
+      "path": "source/lab/id-map-boundary/abi.cpp",
+      "sha256": "3083eef91f73d5ad9aaf546e1f9b106c4f125fc5288b6e54bbd978a14b48c385"
+    },
+    {
+      "path": "source/lab/id-map-boundary/test_schema.py",
+      "sha256": "58bdb6a40f4211b415570b1abb8d5549a09faf0ef62bf3083eb326cf4d40a1c4"
+    },
+    {
+      "path": "source/lab/id-map-boundary/test_verify_policy.py",
+      "sha256": "da0c8d364b166a0c2319c9909225e91a8f169451535ccf6264ada21077c4ae79"
+    },
+    {
+      "path": "source/lab/id-map-boundary/verify_policy.py",
+      "sha256": "510e264d36cdaeeebb1e86afc139f6b0d9377e94532e839f8fee5c737d1f341c"
+    },
+    {
       "path": "source/lab/id-map/StarIdMap.original.hpp",
       "sha256": "ff8b48f3931efedf8e5b19bc074b84a04f04329aedabbfd3eeb7b7b6ffeaad62"
     },
@@ -36144,7 +36238,7 @@
     },
     {
       "path": "source/lab/migration/modules.json",
-      "sha256": "dedd69a81e7c281a56e3b3126808bdc13bde1fcde5b51a4f451da79519be98f9"
+      "sha256": "bebe6706601548c284064b114a5754312b4da1620018f46ea11861976b1767e3"
     },
     {
       "path": "source/lab/native_artifacts.py",
@@ -37295,6 +37389,10 @@
       "sha256": "83ef4a383e3de82ac0efe8ebe9f02560c901ddc2ceaecb706e2a7c82c4ae9e74"
     },
     {
+      "path": "source/rust/ffi/src/id_map.rs",
+      "sha256": "fb15ad611a26da698a2a886cc67fdb40d84c13888bc4b12da071105cea770d6e"
+    },
+    {
       "path": "source/rust/ffi/src/io_device.rs",
       "sha256": "709c0ca4b60f7d1e705827c825f92d8bc9996f798267f5e9097e7e0707833376"
     },
@@ -37308,7 +37406,7 @@
     },
     {
       "path": "source/rust/ffi/src/lib.rs",
-      "sha256": "75d6ad208c68583c9c6602d30113a82d4c4496d737ccf11856a47eb45ade364d"
+      "sha256": "475eb1beae2a2e72550badeffc4a0c7b7eb21128c0fe1570347a55698ebf5116"
     },
     {
       "path": "source/rust/ffi/src/line_query.rs",
@@ -38188,22 +38286,22 @@
   },
   "summary": {
     "by_disposition": {
-      "ffi-adapter": 42,
+      "ffi-adapter": 43,
       "harness": 29,
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 576,
+      "oracle/harness": 581,
       "retain-tooling": 30,
       "retained-third-party": 296,
-      "rust-candidate": 28,
+      "rust-candidate": 29,
       "test": 57
     },
     "by_module": {
       "base.animation": 2,
       "base.geometry": 6,
       "base.lighting": 6,
-      "foundation.collections": 28,
+      "foundation.collections": 30,
       "foundation.compression-crypto": 18,
       "foundation.math-geometry": 16,
       "foundation.media": 14,
@@ -38234,14 +38332,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 45,
-      "validation.oracles-harness": 605,
+      "validation.oracles-harness": 610,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2063,
+    "files": 2070,
     "modules": 39,
-    "no_direct_target": 957
+    "no_direct_target": 964
   }
 }

@@ -6,6 +6,8 @@ mod ttl_cache;
 pub use ttl_cache::{sb_ttl_count, sb_ttl_run, SbTtlHost, SbTtlReply, SbTtlRequest};
 mod weighted_pool;
 pub use weighted_pool::{sb_wp_count, sb_wp_run, SbWpHost, SbWpReply, SbWpRequest};
+mod id_map;
+pub use id_map::{sb_idmap_count, sb_idmap_run, SbIdMapHost, SbIdMapReply, SbIdMapRequest};
 
 mod string_view;
 pub use string_view::{star_string_view_call_count, star_string_view_run, StarStringViewHost};
