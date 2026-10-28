@@ -4790,6 +4790,16 @@
       "rule": "core-collections"
     },
     {
+      "cmake_membership": [],
+      "disposition": "ffi-adapter",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "foundation.collections",
+      "path": "source/core/StarIdMapHost.hpp",
+      "rule": "rust-id-map-host"
+    },
+    {
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
@@ -22608,6 +22618,56 @@
     {
       "cmake_membership": [],
       "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/id-map-production/acquire.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/id-map-production/configuration.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/id-map-production/test_verify.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/id-map-production/trace.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/id-map-production/verify.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
       "language": "c/c++",
       "line": 1,
       "membership_status": "no-direct-target-found",
@@ -30722,7 +30782,7 @@
     },
     {
       "path": "scripts/test_verify_weighted_pool_retention.py",
-      "sha256": "7111035d5c379cf47faa31411a376f9df9528d5e4790a723bfad70530ca3df5d"
+      "sha256": "c01868840052e82b473c03c9266856746868f225bd77962b654c713a50696375"
     },
     {
       "path": "scripts/verify-lru-retention.py",
@@ -30734,11 +30794,11 @@
     },
     {
       "path": "scripts/verify-weighted-pool-retention.py",
-      "sha256": "f3fe3692dcb65d17ef5fd2ca8dd3bbe0698a484eb867b61ceaa33bb8d2e69561"
+      "sha256": "77fc095ac6fb12faa74417225defd104a8d693426dec1f28cecd4d5a440ed76b"
     },
     {
       "path": "source/CMakeLists.txt",
-      "sha256": "4d6e171a99518a4207c43fc74d8750191729b321f1c226d68ec61378414e6db9"
+      "sha256": "3874babf1a75277903f2f88cf29ef967e83558b9fc4fc7e6b898a1277455938e"
     },
     {
       "path": "source/application/CMakeLists.txt",
@@ -31478,7 +31538,11 @@
     },
     {
       "path": "source/core/StarIdMap.hpp",
-      "sha256": "ff8b48f3931efedf8e5b19bc074b84a04f04329aedabbfd3eeb7b7b6ffeaad62"
+      "sha256": "1bd2bed716557cf13eed15ba6e3bf0a2f611291171c235ec333394a1d7c1beda"
+    },
+    {
+      "path": "source/core/StarIdMapHost.hpp",
+      "sha256": "6511cadbb2e4c4f78d4694a96520a72bf9bc797db28b7c723c75daffcd654938"
     },
     {
       "path": "source/core/StarImage.cpp",
@@ -35977,6 +36041,26 @@
       "sha256": "a5b5e1edf9a47206799367814cb9ad1bcb44814952d2a8a0cc37e5b5ae257621"
     },
     {
+      "path": "source/lab/id-map-production/acquire.py",
+      "sha256": "af0e58a4de08075b42d1f89bdbd86c12e86b4b6eaee6507cdf2a251c288267b0"
+    },
+    {
+      "path": "source/lab/id-map-production/configuration.py",
+      "sha256": "d2065e60473a6b9e0d795fe64fd07353aa3c1179f05a918a6dd14cd960b2d0ef"
+    },
+    {
+      "path": "source/lab/id-map-production/test_verify.py",
+      "sha256": "edaf2ec08709d0c99bf1eeaa9c54980da45eae0b0b0b5eaede07213cc6cc0ec1"
+    },
+    {
+      "path": "source/lab/id-map-production/trace.cpp",
+      "sha256": "fcc287e38d23444f584d2c9589a177c31341cb3ef4a06726ca1c57cf0e586988"
+    },
+    {
+      "path": "source/lab/id-map-production/verify.py",
+      "sha256": "78a070bf4c4eac7a29a3c66206e759e4e179904272488195f0b28c1a68c24841"
+    },
+    {
       "path": "source/lab/id-map/StarIdMap.original.hpp",
       "sha256": "ff8b48f3931efedf8e5b19bc074b84a04f04329aedabbfd3eeb7b7b6ffeaad62"
     },
@@ -36490,7 +36574,7 @@
     },
     {
       "path": "source/lab/migration/modules.json",
-      "sha256": "bebe6706601548c284064b114a5754312b4da1620018f46ea11861976b1767e3"
+      "sha256": "7e955380221ca31e3c9c7587f5b918dc2123c0f9977f4cbd49958236a5468d6d"
     },
     {
       "path": "source/lab/native_artifacts.py",
@@ -38538,12 +38622,12 @@
   },
   "summary": {
     "by_disposition": {
-      "ffi-adapter": 43,
+      "ffi-adapter": 44,
       "harness": 29,
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 599,
+      "oracle/harness": 604,
       "retain-tooling": 30,
       "retained-third-party": 296,
       "rust-candidate": 29,
@@ -38553,7 +38637,7 @@
       "base.animation": 2,
       "base.geometry": 6,
       "base.lighting": 6,
-      "foundation.collections": 30,
+      "foundation.collections": 31,
       "foundation.compression-crypto": 18,
       "foundation.math-geometry": 16,
       "foundation.media": 14,
@@ -38584,14 +38668,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 45,
-      "validation.oracles-harness": 628,
+      "validation.oracles-harness": 633,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2088,
+    "files": 2094,
     "modules": 39,
-    "no_direct_target": 982
+    "no_direct_target": 988
   }
 }
