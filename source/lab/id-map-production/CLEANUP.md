@@ -1,4 +1,37 @@
-# inactive cache retirement — completed, not module completion
+# prebuild cleanup — not module completion
+
+## native proof products, 2026-10-28 21:34 utc
+
+50 inactive generated products under exactly seven IdMap lab roots were archived
+with the unchanged existing tool, under the exclusive cleanup lock. all blobs
+reconstructed BEFORE pruning; independent bounded reconstruction, manifest and
+complete complement/protection checks passed afterward. 34 conservation tests pass.
+
+- closure `build/id-map-product-retention-r1/closure.json`:
+  `fe37e34d3930ff38ac4f423aba3984eeb8964909981bd63120570275e84f309b`
+- archive run `20261028-id-map-native-products-r1`, manifest:
+  `c21ae6bbca9415abd4b479a1a5fb5e8dc39e99309cf7513585003dee594a5da6`
+- completion `build/id-map-product-retention-r1/completion.json`:
+  `05f71f34bbb384505cced76769c04990ce832a464cfef8447a62dc34b1e7885d`
+
+330,069,243 logical /330,178,560 allocated bytes retired. archive grew74,551,296
+bytes, below76,386,304 bound. 836 small files and1,039 protected files unchanged:
+whole1,038-file old game tree plus canonical archive. all113 reference objects
+also match original external admission pins, not newly rebound hashes.
+
+large admission jsons, maps, executables and two exact disassembly products retain
+FULL original bytes in blobs. compact source, models, golden data, commands,
+stdout, failure receipts and digest index remain live. archived metadata is DATA,
+never a tool/source resolver or renewed pre-execution evidence. archived originals'
+live-path/inode/ctime/native-origin replay is **unavailable**. the before/after
+conservation gate describes this action, not future mutations of protected files.
+
+old pair remains live; no build or pair retirement occurred. archive16,804,302,848
+and live2,753,572,864 bytes fit fixed4/16gib caps, but1536mib future reservation
+still fails until the separately conserved old pair is retired. no user storage,
+Steam, assets, sources or unrelated process was removed. all39 remain OPEN.
+
+## earlier inactive cache retirement
 
 Exactly three inspected, inactive, singleton cache files were archived with the
 existing cleanup tool. Every blob reconstructed before pruning; independent
