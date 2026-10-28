@@ -25454,6 +25454,46 @@
     {
       "cmake_membership": [],
       "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-production/audit_auxiliary.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-production/audit_auxiliary_v2.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-production/auxiliary.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-production/buffer_gates.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
       "language": "c/c++",
       "line": 1,
       "membership_status": "no-direct-target-found",
@@ -25538,6 +25578,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-production/qualify.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/weighted-pool-production/run.py",
       "rule": "laboratories"
     },
@@ -25568,6 +25618,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-production/test_audit_auxiliary_v2.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/weighted-pool-production/test_game_build_admission.py",
       "rule": "laboratories"
     },
@@ -25579,6 +25639,16 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/weighted-pool-production/test_game_origin.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/weighted-pool-production/test_qualify.py",
       "rule": "laboratories"
     },
     {
@@ -36605,6 +36675,22 @@
       "sha256": "42f33c2602802ec2171dcfd87af54476674ef44251552d861dc481d5bfd0aa37"
     },
     {
+      "path": "source/lab/weighted-pool-production/audit_auxiliary.py",
+      "sha256": "fd0a4350b6c3d3e925585889ee5def66987f82a7f058e83b02e8d7f82c281148"
+    },
+    {
+      "path": "source/lab/weighted-pool-production/audit_auxiliary_v2.py",
+      "sha256": "97e316fbea1190fcc4b7b9f84670dfad8c484d6661122fa0c4efc47935811513"
+    },
+    {
+      "path": "source/lab/weighted-pool-production/auxiliary.py",
+      "sha256": "bd34ef3339dac93daeaeb027279f71e72201ea55bde3802ee6343a6bc1172d92"
+    },
+    {
+      "path": "source/lab/weighted-pool-production/buffer_gates.py",
+      "sha256": "cb89dcb12c19a23d7755439e2eceb7fc13caeabc64ac9a4d12262828e72a8366"
+    },
+    {
       "path": "source/lab/weighted-pool-production/combined.cpp",
       "sha256": "12ea6c6973ce2115903636b6a8f770581147bbd2b6e647bd0823379e2217c015"
     },
@@ -36637,6 +36723,10 @@
       "sha256": "171dcb49e5a332d46a6029784db2d588a51a62652cfb709dd45b3c6f8097231d"
     },
     {
+      "path": "source/lab/weighted-pool-production/qualify.py",
+      "sha256": "3d60e686111b498c67043be51708fe7966a91a2117146fccbce49eb6c5b9d3c5"
+    },
+    {
       "path": "source/lab/weighted-pool-production/run.py",
       "sha256": "b085904a8ce418ad3753f372ec7e1a7a87a3d9c8564f7c37179d9e4fa38b77cf"
     },
@@ -36649,12 +36739,20 @@
       "sha256": "c361bdd25a797e571cc57e22913d35daf85387bbe6ec01a72efd6c9319b8f1ce"
     },
     {
+      "path": "source/lab/weighted-pool-production/test_audit_auxiliary_v2.py",
+      "sha256": "1da482376506c9245b9f712a17f5a589fd11602b01c6bfe30651e5429754f48e"
+    },
+    {
       "path": "source/lab/weighted-pool-production/test_game_build_admission.py",
       "sha256": "00a1bc0544aee7bc1f93d42918c90f51ecc40aa5756970bb5a63082c8afa7c42"
     },
     {
       "path": "source/lab/weighted-pool-production/test_game_origin.py",
       "sha256": "6ed54e1c9e92d503fcfe1d267d3dede377c30d3a5862a899d23c8fe12c2748ff"
+    },
+    {
+      "path": "source/lab/weighted-pool-production/test_qualify.py",
+      "sha256": "a1cba5089b0afeb67625b32db40512a6b2ab9987ad125c8e12cf7135cc55e64e"
     },
     {
       "path": "source/lab/weighted-pool-production/verify.py",
@@ -37843,7 +37941,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 553,
+      "oracle/harness": 560,
       "retain-tooling": 28,
       "retained-third-party": 296,
       "rust-candidate": 28,
@@ -37884,14 +37982,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 43,
-      "validation.oracles-harness": 582,
+      "validation.oracles-harness": 589,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2038,
+    "files": 2045,
     "modules": 39,
-    "no_direct_target": 932
+    "no_direct_target": 939
   }
 }
