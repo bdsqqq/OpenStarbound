@@ -22702,7 +22702,27 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/id-map-production/game_origin.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/id-map-production/test_cache_retention.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/id-map-production/test_game_origin.py",
       "rule": "laboratories"
     },
     {
@@ -36143,8 +36163,16 @@
       "sha256": "d2065e60473a6b9e0d795fe64fd07353aa3c1179f05a918a6dd14cd960b2d0ef"
     },
     {
+      "path": "source/lab/id-map-production/game_origin.py",
+      "sha256": "bc8620fdfef093a66288fc7098d0ce2fd6c78185d14ef0935d9b026ad7367c46"
+    },
+    {
       "path": "source/lab/id-map-production/test_cache_retention.py",
       "sha256": "5d6392cfc03e3a0478fee1273a14c3c2e89aa48e48a5b2469aa8d4e6e895caed"
+    },
+    {
+      "path": "source/lab/id-map-production/test_game_origin.py",
+      "sha256": "c0ecfa953807676adb8f36847624187d1cb2009915b79a916193e749c7be6099"
     },
     {
       "path": "source/lab/id-map-production/test_verify.py",
@@ -38725,7 +38753,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 611,
+      "oracle/harness": 613,
       "retain-tooling": 30,
       "retained-third-party": 296,
       "rust-candidate": 29,
@@ -38766,14 +38794,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 45,
-      "validation.oracles-harness": 640,
+      "validation.oracles-harness": 642,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2101,
+    "files": 2103,
     "modules": 39,
-    "no_direct_target": 995
+    "no_direct_target": 997
   }
 }
