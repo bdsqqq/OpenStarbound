@@ -1,0 +1,38 @@
+[
+  {
+    "output": "ProductionProxyWeightedPool.hpp",
+    "input": "/Users/bdsqqq/www/OpenStarbound/source/core/StarWeightedPool.hpp",
+    "inputSha256": "22ee8036703637c2808a015740b9bb5a7094c5c2e0f4f025102b79c8a8397f93",
+    "transformation": "class and Random dependency names only; original selector preserved"
+  },
+  {
+    "output": "lifecycle.cpp",
+    "input": "/Users/bdsqqq/www/OpenStarbound/source/lab/weighted-pool-boundary/lifecycle.cpp",
+    "inputSha256": "77c0e9412e1f7bb8ca094c9475e44bb5e500af2f03e9ab175a0496e29732d3a1",
+    "transformation": "actual production class/header; previous native comparison renamed frozen ReferenceWeightedPool; same drivers/assertions"
+  },
+  {
+    "output": "scalar.cpp",
+    "input": "/Users/bdsqqq/www/OpenStarbound/source/lab/weighted-pool-boundary/scalar.cpp",
+    "inputSha256": "bca65fdb0d4fb8b3920e27cbaad6fea6101028f3d802b4b3c561a96f572b3c2e",
+    "transformation": "actual production class/header; previous native comparison renamed frozen ReferenceWeightedPool; same drivers/assertions"
+  },
+  {
+    "output": "probe.cpp",
+    "input": "/Users/bdsqqq/www/OpenStarbound/source/lab/weighted-pool-boundary/probe.cpp",
+    "inputSha256": "a222d72061f6c9ea13cfa6e733d7a6ea66402a039d23077f516b9bbc9265c08a",
+    "transformation": "actual production class/header; previous native comparison renamed frozen ReferenceWeightedPool; same drivers/assertions"
+  },
+  {
+    "output": "integration.cpp",
+    "input": "/Users/bdsqqq/www/OpenStarbound/source/lab/weighted-pool-boundary/integration.cpp",
+    "inputSha256": "0195a965cdb3e352007721dfb1bd4cccab71ab2ad35fd977212d3db2a6e00b6a",
+    "transformation": "actual production class/header; previous native comparison renamed frozen ReferenceWeightedPool; same drivers/assertions"
+  },
+  {
+    "output": "combined.cpp",
+    "input": "/Users/bdsqqq/www/OpenStarbound/source/lab/weighted-pool-boundary/combined.cpp",
+    "inputSha256": "91cc7fe50562dd25c483c8aec903bc1a501c14fd6de08909715fcb20ef175660",
+    "transformation": "actual production class/header; previous native comparison renamed frozen ReferenceWeightedPool; same drivers/assertions"
+  }
+]

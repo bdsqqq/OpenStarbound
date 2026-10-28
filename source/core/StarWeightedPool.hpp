@@ -1,6 +1,10 @@
 #pragma once
 
 #include "StarRandom.hpp"
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+#include "StarSet.hpp"
+#include "StarWeightedPoolHost.hpp"
+#endif
 
 namespace Star {
 
@@ -47,98 +51,272 @@ public:
 private:
   size_t selectIndex(double target) const;
 
+
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+  template<unsigned Mode> struct NativeFrame : RustWeightedPoolDetail::Frame {
+    using Pool=std::conditional_t<(Mode<=3),WeightedPool,WeightedPool const>;
+    Pool* pool; uint64_t a,b; RandomSource* random; Item* value; void const* borrowed=nullptr;
+    NativeFrame(Pool* p,uint64_t x=0,uint64_t y=0,RandomSource* r=nullptr,Item* v=nullptr):pool(p),a(x),b(y),random(r),value(v){
+      this->payload=this;
+      this->allowed=[](void* p,uint32_t op,uint64_t arg){return static_cast<NativeFrame*>(p)->permits(op,arg);};
+      this->leaf=[](void* p,uint32_t op,uint64_t arg){return static_cast<NativeFrame*>(p)->perform(op,arg);};
+    }
+    bool permits(uint32_t op,uint64_t arg){
+      if(op==SB_WP_ARG)return arg==0&&(Mode==2||Mode==6||Mode==7||Mode==8||Mode==12||Mode==14||Mode==17||Mode==18);
+      bool hasArg=op==SB_WP_AT_BORROW||op==SB_WP_AT_WEIGHT||op==SB_WP_AT_ITEM_BORROW||op==SB_WP_WRITE_TOTAL||op==SB_WP_DRAW_STATIC||op==SB_WP_CALL_INDEX_SEED||op==SB_WP_READ_WEIGHT;
+      if(!hasArg&&arg)return false;
+      switch(op){
+       case SB_WP_COUNT:return Mode==5||Mode==14;
+       case SB_WP_IS_EMPTY:return Mode==9||Mode==10||Mode==11||Mode==12||Mode==18;
+       case SB_WP_AT_BORROW:return Mode==6;
+       case SB_WP_AT_WEIGHT:return Mode==7;
+       case SB_WP_AT_ITEM_BORROW:return Mode==8;
+       case SB_WP_APPEND_ITEM_EXPRESSION:return Mode==2;
+       case SB_WP_CLEAR_ITEMS:return Mode==3;
+       case SB_WP_READ_TOTAL:return Mode==2||Mode==18;
+       case SB_WP_WRITE_TOTAL:return Mode==2||Mode==3;
+       case SB_WP_DRAW_SOURCE:return Mode==15;
+       case SB_WP_DRAW_GLOBAL:return Mode==16;
+       case SB_WP_DRAW_STATIC:return Mode==17;
+       case SB_WP_DRAW_SEED:return Mode==13;
+       case SB_WP_CALL_INDEX_SOURCE:return Mode==10;
+       case SB_WP_CALL_INDEX_GLOBAL:return Mode==11;
+       case SB_WP_CALL_INDEX_SEED:return Mode==12;
+       case SB_WP_READ_WEIGHT:return Mode==18&&arg<pool->m_items.size();
+       case SB_WP_SCAN_SIZE:return Mode==18;
+      }return false;
+    }
+    SbWpReply perform(uint32_t op,uint64_t arg){using namespace RustWeightedPoolDetail;
+     switch(op){
+      case SB_WP_ARG:return reply(Mode==2||Mode==18?SB_WP_F64:SB_WP_U64,arg?b:a);
+      case SB_WP_COUNT:if constexpr(Mode==14)return reply(SB_WP_U64,pool->size());else return reply(SB_WP_U64,pool->m_items.count());
+      case SB_WP_IS_EMPTY:return reply(SB_WP_BOOL,pool->m_items.empty());
+      case SB_WP_AT_BORROW:if constexpr(Mode==4)borrowed=&pool->m_items;else borrowed=&pool->m_items.at(arg);return reply(SB_WP_BORROW);
+      case SB_WP_AT_WEIGHT:return reply(SB_WP_F64,bits(pool->at(arg).first));
+      case SB_WP_AT_ITEM_BORROW:borrowed=&pool->at(arg).second;return reply(SB_WP_BORROW);
+      case SB_WP_APPEND_ITEM_EXPRESSION:if constexpr(Mode==2)pool->m_items.append({number(a),std::move(*value)});return reply();
+      case SB_WP_CLEAR_ITEMS:if constexpr(Mode==3){pool->m_items.clear();return reply();}break;
+      case SB_WP_READ_TOTAL:return reply(SB_WP_F64,bits(pool->m_totalWeight));
+      case SB_WP_WRITE_TOTAL:if constexpr(Mode==2||Mode==3){pool->m_totalWeight=number(arg);return reply();}break;
+      case SB_WP_DRAW_SOURCE:return reply(SB_WP_F64,bits(random->randd()));
+      case SB_WP_DRAW_GLOBAL:return reply(SB_WP_F64,bits(Random::randd()));
+      case SB_WP_DRAW_STATIC:return reply(SB_WP_F64,bits(staticRandomDouble(arg)));
+      case SB_WP_DRAW_SEED:return reply(SB_WP_U64,Random::randu64());
+      case SB_WP_CALL_INDEX_SOURCE:if constexpr(Mode==10)return reply(SB_WP_U64,pool->selectIndex(*random));break;
+      case SB_WP_CALL_INDEX_GLOBAL:if constexpr(Mode==11)return reply(SB_WP_U64,pool->selectIndex());break;
+      case SB_WP_CALL_INDEX_SEED:if constexpr(Mode==12)return reply(SB_WP_U64,pool->selectIndex(arg));break;
+      case SB_WP_READ_WEIGHT:return reply(SB_WP_F64,bits(pool->m_items[arg].first));
+      case SB_WP_SCAN_SIZE:return reply(SB_WP_U64,pool->m_items.size());
+     }throw std::runtime_error("invalid native capability");
+    }
+  };
+
+#endif
   ItemsList m_items;
   double m_totalWeight;
 };
 
 template <typename Item>
 WeightedPool<Item>::WeightedPool()
-  : m_totalWeight(0.0) {}
+  : m_totalWeight(0.0) {
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+NativeFrame<0> f(this); f.run(0);
+#else
+
+#endif
+}
 
 template <typename Item>
 template <typename Container>
 WeightedPool<Item>::WeightedPool(Container container)
   : WeightedPool() {
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+auto root=RustWeightedPoolDetail::makeFrame(
+[](uint32_t op,uint64_t a){return op==SB_WP_CONTAINER_SCOPE&&!a;},
+[&](uint32_t,uint64_t){
+ // These generic lambdas retain the enclosing WeightedPool access context.
+ auto memberBegin=[](auto& c)->decltype(c.begin()){return c.begin();};
+ auto memberEnd=[](auto& c)->decltype(c.end()){return c.end();};
+ constexpr bool members=std::is_invocable_v<decltype(memberBegin),Container&>&&std::is_invocable_v<decltype(memberEnd),Container&>;
+ auto cursor=[&](){if constexpr(members)return memberBegin(container);else return RustWeightedPoolDetail::Adl::first(container);}();
+ auto finish=[&](){if constexpr(members)return memberEnd(container);else return RustWeightedPoolDetail::Adl::last(container);}();
+ auto phase=RustWeightedPoolDetail::CursorPhase::condition;
+ auto loop=RustWeightedPoolDetail::makeFrame(
+ [&](uint32_t op,uint64_t a){if(a)return false;using P=RustWeightedPoolDetail::CursorPhase;return(op==SB_WP_CONTAINER_END&&phase==P::condition)||(op==SB_WP_CONTAINER_ADD_EXPRESSION&&phase==P::value)||(op==SB_WP_CONTAINER_NEXT&&phase==P::next);},
+ [&](uint32_t op,uint64_t){using P=RustWeightedPoolDetail::CursorPhase;if(op==SB_WP_CONTAINER_END){bool more=static_cast<bool>(cursor!=finish);phase=more?P::value:P::ended;return RustWeightedPoolDetail::reply(SB_WP_BOOL,!more);}if(op==SB_WP_CONTAINER_NEXT){++cursor;phase=P::condition;return RustWeightedPoolDetail::reply();} {auto const& pair=*cursor;add(get<0>(pair),get<1>(pair));}phase=P::next;return RustWeightedPoolDetail::reply();});
+ loop.run(1,1);return RustWeightedPoolDetail::reply();});root.run(1);
+#else
+
   for (auto const& pair : container)
     add(get<0>(pair), get<1>(pair));
+
+#endif
 }
 
 template <typename Item>
 void WeightedPool<Item>::add(double weight, Item item) {
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+NativeFrame<2> f(this,RustWeightedPoolDetail::bits(weight),0,nullptr,&item);f.run(2);
+#else
+
   if (weight <= 0.0)
     return;
 
   m_items.append({weight, std::move(item)});
   m_totalWeight += weight;
+
+#endif
 }
 
 template <typename Item>
 void WeightedPool<Item>::clear() {
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+NativeFrame<3> f(this);f.run(3);
+#else
+
   m_items.clear();
   m_totalWeight = 0.0;
+
+#endif
 }
 
 template <typename Item>
 auto WeightedPool<Item>::items() const -> ItemsList const & {
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+NativeFrame<4> f(this);f.borrowed=&m_items;f.borrowReturned=true;f.run(4);return m_items;
+#else
+
   return m_items;
+
+#endif
 }
 
 template <typename Item>
 size_t WeightedPool<Item>::size() const {
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+NativeFrame<5> f(this);return f.run(5).value;
+#else
+
   return m_items.count();
+
+#endif
 }
 
 template <typename Item>
 pair<double, Item> const& WeightedPool<Item>::at(size_t index) const {
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+NativeFrame<6> f(this,index);f.run(6);return *static_cast<ItemsType const*>(f.borrowed);
+#else
+
   return m_items.at(index);
+
+#endif
 }
 
 template <typename Item>
 double WeightedPool<Item>::weight(size_t index) const {
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+NativeFrame<7> f(this,index);return RustWeightedPoolDetail::number(f.run(7).value);
+#else
+
   return at(index).first;
+
+#endif
 }
 
 template <typename Item>
 Item const& WeightedPool<Item>::item(size_t index) const {
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+NativeFrame<8> f(this,index);f.run(8);return *static_cast<Item const*>(f.borrowed);
+#else
+
   return at(index).second;
+
+#endif
 }
 
 template <typename Item>
 bool WeightedPool<Item>::empty() const {
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+NativeFrame<9> f(this);return f.run(9).value;
+#else
+
   return m_items.empty();
+
+#endif
 }
 
 template <typename Item>
 Item WeightedPool<Item>::select(RandomSource& rand) const {
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+NativeFrame<10> f(this,0,0,&rand);auto r=f.run(10);if(r.tag==SB_WP_DEFAULT_ITEM)return Item();if(r.tag!=SB_WP_ITEM_RESULT||r.value>=m_items.size())throw std::runtime_error("select tag");return m_items[r.value].second;
+#else
+
   if (m_items.empty())
     return Item();
 
   return m_items[selectIndex(rand)].second;
+
+#endif
 }
 
 template <typename Item>
 Item WeightedPool<Item>::select() const {
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+NativeFrame<11> f(this);auto r=f.run(11);if(r.tag==SB_WP_DEFAULT_ITEM)return Item();if(r.tag!=SB_WP_ITEM_RESULT||r.value>=m_items.size())throw std::runtime_error("select tag");return m_items[r.value].second;
+#else
+
   if (m_items.empty())
     return Item();
 
   return m_items[selectIndex()].second;
+
+#endif
 }
 
 template <typename Item>
 Item WeightedPool<Item>::select(uint64_t seed) const {
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+NativeFrame<12> f(this,seed);auto r=f.run(12);if(r.tag==SB_WP_DEFAULT_ITEM)return Item();if(r.tag!=SB_WP_ITEM_RESULT||r.value>=m_items.size())throw std::runtime_error("select tag");return m_items[r.value].second;
+#else
+
   if (m_items.empty())
     return Item();
 
   return m_items[selectIndex(seed)].second;
+
+#endif
 }
 
 template <typename Item>
 List<Item> WeightedPool<Item>::selectUniques(size_t desiredCount) const {
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+NativeFrame<13> f(this);return selectUniques(desiredCount,f.run(13).value);
+#else
+
   return selectUniques(desiredCount, Random::randu64());
+
+#endif
 }
 
 template <typename Item>
 List<Item> WeightedPool<Item>::selectUniques(size_t desiredCount, uint64_t seed) const {
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+NativeFrame<14> root(this,desiredCount);size_t targetCount=root.run(14).value;
+Set<size_t> indices;
+auto collect=RustWeightedPoolDetail::makeFrame(
+[&](uint32_t op,uint64_t a){return (op==SB_WP_ARG&&a<2)||(op==SB_WP_UNIQUE_SET_SIZE&&!a)||op==SB_WP_CALL_INDEX_SEED||(op==SB_WP_UNIQUE_SET_ADD&&a<m_items.size());},
+[&](uint32_t op,uint64_t a){if(op==SB_WP_ARG)return RustWeightedPoolDetail::reply(SB_WP_U64,a?seed:targetCount);if(op==SB_WP_UNIQUE_SET_SIZE)return RustWeightedPoolDetail::reply(SB_WP_U64,indices.size());if(op==SB_WP_CALL_INDEX_SEED)return RustWeightedPoolDetail::reply(SB_WP_U64,selectIndex(a));indices.add(a);return RustWeightedPoolDetail::reply();});
+collect.run(14,2);
+List<Item> result;
+auto cursor=indices.begin();auto finish=indices.end();
+auto phase=RustWeightedPoolDetail::CursorPhase::condition;
+auto append=RustWeightedPoolDetail::makeFrame(
+[&](uint32_t op,uint64_t a){if(a)return false;using P=RustWeightedPoolDetail::CursorPhase;return(op==SB_WP_UNIQUE_END&&phase==P::condition)||(op==SB_WP_UNIQUE_APPEND_EXPRESSION&&phase==P::value&&*cursor<m_items.size())||(op==SB_WP_UNIQUE_NEXT&&phase==P::next);},
+[&](uint32_t op,uint64_t){using P=RustWeightedPoolDetail::CursorPhase;if(op==SB_WP_UNIQUE_END){bool more=static_cast<bool>(cursor!=finish);phase=more?P::value:P::ended;return RustWeightedPoolDetail::reply(SB_WP_BOOL,!more);}if(op==SB_WP_UNIQUE_NEXT){++cursor;phase=P::condition;return RustWeightedPoolDetail::reply();}result.append(m_items[*cursor].second);phase=P::next;return RustWeightedPoolDetail::reply();});
+append.run(14,3);return result;
+#else
+
   size_t targetCount = std::min(desiredCount, size());
   Set<size_t> indices;
   while (indices.size() < targetCount)
@@ -147,25 +325,49 @@ List<Item> WeightedPool<Item>::selectUniques(size_t desiredCount, uint64_t seed)
   for (size_t i : indices)
     result.append(m_items[i].second);
   return result;
+
+#endif
 }
 
 template <typename Item>
 size_t WeightedPool<Item>::selectIndex(RandomSource& rand) const {
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+NativeFrame<15> f(this,0,0,&rand);return selectIndex(RustWeightedPoolDetail::number(f.run(15).value));
+#else
+
   return selectIndex(rand.randd());
+
+#endif
 }
 
 template <typename Item>
 size_t WeightedPool<Item>::selectIndex() const {
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+NativeFrame<16> f(this);return selectIndex(RustWeightedPoolDetail::number(f.run(16).value));
+#else
+
   return selectIndex(Random::randd());
+
+#endif
 }
 
 template <typename Item>
 size_t WeightedPool<Item>::selectIndex(uint64_t seed) const {
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+NativeFrame<17> f(this,seed);return selectIndex(RustWeightedPoolDetail::number(f.run(17).value));
+#else
+
   return selectIndex(staticRandomDouble(seed));
+
+#endif
 }
 
 template <typename Item>
 size_t WeightedPool<Item>::selectIndex(double target) const {
+#ifdef STAR_USE_RUST_WEIGHTED_POOL
+NativeFrame<18> f(this,RustWeightedPoolDetail::bits(target));return f.run(18).value;
+#else
+
   if (m_items.empty())
     return NPos;
 
@@ -188,6 +390,8 @@ size_t WeightedPool<Item>::selectIndex(double target) const {
   // If we haven't crossed the target, just assume floating point error has
   // caused us to not quite make it to the last item.
   return m_items.size() - 1;
+
+#endif
 }
 
 }

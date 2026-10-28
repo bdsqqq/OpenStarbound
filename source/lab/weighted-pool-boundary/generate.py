@@ -2,7 +2,8 @@
 """Clone original definitions; replace only bodies in ON branch, exact OFF branch."""
 from pathlib import Path
 H=Path(__file__).resolve().parent;R=H.parents[2]
-s=(R/'source/core/StarWeightedPool.hpp').read_text();s=s.replace('WeightedPool','BoundaryWeightedPool')
+# The production header is now selectable; the qualified native input stays frozen.
+s=(R/'source/lab/weighted-pool/StarWeightedPool.original.hpp').read_text().replace('ReferenceWeightedPool','WeightedPool');s=s.replace('WeightedPool','BoundaryWeightedPool')
 # Helpers are nested types/static-free member functions; the two native fields stay exact.
 helpers=r'''
   template<unsigned Mode> struct NativeFrame : WpBoundary::Frame {

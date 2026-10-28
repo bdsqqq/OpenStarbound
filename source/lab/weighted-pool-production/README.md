@@ -1,0 +1,25 @@
+# weightedpool production-header integration — finite gate
+
+certificate `build/weighted-pool-production-r1/acquisition/certificate.typed`, sha256 `767ce920b538c0a44ce2fb3d7642df76c1ec4f28622fe186aa7421f172cf1a14`.
+
+```sh
+python3 -B source/lab/weighted-pool-production/verify.py --certificate-sha 767ce920b538c0a44ce2fb3d7642df76c1ec4f28622fe186aa7421f172cf1a14
+```
+
+`STAR_USE_RUST_WEIGHTED_POOL` defaults OFF. ON selects the existing aggregate and its compile definition. actual `StarWeightedPool.hpp` now uses the qualified19 native continuations and typed inline host; the original two fields/layout/lifecycle declarations remain. native OFF bodies are unchanged. generated fixtures use the ACTUAL production class/header, not the lab class, and retain independent frozen-native references. class/Random dependency substitutions are declared in `transformations.json`.
+
+## executed and replayed
+
+- actual production-header OFF and ON compile/link/runtime: original8 lifecycle traces twice,27 rational rows, scalar/real native Random assertions, lazy/copy/move/layout/borrow/private-friend/move-only cursor/contextual-bool/native exception identity. ON also requires all19 actual Rust roots/four stages; OFF uses a distinct label and makes no Rust route-counter claim.
+- exact113 original Core/extern objects, canonical physical Rust members, expanded linker argv/map/trace/SDK, and surviving production→Rust edge reconstructed. both fixture images link the aggregate for their direct protocol self-tests; this is NOT a standalone no-Rust-link proof for OFF.
+- CMake ENGINE evaluated the source-extracted default-OFF/ON option/aggregate/definition gate. includes/definitions are observed by a script harness: NOT full project configure/build evidence.
+- actual `StarTreasure.cpp`, `StarWeather.cpp`, `StarCelestialDatabase.cpp` TYPECHECK under their original native game compile commands plus the sole new selector, using `-fsyntax-only` and consumed-header receipts. not executed gameplay.
+- seven isolated semantic/provider/count-runtime falsifiers rejected.
+
+old inline and Rust certificates/products/source epochs reconstruct using exact pre-edit source copies; no executable/tool substitution. before inventory refresh, exact old catalog/modules metadata were retained under `metadata-retention.json`, sha256 `dd26cf0fbc7df44a8d99f5a613b71f82353488faa75c20ed775299a41e85edaf`. this resolver can serve ONLY those two noncompiled metadata files, never changed compiled code/tools.
+
+## remaining application gates
+
+no new game build, screenshot matrix, PCM/CLI/TCP/save/BTree qualification or cleanup yet. the behavior build profile is fail-closed until dedicated externally pinned WeightedPool game admission exists; it also refuses a new game pair while the current TTL pair remains. full project28-selector configure, standalone native no-Rust-link evidence and actual scene24 remain for that unit.
+
+scene24 should use normal `root.createTreasure` with literal singleton retained/zero/negative entries and repeated seeded requests; descriptors must drive real pixels. preserve the route's eager global default RNG draw. treasure deduplication is not WeightedPool::selectUniques; startup loading is not phase-call constructor coverage. do not claim those missing edges from this scene or fit multi-entry float goldens. original qualified numeric/lifecycle/runtime fixtures remain separate evidence. full39 migration stays open.
