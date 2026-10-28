@@ -66,7 +66,8 @@ def remaining(plan):
 
 def supervise(argv, cwd, env, output, plan):
     """Preserve failed commands; terminate only this owned process group."""
-    ad.dump(output.with_suffix('.command.json'), dict(argv=argv, cwd=str(cwd), environment=env))
+    started_utc = dt.datetime.now(dt.timezone.utc).isoformat()
+    ad.dump(output.with_suffix('.command.json'), dict(argv=argv, cwd=str(cwd), environment=env, startedUTC=started_utc))
     remaining(plan)
     ad.check_budget(Path(plan['buildRoot']))
     ad.need(not os.path.lexists(ROOT / 'build/.migration-cleanup.lock'), 'cleanup active before owned command')
@@ -102,7 +103,8 @@ def supervise(argv, cwd, env, output, plan):
                 pass
             proc.wait()
             ad.dump(output.with_suffix('.receipt.json'), dict(argv=argv, returncode=proc.returncode,
-                    elapsedSeconds=time.monotonic() - start, failure=failure))
+                    elapsedSeconds=time.monotonic() - start, failure=failure, pid=proc.pid,
+                    finishedUTC=dt.datetime.now(dt.timezone.utc).isoformat()))
     ad.need(code == 0, 'native command failed; immutable logs retained: ' + str(output))
     ad.check_deadline(plan)
     ad.check_budget(Path(plan['buildRoot']))

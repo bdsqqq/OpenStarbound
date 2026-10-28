@@ -26,8 +26,8 @@ review found three safety gaps, repaired before native execution:
 before-source controls retain the cargo-home and surviving-descendant failures.
 read-only actual29/19-tool/113-object checks pass; actual old-pair and1536mib
 reservation guards correctly reject. **no actual prepare/sdk closure/configure/
-compile/cargo/game ran.** frontend capture remains disabled pending origin and
-launch/restoration producers; actual behavior and module cleanup remain open.
+compile/cargo/game ran.** origin and launch/restoration producers are now
+source-tested separately (`LAUNCH.md`); actual behavior and module cleanup remain open.
 
 completion `build/id-map-build-source-r1/completion.json`, sha256
 `8135280fe088b3b19f1cd362f7ae9e58a413a7a73c7ffc04abf7887a698a7b51`.

@@ -21,9 +21,11 @@ checker with25 and reject a removed25 clause. this is not a historical tool pass
 completion `build/id-map-frontend-r1/completion.json` sha256
 `cb595e9361a0241d820357250b2d9724db8a03bd2d97a3383648fbfb57edd2db`.
 
-capture deliberately ALWAYS fails closed. `id_map_origin.py` and new actual
-origin/launch-admission/sidecar producers remain unimplemented. no game ran and
-no positive native origin is inferred from monkeypatched synthetic fixtures.
+the source pipeline now includes `id_map_origin.py` and `id_map_capture.py`:
+see `LAUNCH.md` for the85-test integration checkpoint. capture requires the NEW
+whole-game source/tool/header/link/code witness and actual argv; the existing old
+pair cannot pass it. no game ran and no positive native origin is inferred from
+monkeypatched synthetic fixtures. actual fresh admission/runtime remains OPEN.
 
 the source contract for remaining integration: use narrowly
 scoped additive adapters for `SCENARIOS`, `asset_overlays`, `captures`,

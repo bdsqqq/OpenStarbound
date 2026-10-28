@@ -1,7 +1,8 @@
 """Synthetic sensitivity fixtures only: NO game, native origin, or runtime proof.
 
-Only the private game-origin checker is bypassed for synthetic positive inputs.
-Generic build, process, config, image, state and manifest validators still run.
+The private whole-game origin checker is bypassed for synthetic positive inputs.
+These fake builds are NOT origin evidence; process/config/image/state validators
+still run. The separate origin suite exercises the pure build-origin reader.
 """
 import json
 from pathlib import Path
@@ -78,9 +79,9 @@ class SyntheticFrontendTests(unittest.TestCase):
                         metadata=receipt))
         runner.dump(frames / lab.RESTORATION, dict(version=1, scenario=lab.SCENARIO, stat='behaviorLabIdMap',
                     value=0, ownedCategoriesAbsent=True, lastPreparedStage=2))
-        launch = dict(binary=binary_id, command=command, configuration=config_id,
+        launch = dict(binary=binary_id, command=command, configuration=config_id, timeoutSeconds=180,
                       frontend=dict(identities=lab._frontend_identity(), argv=[str(Path(lab.__file__).resolve()),
-                                    'capture', '--synthetic-fixture-not-game']))
+                                    'capture', '--capture', str(binary), '--assets', str(assets), '--output', str(parent)]))
         runner.dump(parent / 'launch.json', launch)
         start = dict(schema=1, pid=12345, pgid=12345, osStart='SYNTHETIC-NOT-OS-PROCESS', status='started',
                      command=command, binary=binary_id, configuration=config_id,
@@ -389,15 +390,38 @@ class SyntheticFrontendTests(unittest.TestCase):
         self.assertTrue((output / 'report.json').is_file())
         self.assertEqual(lab.main(['verify', str(frames)]), 2)
 
+    def test_cli_dispatches_new_producer_with_actual_capture_arguments(self):
+        import id_map_capture
+        binary, assets = self.build / 'SYNTHETIC-NOT-A-GAME', self.build / 'synthetic.pak'
+        output = self.build / 'new-producer-output'
+        args = ['capture', '--capture', str(binary), '--assets', str(assets),
+                '--output', str(output), '--timeout', '30']
+        with mock.patch.object(id_map_capture, 'capture', return_value=output / 'frames') as call:
+            self.assertEqual(lab.main(args), 0)
+        self.assertEqual(call.call_args.args[1:5], (binary, assets, output, 30))
+        self.assertEqual(call.call_args.args[5], [str(Path(lab.__file__).resolve()), *args])
+        self.assertFalse(output.exists())
+
+    def test_argv_input_mismatch_rejects_before_producer(self):
+        import id_map_capture
+        binary, assets = self.build / 'SYNTHETIC-NOT-A-GAME', self.build / 'synthetic.pak'
+        output = self.build / 'must-not-launch'
+        argv = [str(Path(lab.__file__).resolve()), 'capture', '--capture', str(binary),
+                '--assets', str(assets), '--output', str(output / 'wrong'), '--timeout', '30']
+        with mock.patch.object(id_map_capture, 'capture') as call, self.assertRaisesRegex(lab.LabError, 'differs'):
+            lab.capture(binary, assets, output, 30, frontend_argv=argv)
+        call.assert_not_called()
+        self.assertFalse(output.exists())
+
     def test_origin_not_ready_and_capture_fail_closed_without_launch(self):
         frames = self.fixture()
         self.origin_patch.stop()
         with self.assertRaisesRegex(lab.LabError, 'origin|OriginNotReady'):
             lab.validated(frames)
-        # Regardless of a parent-provided origin checker, launch producer is absent.
+        # An API caller without actual new-frontend argv cannot launch.
         self.origin_patch.start()
         output = self.build / 'must-not-launch'
-        with self.assertRaisesRegex(lab.LabError, 'launch-admission producer'):
+        with self.assertRaisesRegex(lab.LabError, 'actual frontend argv'):
             lab.capture(frames.parent / 'SYNTHETIC-NOT-A-GAME', frames.parent / 'synthetic.pak', output, 1)
         self.assertFalse(output.exists())
 

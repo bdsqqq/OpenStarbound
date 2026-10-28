@@ -22,5 +22,6 @@ completion: `build/id-map-game-origin-r1/completion.json`, sha256
 
 this is not source/header/compiler/sdk/build admission, dynamic execution,
 complete data-target provenance or whole-game qualification. the frontend's
-required `id_map_origin.py` validator and launch producer remain unavailable;
-**capture stays disabled** until a fresh actual29 epoch binds those contracts.
+required `id_map_origin.py` validator and launch producer are now source-tested
+(see `LAUNCH.md`), but no fresh actual29 epoch has bound their runtime contracts.
+**the existing old pair still cannot launch as an IdMap game.**

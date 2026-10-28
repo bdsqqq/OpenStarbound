@@ -83,6 +83,11 @@ class BuilderTests(unittest.TestCase):
              patch.object(b.ad, 'check_budget'), patch.object(b.ad, 'check_deadline'):
             b.supervise(['SYNTHETIC NEVER EXECUTED'], self.root, {}, self.root / 'successful', self.plan)
         self.assertEqual([c.args[1] for c in kill.call_args_list], [b.signal.SIGKILL])
+        command = json.loads((self.root / 'successful.command.json').read_text())
+        receipt = json.loads((self.root / 'successful.receipt.json').read_text())
+        self.assertEqual(receipt['pid'], proc.pid)
+        self.assertLessEqual(b.dt.datetime.fromisoformat(command['startedUTC']),
+                             b.dt.datetime.fromisoformat(receipt['finishedUTC']))
 
     def test_missing_compiled_header(self):
         receipt = self.dep_fixture()

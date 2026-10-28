@@ -20592,6 +20592,26 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/id_map_capture.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/id_map_origin.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/behavior/id_map_proof.py",
       "rule": "laboratories"
     },
@@ -20863,6 +20883,26 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/behavior/test_host_address_proof.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/test_id_map_capture.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/test_id_map_origin.py",
       "rule": "laboratories"
     },
     {
@@ -30890,7 +30930,7 @@
     },
     {
       "path": "scripts/test_build_id_map_behavior_lab.py",
-      "sha256": "ab237ba725a395969a384f498f11be67225dabf0a25d184974f39a82ee1810a2"
+      "sha256": "fc2e4bf173bb5be0bce1cda8292310b6d0ebfcac2df0a646b38e794ff32b48bc"
     },
     {
       "path": "scripts/test_cleanup_migration_artifacts.py",
@@ -35298,7 +35338,7 @@
     },
     {
       "path": "source/lab/behavior/behavior_lab_id_map.py",
-      "sha256": "2ef69d977060592fffd14a0dff4aaf399cb7bc4d086e3be9296ab104b1ad57f6"
+      "sha256": "fdc5d07acbaa6906d62ed15a75522b83e4513d24b33349642aab0252e3ef7225"
     },
     {
       "path": "source/lab/behavior/btree_padding.py",
@@ -35347,6 +35387,14 @@
     {
       "path": "source/lab/behavior/host_address_proof.py",
       "sha256": "b9f3953aef82c241d03487e7ab2e8bd785819b702553611d6c6d831771951f5c"
+    },
+    {
+      "path": "source/lab/behavior/id_map_capture.py",
+      "sha256": "d655f90adc44045a5c0dd2fd925097b36fbaa30d674a427f42f1588c4e45f253"
+    },
+    {
+      "path": "source/lab/behavior/id_map_origin.py",
+      "sha256": "fd183d77c09806f631bcfd21d605c44687d56672173bb78dc9eef3b586c6dde2"
     },
     {
       "path": "source/lab/behavior/id_map_proof.py",
@@ -35418,7 +35466,7 @@
     },
     {
       "path": "source/lab/behavior/test_behavior_lab_id_map.py",
-      "sha256": "68b09f6b3ce04a7c7da96c0ce597fd8a69dfa9fa6cf39915b8137c8807802ca3"
+      "sha256": "5edbbfe758b6ccc73635993ab3ccc1c7b2e1736dedc8c6164d646d393f7af5e5"
     },
     {
       "path": "source/lab/behavior/test_buffer_proof.py",
@@ -35459,6 +35507,14 @@
     {
       "path": "source/lab/behavior/test_host_address_proof.py",
       "sha256": "466320b5ef84373501aeb977f3beacee3e3c33dda8d805d80058384783905c93"
+    },
+    {
+      "path": "source/lab/behavior/test_id_map_capture.py",
+      "sha256": "043df13c2b6ada4a43e17e923de27d98f449dafe97b55fa47439d044e7c4565f"
+    },
+    {
+      "path": "source/lab/behavior/test_id_map_origin.py",
+      "sha256": "3a86cbd52606731f40ff6dbdbdfcb778c64b6b4e4628075da7e8ae7e2e899c60"
     },
     {
       "path": "source/lab/behavior/test_id_map_proof.py",
@@ -38795,7 +38851,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 615,
+      "oracle/harness": 619,
       "retain-tooling": 31,
       "retained-third-party": 296,
       "rust-candidate": 29,
@@ -38836,14 +38892,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 46,
-      "validation.oracles-harness": 644,
+      "validation.oracles-harness": 648,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2106,
+    "files": 2110,
     "modules": 39,
-    "no_direct_target": 1000
+    "no_direct_target": 1004
   }
 }

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Explicit scene-25 frontend; synthetic tests are NOT real-game evidence.
 
-The acquired runner stays byte-exact. Capture admission for scene25 is deliberately
-unavailable until a new producer binds this tool's actual argv and game origins.
+The acquired runner stays byte-exact. Scene25 requires the new whole-game origin
+reader and launch/restoration producer; old build or kernel receipts cannot launch.
 """
 from __future__ import annotations
 
@@ -166,9 +166,9 @@ def _check_game_origin(executable, proof):
 
 def verified_build(executable):
     _assert_frozen()
-    # Generic verify preserves all fields, including actual29. It has no fixed
-    # selector extent; the historical WeightedPool-specific verifier is NOT used.
-    proof = _original['verified_build'](executable)
+    # The new origin reader replays current source/configuration/tool byte checks
+    # without generic verify's unsupervised native --version subprocesses.
+    proof = _legacy.load(_legacy.build_provenance.sidecar(Path(executable)))
     _check_selectors(proof)
     _check_game_origin(executable, proof)
     return proof
@@ -176,6 +176,7 @@ def verified_build(executable):
 
 def _frontend_identity():
     return dict(tool=_legacy.identity(Path(__file__)),
+                producer=_legacy.identity(HERE / 'id_map_capture.py'),
                 proofReader=_legacy.identity(HERE / 'id_map_proof.py'),
                 legacy=_legacy.identity(HERE / 'behavior_lab.py'),
                 originValidator=(_legacy.identity(HERE / 'id_map_origin.py')
@@ -247,6 +248,8 @@ def validated(directory):
             or _legacy.canonical(Path(argv[0])) != Path(__file__).resolve()
             or frontend['identities'] != _frontend_identity()):
         raise LabError('IdMap actual frontend tool identity/argv mismatch')
+    _capture_arguments(argv, Path(manifest['binary']['path']), Path(manifest['assets']['path']),
+                       directory.parent, launch.get('timeoutSeconds'))
     if not _proof.same(_legacy.load(directory.parent / BINDING), _binding(directory, manifest, origin, launch)):
         raise LabError('IdMap restoration/process/config/tool/game binding changed')
     return frames, manifest
@@ -272,13 +275,32 @@ def pair_compare(reference, candidate, output, same_backend=False):
         return report
 
 
-def capture(executable, assets, directory, timeout, scenario=SCENARIO):
+def _capture_arguments(argv, executable, assets, directory, timeout):
+    if (type(argv) is not list or len(argv) < 2 or argv[1] != 'capture'
+            or not all(type(a) is str for a in argv)
+            or _legacy.canonical(Path(argv[0])) != Path(__file__).resolve()):
+        raise LabError('IdMap actual frontend argv required')
+    parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
+    parser.add_argument('--capture', type=Path, required=True)
+    parser.add_argument('--assets', type=Path, required=True)
+    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--timeout', type=float, default=180)
+    try:
+        args = parser.parse_args(argv[2:])
+    except (SystemExit, argparse.ArgumentError) as error:
+        raise LabError('IdMap actual frontend argv malformed') from error
+    if (any(_legacy.canonical(a) != _legacy.canonical(b) for a, b in
+            ((args.capture, executable), (args.assets, assets), (args.output, directory)))
+            or type(timeout) not in (int, float) or args.timeout != timeout):
+        raise LabError('IdMap frontend argv differs from actual launch inputs')
+
+
+def capture(executable, assets, directory, timeout, scenario=SCENARIO, *, frontend_argv=None):
     if scenario != SCENARIO:
         return _original['capture'](executable, assets, directory, timeout, scenario)
-    verified_build(executable)
-    # Even a valid new game origin does not admit an old tool's argv. No launch
-    # until an actual new-tool producer seals frontend/process/restoration bindings.
-    raise LabError('IdMap OriginNotReady: scene25 launch-admission producer not implemented; no game launched')
+    _capture_arguments(frontend_argv, executable, assets, directory, timeout)
+    import id_map_capture
+    return id_map_capture.capture(sys.modules[__name__], executable, assets, directory, timeout, frontend_argv)
 
 
 # Four additive hooks only. verified_build remains original inside the private
@@ -324,7 +346,8 @@ def main(argv=None):
                          inspectionRequired=True, repeatability=baseline, comparison=comparison,
                          kind='reference-repeatability-only' if args.same_backend else 'exact-pixels-and-state'))
             return 0 if passed else 1
-        capture(args.capture, args.assets, args.output, args.timeout)
+        actual_argv = [str(Path(__file__).resolve()), *(sys.argv[1:] if argv is None else argv)]
+        capture(args.capture, args.assets, args.output, args.timeout, frontend_argv=actual_argv)
         return 0
     except (LabError, OSError, ValueError, KeyError, TypeError, _legacy.Image.DecompressionBombError) as error:
         print('behavior-lab-id-map: ' + str(error), file=sys.stderr)
