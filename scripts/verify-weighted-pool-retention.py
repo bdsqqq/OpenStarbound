@@ -209,8 +209,56 @@ def source_bindings(repo, specification, closure_sha, certificate_sha, protected
     return bindings, pin
 
 
+def retired_product_bindings(repo, specification, protected):
+    """Conserve ONLY the two historical game outputs, never substitute live tools.
+
+    This is an opt-in successor archive contract, separate from source epochs.
+    A missing original's inode/ctime/execution origin is explicitly unavailable.
+    """
+    if specification is None:
+        return {}, None
+    need(isinstance(specification, (tuple, list)) and len(specification) == 2,
+         'retired products require manifest and SHA256')
+    path, pin = specification
+    path = Path(path).absolute()
+    runs = repo / 'build/migration-evidence-archive/runs'
+    need(path.name == 'manifest.json' and path.parent.parent == runs and
+         re.fullmatch('[A-Za-z0-9_-]{1,128}', path.parent.name), 'retired product manifest scope')
+    m = pinned(path, pin)
+    base = Path('build/behavior/weighted-pool-combined-r1')
+    names = [base / backend / 'bin/starbound' for backend in ('reference', 'candidate')]
+    roots = [str(name.parent) for name in names]
+    need(m['version'] == 1 and type(m['version']) is int and
+         m['status'] == 'ARCHIVED_VERIFIED_PRUNED' and m['roots'] == roots and
+         m['min_bytes'] == MIN_BYTES, 'retired product archive contract')
+    entries = m['entries']
+    need(type(entries) is list and len(entries) == 2 and
+         {row['path'] for row in entries} == {str(p) for p in names},
+         'exact two historical game products required')
+    bindings = {}
+    for row in entries:
+        row_contract(row)
+        original = repo / relative(row['path'])
+        need(original in protected and protected[original] == row['sha256'],
+             'retired product original protected pin')
+        need(MIN_BYTES <= row['size'] <= 128 * CHUNK and row['fingerprint'][6] == 1,
+             'retired product size/link bound')
+        physical(original.parent, 'directory')
+        need(not os.path.lexists(original), 'retired product must be absent, never replace a live input')
+        blob = repo / 'build/migration-evidence-archive/blobs' / row['sha256'][:2] / (row['sha256'] + '.gz')
+        physical(blob)
+        before = fingerprint(blob)
+        with gzip.open(blob, 'rb') as stream:
+            need(digest(stream, row['size']) == (row['sha256'], row['size']),
+                 'retired product reconstructed bytes mismatch')
+        need(fingerprint(blob) == before, 'retired product blob changed')
+        bindings[original] = dict(path=str(original), sha256=row['sha256'], size=row['size'])
+    need(m['removed_bytes'] == sum(row['size'] for row in entries), 'retired product removed total')
+    return bindings, pin
+
+
 def verify(closure_path, closure_sha, repo=None, archive_manifest=None, archive_manifest_sha=None,
-           source_versions=None):
+           source_versions=None, retired_products=None):
     repo = Path(repo if repo is not None else Path(__file__).resolve().parents[1]).absolute()
     physical(repo, 'directory')
     closure_path = Path(closure_path).absolute()
@@ -284,9 +332,15 @@ def verify(closure_path, closure_sha, repo=None, archive_manifest=None, archive_
         protected[p] = pin
     versions, source_versions_sha = source_bindings(
         repo, source_versions, closure_sha, protection['certificateSha256'], protected)
+    retired, retired_sha = retired_product_bindings(repo, retired_products, protected)
     versioned = []
     protected_inodes, protected_paths, cache = set(), set(), {}
     for p, pin in protected.items():
+        if p in retired:
+            # Only exact archived bytes survive. Do not invent a current inode,
+            # resolve a restored executable, or renew its former execution proof.
+            protected_paths.add(p)
+            continue
         canonical = p.resolve(strict=True)
         protected_paths.update((p, canonical))
         stamp = tuple(fingerprint(canonical))
@@ -303,6 +357,8 @@ def verify(closure_path, closure_sha, repo=None, archive_manifest=None, archive_
         p, target_path = Path(name), Path(target)
         need(p.is_absolute() and target_path.is_absolute() and '..' not in p.parts and
              '..' not in target_path.parts, 'protected alias schema')
+        need(p not in retired and target_path not in retired,
+             'retired product cannot stand in for a protected live alias')
         need(p.resolve(strict=True) == target_path, 'protected alias resolution changed')
         protected_paths.update((p, target_path))
         protected_inodes.add(tuple(fingerprint(target_path)[:2]))
@@ -396,6 +452,8 @@ def verify(closure_path, closure_sha, repo=None, archive_manifest=None, archive_
                 complementFiles=len(rows) - len(selected), observedAliases=len(aliases),
                 protectedPaths=len(protected), reconstructedBlobs=len(verified_blobs),
                 sourceVersions=source_versions_sha, versionedSourceBindings=versioned,
+                retiredProductsManifest=retired_sha, retiredProducts=list(retired.values()),
+                retiredProductOriginState='UNAVAILABLE_ARCHIVED' if retired else 'NONE_RETIRED',
                 projectionChecked=True, currentGlobalAllocationMeasured=False,
                 limits=c['limits'] + ['retention only; exact historical source bytes are not live-source qualification; no semantic replay, runtime source/executable substitution, restore, or old live-origin/inode/ctime renewal',
                                       'allocation projection checked against fixed caps; current global allocation is not measured'])
@@ -414,11 +472,13 @@ def main():
     parser.add_argument('--archive-manifest', type=Path)
     parser.add_argument('--archive-manifest-sha')
     parser.add_argument('--source-versions', nargs=2, metavar=('PATH', 'SHA256'))
+    parser.add_argument('--retired-products', nargs=2, metavar=('MANIFEST', 'SHA256'),
+                        help='exact historical game outputs only; never current runtime/tool substitution')
     args = parser.parse_args()
     sys.addaudithook(forbid_process)
     print(json.dumps(verify(args.closure, args.closure_sha, args.repo,
                             args.archive_manifest, args.archive_manifest_sha,
-                            args.source_versions), sort_keys=True, indent=2))
+                            args.source_versions, args.retired_products), sort_keys=True, indent=2))
 
 
 if __name__ == '__main__':

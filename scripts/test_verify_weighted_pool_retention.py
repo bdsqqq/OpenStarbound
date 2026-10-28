@@ -559,6 +559,117 @@ class RetentionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'protected bytes changed'):
             self.epoch_audit()
 
+    def retired_pair_fixture(self, prune=True):
+        roots = ['build/behavior/weighted-pool-combined-r1/' + b + '/bin'
+                 for b in ('reference', 'candidate')]
+        aux = json.loads(self.aux.read_text())
+        entries = []
+        for i, root in enumerate(roots):
+            path = self.repo / root / 'starbound'
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(bytes([65 + i]) * V.MIN_BYTES)
+            row = dict(path=str(path.relative_to(self.repo)), sha256=pin(path),
+                       size=path.stat().st_size, fingerprint=V.fingerprint(path))
+            aux['witness']['files'][str(path)] = row['sha256']
+            blob = self.repo / 'build/migration-evidence-archive/blobs' / row['sha256'][:2] / (row['sha256'] + '.gz')
+            blob.parent.mkdir(parents=True, exist_ok=True)
+            blob.write_bytes(gzip.compress(path.read_bytes()))
+            entries.append(row)
+            if prune:
+                path.unlink()
+        self.closure['protection']['auxiliaryAdmissionSha256'] = write_json(self.aux, aux)
+        self.product_manifest = dict(version=1, status='ARCHIVED_VERIFIED_PRUNED',
+            roots=roots, min_bytes=V.MIN_BYTES, entries=entries,
+            removed_bytes=sum(e['size'] for e in entries))
+        self.product_manifest_path = self.repo / 'build/migration-evidence-archive/runs/retired-pair/manifest.json'
+        return entries
+
+    def product_audit(self, archived=False):
+        cp = write_json(self.closure_path, self.closure)
+        mp = write_json(self.manifest_path, self.manifest) if archived else None
+        pp = write_json(self.product_manifest_path, self.product_manifest)
+        return V.verify(self.closure_path, cp, self.repo,
+                        self.manifest_path if archived else None, mp,
+                        retired_products=(self.product_manifest_path, pp))
+
+    def test_retired_pair_defaults_stay_strict(self):
+        self.retired_pair_fixture()
+        with self.assertRaises(FileNotFoundError):
+            self.audit()
+
+    def test_exact_archived_game_product_conservation(self):
+        self.retired_pair_fixture()
+        result = self.product_audit()
+        self.assertEqual(len(result['retiredProducts']), 2)
+        self.assertEqual(result['retiredProductsManifest'], pin(self.product_manifest_path))
+        self.assertFalse(result['currentGlobalAllocationMeasured'])
+
+    def test_retired_pair_and_original_lab_archive(self):
+        self.retired_pair_fixture()
+        self.archive_fixture()
+        self.assertEqual(len(self.product_audit(True)['retiredProducts']), 2)
+
+    def test_retired_product_cannot_shadow_live_executable(self):
+        self.retired_pair_fixture(prune=False)
+        with self.assertRaisesRegex(ValueError, 'must be absent'):
+            self.product_audit()
+
+    def test_retired_product_manifest_requires_both_originals(self):
+        self.retired_pair_fixture()
+        self.product_manifest['entries'].pop()
+        with self.assertRaisesRegex(ValueError, 'exact two historical'):
+            self.product_audit()
+
+    def test_retired_product_never_substitutes_arbitrary_tool(self):
+        self.retired_pair_fixture()
+        self.product_manifest['entries'][0]['path'] = str(self.external.relative_to(self.repo))
+        with self.assertRaisesRegex(ValueError, 'exact two historical'):
+            self.product_audit()
+
+    def test_retired_product_original_pin_cannot_be_rebound(self):
+        self.retired_pair_fixture()
+        self.product_manifest['entries'][0]['sha256'] = '0' * 64
+        with self.assertRaisesRegex(ValueError, 'original protected pin'):
+            self.product_audit()
+
+    def test_retired_product_corrupt_blob_rejected(self):
+        entries = self.retired_pair_fixture()
+        h = entries[0]['sha256']
+        blob = self.repo / 'build/migration-evidence-archive/blobs' / h[:2] / (h + '.gz')
+        blob.write_bytes(gzip.compress(b'wrong'))
+        with self.assertRaisesRegex(ValueError, 'reconstructed bytes mismatch'):
+            self.product_audit()
+
+    def test_retired_product_decompression_bound(self):
+        entries = self.retired_pair_fixture()
+        h = entries[0]['sha256']
+        blob = self.repo / 'build/migration-evidence-archive/blobs' / h[:2] / (h + '.gz')
+        blob.write_bytes(gzip.compress(b'X' * (entries[0]['size'] + 1)))
+        with self.assertRaisesRegex(ValueError, 'exceed bound'):
+            self.product_audit()
+
+    def test_retired_product_keeps_unrelated_tool_strict(self):
+        self.retired_pair_fixture()
+        self.external.write_bytes(b'changed actual tool')
+        with self.assertRaisesRegex(ValueError, 'protected bytes changed'):
+            self.product_audit()
+
+    def test_retired_product_cannot_replace_protected_live_alias(self):
+        entries = self.retired_pair_fixture()
+        aux = json.loads(self.aux.read_text())
+        aux['witness']['aliases'][str(self.external_alias)] = str(self.repo / entries[0]['path'])
+        self.closure['protection']['auxiliaryAdmissionSha256'] = write_json(self.aux, aux)
+        with self.assertRaisesRegex(ValueError, 'protected live alias'):
+            self.product_audit()
+
+    def test_retired_product_requires_external_manifest_pin(self):
+        self.retired_pair_fixture()
+        cp = write_json(self.closure_path, self.closure)
+        write_json(self.product_manifest_path, self.product_manifest)
+        with self.assertRaisesRegex(ValueError, 'external manifest pin mismatch'):
+            V.verify(self.closure_path, cp, self.repo,
+                     retired_products=(self.product_manifest_path, '0' * 64))
+
     def test_audit_hook_rejects_process_events(self):
         for event in ('subprocess.Popen', 'os.system', 'os.posix_spawn', 'os.fork', 'os.exec'):
             with self.subTest(event=event), self.assertRaisesRegex(ValueError, 'process creation'):
