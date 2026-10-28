@@ -22428,6 +22428,16 @@
     {
       "cmake_membership": [],
       "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/id-map-boundary/continue_rust_bridge.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
       "language": "c/c++",
       "line": 1,
       "membership_status": "no-direct-target-found",
@@ -22482,6 +22492,46 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/id-map-boundary/providers.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/id-map-boundary/rust_bridge.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/id-map-boundary/rust_trace.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/id-map-boundary/test_providers.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/id-map-boundary/test_schema.py",
       "rule": "laboratories"
     },
@@ -22512,6 +22562,26 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/id-map-boundary/test_verify_rust_bridge.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/id-map-boundary/trace_key.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/id-map-boundary/verify_frames.py",
       "rule": "laboratories"
     },
@@ -22523,6 +22593,16 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/id-map-boundary/verify_policy.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/id-map-boundary/verify_rust_bridge.py",
       "rule": "laboratories"
     },
     {
@@ -35825,6 +35905,10 @@
       "sha256": "6235b210b631c1ebb9080b7791cc5f472fc4a1f76361c2a814ac8b19806670bc"
     },
     {
+      "path": "source/lab/id-map-boundary/continue_rust_bridge.py",
+      "sha256": "ee860f2cf2d69b354f5ee749c30fbcedc87891664c2ce23d898192321e1cbe8f"
+    },
+    {
       "path": "source/lab/id-map-boundary/controls.cpp",
       "sha256": "ae6e696e0a905416581f6f436e842dc2958a775953dff3d95aa283383114668d"
     },
@@ -35845,6 +35929,22 @@
       "sha256": "54282e46d5fc9317d7b47075a09d7aff5b48aefc2a4ac3507dde3eabc65a0b68"
     },
     {
+      "path": "source/lab/id-map-boundary/providers.py",
+      "sha256": "7b89ad854fafc95896ae75ebd79ed3568ea709e8342456abd5b8b9dc929fa04c"
+    },
+    {
+      "path": "source/lab/id-map-boundary/rust_bridge.py",
+      "sha256": "7ee5291449681568206dd8857ce81bdb65fd04cafba8dd59d67b3d77761a7390"
+    },
+    {
+      "path": "source/lab/id-map-boundary/rust_trace.cpp",
+      "sha256": "775573e6e3a8bb0ed5f0f863b57afd0c1d3a8c3822804a95a46361143fb6293e"
+    },
+    {
+      "path": "source/lab/id-map-boundary/test_providers.py",
+      "sha256": "57210577ae9d67fe2e53de3dcafa23843ff0b5814203fb5c1a8cdf7576e92f77"
+    },
+    {
       "path": "source/lab/id-map-boundary/test_schema.py",
       "sha256": "58bdb6a40f4211b415570b1abb8d5549a09faf0ef62bf3083eb326cf4d40a1c4"
     },
@@ -35857,12 +35957,24 @@
       "sha256": "da0c8d364b166a0c2319c9909225e91a8f169451535ccf6264ada21077c4ae79"
     },
     {
+      "path": "source/lab/id-map-boundary/test_verify_rust_bridge.py",
+      "sha256": "24f392146d17b17f36faf4ce165affc9822f17e707e24357f9e1d37e8ccb0ca1"
+    },
+    {
+      "path": "source/lab/id-map-boundary/trace_key.hpp",
+      "sha256": "bd5cf537c1a76fa5ee1efe6a94578bf51f00bdadb3834bd3c6849a1a1583733d"
+    },
+    {
       "path": "source/lab/id-map-boundary/verify_frames.py",
       "sha256": "1b8e9bee98c6a9b9bf22b1c137daf2f735cad90e51630cf06201185b02516227"
     },
     {
       "path": "source/lab/id-map-boundary/verify_policy.py",
       "sha256": "510e264d36cdaeeebb1e86afc139f6b0d9377e94532e839f8fee5c737d1f341c"
+    },
+    {
+      "path": "source/lab/id-map-boundary/verify_rust_bridge.py",
+      "sha256": "a5b5e1edf9a47206799367814cb9ad1bcb44814952d2a8a0cc37e5b5ae257621"
     },
     {
       "path": "source/lab/id-map/StarIdMap.original.hpp",
@@ -38431,7 +38543,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 591,
+      "oracle/harness": 599,
       "retain-tooling": 30,
       "retained-third-party": 296,
       "rust-candidate": 29,
@@ -38472,14 +38584,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 45,
-      "validation.oracles-harness": 620,
+      "validation.oracles-harness": 628,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2080,
+    "files": 2088,
     "modules": 39,
-    "no_direct_target": 974
+    "no_direct_target": 982
   }
 }

@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+"""Fresh link-only admission for omitted immutable linker support; no native rerun."""
+import json,os,shlex,time
+from pathlib import Path
+import rust_bridge as b
+R=b.R;O=b.O;S=O/'links-r2';sha=b.sha;need=b.need;dump=b.dump;typed=b.typed
+
+def main():
+ need(not S.exists(),'fresh link-only stage');S.mkdir();old=json.loads((O/'admission.json').read_bytes());w=old['witness'];b.unchanged(w);need(time.time()<b.DEADLINE and old['deadline']==b.DEADLINE,'same original deadline');r=old['recipe'];archive=Path(old['archive']);canonical=json.loads((O/'canonical.json').read_bytes());need(sha(archive)==canonical['sha256'],'actual already-produced canonical archive');owners=b.providers.physical(archive);need(b.codec.dumps(owners)==(O/'physical-providers.typed').read_text().strip(),'original physical provider pins')
+ frame=json.loads((b.FRAME/'admission-probe.json').read_bytes());w2=dict(files=dict(w['files']),aliases=dict(w['aliases']));support=[];usr=Path(r['compiler']).resolve().parent.parent
+ for p in [usr/'lib/libLTO.dylib',usr/'lib/libtapi.dylib']:
+  key=str(p.resolve());need(key in frame['witness']['files']and sha(p)==frame['witness']['files'][key],'pre-existing exact support-tool bytes, never a source-copy substitute');w2['files'][key]=sha(p);w2['aliases'][str(p)]=key;support.append(dict(path=str(p),sha256=sha(p)))
+ for p in [Path(__file__),archive,O/'trace.o',O/'canonical.json',O/'physical-providers.typed']:w2['files'][str(p.resolve())]=sha(p)
+ oldbudget=b.budget
+ def budget():
+  value=oldbudget();need(b.native.cleanup.allocated_bytes(O)<=128*1024**2,'whole bridge root128MiB');return value
+ b.O=S;b.budget=budget;b.COMMANDS=[]
+ dump(S/'admission.json',dict(witness=w2,previousAdmissionSha256=sha(O/'admission.json'),deadline=b.DEADLINE,env=old['env'],supportTools=support,scope='fresh link-only admission before any link; original producer failed closed at omitted libLTO input; Cargo/compile/expansion NOT relabeled or rerun',canonicalSha256=sha(O/'canonical.json')))
+ before=json.loads((O/'sdk-before.json').read_bytes());sdk=r['flags'][r['flags'].index('-isysroot')+1];origins={};outputs={};c=r['compiler'];env=old['env']
+ for role,obj in [('native',b.FRAME/'native-r2.o'),('edges',b.FRAME/'edges.o'),('trace',O/'trace.o')]:
+  link=[c,*r['flags'],*r['objects'],obj,archive,*r['libraries'],'-Wl,-dead_strip','-Wl,-map,'+str(O/(role+'.map')),'-Wl,-t,-trace_implicit_libraries','-o',O/role]
+  if role=='native':expansion=O/'native-expand.stderr'
+  else:b.command(role+'-expand',[c,'-###',*link[1:]],w2,env);expansion=S/(role+'-expand.stderr')
+  rows=[shlex.split(x)for x in expansion.read_text().splitlines()if x.lstrip().startswith('"')];need(len(rows)==1,'one expanded ld');bound=b.expanded_invocation.bind(rows[0]);need(bound['inventory']['tool']==old['tools']['CMAKE_LINKER'],'selected actual linker');inputs=bound['inventory']['file_inputs'];need([p for p in inputs if p.endswith('.o')]==[*r['objects'],str(obj)],'exact113+one C++ objects, no mock');need([p for p in inputs if p.endswith('.a')and('star_engine_ffi'in p or'/rust'in p)]==[str(archive)],'one aggregate/runtime');b.subset(inputs,w2);typed(S/(role+'-expanded.typed'),bound)
+  blobs={p.encode():Path(p).read_bytes()for p in inputs if p.endswith('.a')};tables={p:b''.join(m['name']+b'\n'for m in b.archive_identity.arm64_archive_members(raw))for p,raw in blobs.items()};typed(S/(role+'-prelink.typed'),{p:[{k:m[k]for k in ['name','offset','sha256']}for m in b.archive_identity.arm64_archive_members(raw)]for p,raw in blobs.items()})
+  b.command(role+'-link',link,w2,env);b.expanded_invocation.verify(bound,rows[0]);objects=[*[p.encode()for p in r['objects']],str(obj).encode()];trace=b.link_trace.parse((S/(role+'-link.stdout')).read_bytes(),objects,tables);mapped=b.object_inventory.reconcile((O/(role+'.map')).read_bytes(),objects,tables,blobs);live=b.providers.live(b.native_symbols.live_symbols((O/(role+'.map')).read_bytes()),owners,archive,role=='trace');paths=trace['sdk_paths']+mapped['unresolved_origins']+[x['source']for x in trace['indirect_declarations']];sdkroles=b.sdk_witness.reconcile_consumed(before,[os.fsdecode(p)for p in paths],requested_root=sdk,expected_canonical_root=sdk);origins[role]=dict(providers=live,sdk=sdkroles,trace=trace,map=mapped)
+  b.command(role,[O/role],w2,env);b.command(role+'-repeat',[O/role],w2,env);outputs[role]=(S/(role+'.stdout')).read_text();need(outputs[role]==(S/(role+'-repeat.stdout')).read_text(),'actual native repeat')
+ b.command('disassemble',['/usr/bin/otool','-tvV',O/'trace'],w2,env);dis=(S/'disassemble.stdout').read_bytes();need(any(b'_sb_idmap_run'in x and(b'\tbl\t'in x or b'\tb\t'in x)for x in dis.splitlines()),'surviving native to Rust call edge');b.model.verify(outputs['native']);b.edge_model.verify(outputs['edges']);need(outputs['native']==(b.FRAME/'native-r2.stdout').read_text()and outputs['edges']==(b.FRAME/'edges.stdout').read_text(),'original/model/mock byte streams unchanged');traces=[x for x in outputs['trace'].splitlines()if x.startswith('TRACE\t')];frame_report=json.loads((b.FRAME/'report.json').read_bytes());need(traces==frame_report['typedTraces'],'same original typed traces');markers=[x for x in outputs['trace'].splitlines()if x.startswith('PASS\tactual-rust-')];need(len(markers)==3,'actual Rust controls')
+ b.unchanged(w2);after=b.sdk_witness.capture(sdk,sdk);need(before==after,'SDK before/after');dump(O/'sdk-after.json',after);typed(O/'origins.typed',origins)
+ result=dict(status='FINITE_ACTUAL_RUST_IDMAP_INTEROP_BY_LINK_ONLY_CONTINUATION',acceptedPredecessorCommands=['canonical-cargo','trace-compile','native-expand'],commands=b.COMMANDS,originalProducer='FAILED_CLOSED_BEFORE_FIRST_LINK: missing libLTO admission; original source/logs retained, no Cargo/compile/native rerun',admissionSha256=sha(S/'admission.json'),originalAdmissionSha256=sha(O/'admission.json'),canonicalSha256=sha(O/'canonical.json'),typedTraces=traces,actualRustMarkers=markers,limits=['actual same-aggregate native interop/provider declarations, NOT production/game/full39','finite domains only, no signed overflow/full-small-integer nonprogress claim','live map provider declarations/native call edge, NOT complete surviving-code/data-target provenance'])
+ result['products']={str(p):sha(p)for p in O.rglob('*')if p.is_file()and p.name!='report.json'};dump(O/'report.json',result);budget();print('REPORT',sha(O/'report.json'))
+if __name__=='__main__':main()
