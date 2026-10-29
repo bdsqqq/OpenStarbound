@@ -26,7 +26,8 @@ int main() {
   {
     V a;
     V same(a);
-    V filled(2, 7);
+    // int,int selects the original unconstrained iterator constructor instead.
+    V filled(static_cast<size_t>(2), 7);
     V moved(std::move(filled));
     Star::StaticVector<int, 3> converted(a);
     V list{1, 2};
