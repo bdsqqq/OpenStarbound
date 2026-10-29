@@ -144,9 +144,13 @@ def association(raw, owner):
     for record in info['images']:
         need(type(record) is _PlistDict and type(record.get('image-path')) is str
              and type(record.get('system-entities')) is list, 'image record')
+        # Unrelated images can have opaque OS references (for example RAM
+        # images). They cannot select our owner; device/mount overlap below
+        # still fails closed. Only the selected owner needs physical attestation.
         record_path = Path(record['image-path'])
-        need(record_path.is_absolute() and str(record_path) == record['image-path']
-             and '..' not in record_path.parts, 'canonical info image path')
+        if record_path.is_absolute():
+            need(str(record_path) == record['image-path'] and '..' not in record_path.parts,
+                 'canonical filesystem image reference')
         entities = record['system-entities']
         need(all(type(e) is _PlistDict and type(e.get('dev-entry')) is str for e in entities),
              'entity record')

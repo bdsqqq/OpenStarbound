@@ -89,6 +89,19 @@ class ReleaseTests(unittest.TestCase):
             self.release(runner, now)
         self.assertEqual(len(self.calls), calls)
 
+    def test_unrelated_opaque_image_reference_does_not_block_owned_release(self):
+        self.records.append({'image-path': 'ram://2048', 'system-entities': [
+            {'dev-entry': '/dev/disk99'},
+            {'dev-entry': '/dev/disk99s1', 'mount-point': '/Volumes/unrelated'}]})
+        receipt = self.release()
+        self.assertEqual(receipt['scope'], 'RESOURCE_RELEASE_ONLY_NOT_ADMISSION')
+        self.assertEqual(len(self.calls), 2)
+
+    def test_opaque_reference_reusing_owned_device_still_rejected(self):
+        self.records.append({'image-path': 'ram://2048', 'system-entities': [
+            {'dev-entry': self.owner['device']}]})
+        self.rejected(calls=1)
+
     def test_expired_original_preserved_and_exact_commands_same_deadline(self):
         original = self.owner['originalExperiment']
         receipt = self.release()

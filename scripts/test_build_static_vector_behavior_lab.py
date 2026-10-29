@@ -364,6 +364,50 @@ class CaptureTests(unittest.TestCase):
             self.assertEqual(rig.launch.call_count, 1)
 
 
+class SharedCoreTests(unittest.TestCase):
+    def test_core_returns_receipt_only_after_cleanup_without_native_clock(self):
+        with capture_fixture(stdout=(b'\xff\x00', b''), stderr=(b'\x80', b'')) as rig:
+            validate = Mock()
+            clock = Mock(return_value=10)
+            receipt = builder._supervise_command(['/never-executed'], builder.ROOT / 'source', {},
+                rig.output, limits=rig.limits, validate=validate, remaining_seconds=clock,
+                python=Path(sys.executable).resolve(), witness={'release': 'only'},
+                write_record=builder.ad.primitives.dump, check_output=lambda path: None,
+                scope='RESOURCE_RELEASE_ONLY_NOT_ADMISSION')
+            self.assertEqual(receipt, rig.receipt())
+            self.assertTrue(rig.selector.closed)
+            self.assertTrue(receipt['guardianReaped'])
+            self.assertTrue(receipt['commandReaped'])
+            self.assertEqual(receipt['scope'], 'RESOURCE_RELEASE_ONLY_NOT_ADMISSION')
+            self.assertEqual(rig.output.with_suffix('.stdout').read_bytes(), b'\xff\x00')
+            rig.validate.assert_not_called()
+            rig.clock.assert_not_called()
+            self.assertEqual(validate.call_count, 2)
+
+    def test_core_unknown_command_reaping_survives_cancel(self):
+        with capture_fixture() as rig:
+            rig.chunks[13] = [BlockingIOError()] * 3
+            clock = Mock(side_effect=[10, ValueError('release clock expired')])
+            with self.assertRaisesRegex(ValueError, 'release clock expired'):
+                builder._supervise_command(['/never-executed'], builder.ROOT / 'source', {},
+                    rig.output, limits=rig.limits, validate=lambda: None,
+                    remaining_seconds=clock, python=Path(sys.executable).resolve(), witness={},
+                    write_record=builder.ad.primitives.dump, check_output=lambda path: None,
+                    scope='RESOURCE_RELEASE_ONLY_NOT_ADMISSION')
+            receipt = rig.receipt()
+            self.assertTrue(receipt['guardianReaped'])
+            self.assertFalse(receipt['commandReaped'])
+            self.assertIsNone(receipt['guardianStatus'])
+            self.assertFalse(receipt['outputComplete'])
+
+    def test_native_return_and_schema_do_not_gain_release_scope(self):
+        with capture_fixture() as rig:
+            self.assertIsNone(rig.run())
+            self.assertNotIn('scope', rig.receipt())
+            command = json.loads(rig.output.with_suffix('.command.json').read_text())
+            self.assertNotIn('scope', command)
+
+
 class GuardianTests(unittest.TestCase):
     def test_protocol_rejects_unknown_duplicate_trailing_and_typed_identities(self):
         with capture_fixture() as rig:

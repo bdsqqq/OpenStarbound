@@ -25238,6 +25238,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector-game/enclosure_runner.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/static-vector-game/game_build_admission.py",
       "rule": "laboratories"
     },
@@ -25299,6 +25309,16 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/static-vector-game/test_enclosure_release.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector-game/test_enclosure_runner.py",
       "rule": "laboratories"
     },
     {
@@ -31648,7 +31668,7 @@
     },
     {
       "path": "scripts/test_build_static_vector_behavior_lab.py",
-      "sha256": "46f9af2442285a85b349ddb3746e25db745783b2563816595418441bb3db32cb"
+      "sha256": "8218b8765651de466b74fe1bba1afa56270a667fc2a46bad5b631af5628ad2a5"
     },
     {
       "path": "scripts/test_cleanup_migration_artifacts.py",
@@ -37944,7 +37964,11 @@
     },
     {
       "path": "source/lab/static-vector-game/enclosure_release.py",
-      "sha256": "75dc50fe1b213247210c803fcd37fc9617b1be74195389fd46848e16c6e61f3b"
+      "sha256": "626c5a7569f42cd64a709612ed9a7d12c12e31d7d3038b6a29be8faa40287def"
+    },
+    {
+      "path": "source/lab/static-vector-game/enclosure_runner.py",
+      "sha256": "7f993c5c801b5232be71ccb007b8d460624c95fbb0b16ba418c6a30018e1b7f9"
     },
     {
       "path": "source/lab/static-vector-game/game_build_admission.py",
@@ -37972,7 +37996,11 @@
     },
     {
       "path": "source/lab/static-vector-game/test_enclosure_release.py",
-      "sha256": "b53ad023e24ea46eb217ab779e9205536e9edc5fc8e13bef7fc47fa7f8f416c2"
+      "sha256": "e8726be4f16d5537646a90378306a73ee3d81c8c341e8499bcf19921196462d5"
+    },
+    {
+      "path": "source/lab/static-vector-game/test_enclosure_runner.py",
+      "sha256": "05a445494eb00d77938cbcebb387963ed1e7ff4081a334691a3a02523416d278"
     },
     {
       "path": "source/lab/static-vector-game/test_game_build_admission.py",
@@ -39845,7 +39873,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 682,
+      "oracle/harness": 684,
       "retain-tooling": 35,
       "retained-third-party": 296,
       "rust-candidate": 30,
@@ -39886,14 +39914,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 50,
-      "validation.oracles-harness": 711,
+      "validation.oracles-harness": 713,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2181,
+    "files": 2183,
     "modules": 39,
-    "no_direct_target": 1075
+    "no_direct_target": 1077
   }
 }

@@ -136,6 +136,25 @@ def supervise(argv, cwd, env, output, plan):
     ad.validate(plan)
     python = Path(sys.executable).resolve(strict=True)
     ad.need(Path(plan.get('python', str(python))).resolve(strict=True) == python, 'guardian trusted Python mismatch')
+    _supervise_command(argv, cwd, env, output, limits=limits,
+        validate=lambda: ad.validate(plan), remaining_seconds=lambda: remaining(plan),
+        python=python, witness=plan['witness'], write_record=ad.dump,
+        check_output=lambda path: ad.controller_limit(path)
+            if path.name.endswith(('.command.json', '.receipt.json')) else None)
+
+
+def _supervise_command(argv, cwd, env, output, *, limits, validate,
+                       remaining_seconds, python, witness, write_record,
+                       check_output, scope=None):
+    """Owned guardian/capture mechanism; callers supply their own admission clock.
+
+    A successful return follows cleanup and durable receipt publication. Failure
+    reaps the direct guardian but never invents missing command-reaping evidence.
+    """
+    phase = output.name
+    for suffix in ('.command.json', '.receipt.json'):
+        check_output(output.with_suffix(suffix))
+    extra = {} if scope is None else {'scope': scope}
     launcher = dict(python=identity(python), guardian=identity(GUARDIAN))
     token = secrets.token_hex(32)
     started = dt.datetime.now(dt.timezone.utc).isoformat()
@@ -158,9 +177,11 @@ def supervise(argv, cwd, env, output, plan):
 
     try:
         for name in counts:
-            files[name] = output.with_suffix('.' + name).open('xb')
-        remaining(plan)
-        ad.validate(plan)
+            path = output.with_suffix('.' + name)
+            check_output(path)
+            files[name] = path.open('xb')
+        remaining_seconds()
+        validate()
         status_read, status_write = os.pipe()
         try:
             status_pipe = os.fdopen(status_read, 'rb', buffering=0)
@@ -170,10 +191,10 @@ def supervise(argv, cwd, env, output, plan):
         launch_argv = [str(python), '-B', str(GUARDIAN), '--status-fd', str(status_write),
                        '--token', token, '--source-sha', launcher['guardian']['sha256'],
                        '--environment-json', json.dumps(env, sort_keys=True), '--'] + list(argv)
-        ad.dump(output.with_suffix('.command.json'), dict(argv=argv, launchArgv=launch_argv,
+        write_record(output.with_suffix('.command.json'), dict(argv=argv, launchArgv=launch_argv,
             launcher=launcher, guardianSchema=GUARDIAN_SCHEMA, statusBytes=STATUS_BYTES,
             cwd=str(cwd), environment=env, phase=phase, outputLimits=limits, startedUTC=started,
-            inputsSha256=code.sha(json.dumps(plan['witness'], sort_keys=True).encode())))
+            inputsSha256=code.sha(json.dumps(witness, sort_keys=True).encode()), **extra))
         command_record = identity(output.with_suffix('.command.json'))
         ad.need(launcher == dict(python=identity(python), guardian=identity(GUARDIAN)), 'guardian launcher drift')
         proc = subprocess.Popen(launch_argv, cwd=cwd, env=env, stdout=subprocess.PIPE,
@@ -187,11 +208,11 @@ def supervise(argv, cwd, env, output, plan):
             selector.register(stream, selectors.EVENT_READ, name)
         next_validation = time.monotonic() + 2
         while True:
-            left = remaining(plan)
+            left = remaining_seconds()
             ad.need(left > 0, 'original phase deadline expired')
             now = time.monotonic()
             if now >= next_validation:
-                ad.validate(plan)
+                validate()
                 next_validation = time.monotonic() + 2
             if not group_stopped and status is not None:
                 stop_group(signal.SIGKILL)
@@ -231,6 +252,8 @@ def supervise(argv, cwd, env, output, plan):
                 overflow = data[len(prefix):]
                 if overflow:
                     path = output.with_suffix('.' + name + '-overflow.bin')
+                    check_output(path)
+                    ad.need(len(overflow) <= limits['overflowBytes'], 'overflow evidence bound')
                     with path.open('xb') as evidence:
                         evidence.write(overflow)
                     row['overflow'] = dict(path=str(path), sizeBytes=len(overflow), sha256=code.sha(overflow))
@@ -243,7 +266,7 @@ def supervise(argv, cwd, env, output, plan):
         ad.need(status['returncode'] == 0, 'native phase failed; logs retained')
         ad.need(proc.returncode == -signal.SIGKILL, 'guardian did not remain live until group cleanup')
         ad.need(launcher == dict(python=identity(python), guardian=identity(GUARDIAN)), 'guardian launcher drift')
-        ad.validate(plan)
+        validate()
         complete = True
     except BaseException as exc:
         failure = str(exc) or type(exc).__name__
@@ -278,7 +301,7 @@ def supervise(argv, cwd, env, output, plan):
             if cleanup_error is not None:
                 complete = False
                 failure = failure or str(cleanup_error) or type(cleanup_error).__name__
-            ad.dump(output.with_suffix('.receipt.json'), dict(argv=argv, launchArgv=launch_argv,
+            receipt = dict(argv=argv, launchArgv=launch_argv,
                 launcher=launcher, command=command_record, phase=phase, guardianStatus=status,
                 guardianStatusBytes=status_bytes_read, guardianStatusEOF=status_eof,
                 commandPID=status['commandPID'] if status is not None else None,
@@ -291,9 +314,11 @@ def supervise(argv, cwd, env, output, plan):
                 pid=proc.pid if proc is not None else None,
                 pgid=proc.pid if proc is not None else None, reaped=reaped,
                 guardianReaped=reaped, reapedScope='DIRECT_GUARDIAN_ONLY',
-                finishedUTC=dt.datetime.now(dt.timezone.utc).isoformat()))
+                finishedUTC=dt.datetime.now(dt.timezone.utc).isoformat(), **extra)
+            write_record(output.with_suffix('.receipt.json'), receipt)
             if raise_cleanup:
                 raise cleanup_error
+    return receipt
 
 
 def cargo_command(plan, build):
