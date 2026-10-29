@@ -8,6 +8,8 @@ import datetime as dt
 import importlib.util
 import json
 import math
+import re
+import signal
 from pathlib import Path
 import sys
 
@@ -33,9 +35,18 @@ need = ad.need
 identity = ad.identity
 
 
+def unique_object(pairs):
+    """Ambiguous receipts must not hide an incomplete declaration via last-wins."""
+    result = {}
+    for key, value in pairs:
+        need(key not in result, 'duplicate JSON key: ' + key)
+        result[key] = value
+    return result
+
+
 def read(path):
     identity(path)
-    value = json.loads(Path(path).read_text())
+    value = json.loads(Path(path).read_text(), object_pairs_hook=unique_object)
     need(type(value) is dict, 'JSON object required')
     return value
 
@@ -51,11 +62,72 @@ def utc(value):
     return stamp
 
 
+def phase_protocol(plan, phase, command, receipt, side):
+    """Bind the live-guardian protocol as DATA; never launch or renew its clock."""
+    limits = builder.phase_output_limits(phase)
+    for row in (command, receipt):
+        need(same_json(row['phase'], phase) and same_json(row['outputLimits'], limits),
+             'exact phase/output limits')
+    python = Path(sys.executable).resolve(strict=True)
+    need(ad.physical(plan['python']) == str(python), 'current admitted Python')
+    launcher = dict(python=identity(python), guardian=identity(builder.GUARDIAN))
+    for item in launcher.values():
+        need(plan['witness']['files'].get(item['path']) == item['sha256'], 'launcher source witness')
+    need(same_json(command['launcher'], launcher) and same_json(receipt['launcher'], launcher),
+         'current physical guardian/Python launcher')
+    need(same_json(command['guardianSchema'], builder.GUARDIAN_SCHEMA) and
+         same_json(command['statusBytes'], builder.STATUS_BYTES), 'bounded guardian protocol')
+    launch = command['launchArgv']
+    need(type(launch) is list and len(launch) >= 12 and all(type(arg) is str for arg in launch),
+         'guardian launch argv strings')
+    fd, token = launch[4], launch[6]
+    need(re.fullmatch(r'[1-9][0-9]*', fd) is not None and int(fd) > 2 and
+         re.fullmatch(r'[0-9a-f]{64}', token) is not None, 'private descriptor/token')
+    expected = [str(python), '-B', str(builder.GUARDIAN), '--status-fd', fd, '--token', token,
+        '--source-sha', launcher['guardian']['sha256'], '--environment-json',
+        json.dumps(command['environment'], sort_keys=True), '--'] + command['argv']
+    need(same_json(launch, expected) and same_json(receipt['launchArgv'], expected), 'exact guardian launch')
+    bound(receipt['command'], side / (phase + '.command.json'))
+    pid = receipt['pid']
+    need(type(pid) is int and 0 < pid < 2**31 and type(receipt['pgid']) is int and
+         receipt['pgid'] == pid, 'owned guardian process group')
+    status_data = json.dumps(receipt['guardianStatus'], sort_keys=True, separators=(',', ':')).encode('utf-8')
+    status = builder.guardian_status(status_data, pid, token, launcher['guardian']['sha256'])
+    need(same_json(status, receipt['guardianStatus']) and receipt['guardianStatusEOF'] is True and
+         type(receipt['guardianStatusBytes']) is int and receipt['guardianStatusBytes'] == len(status_data),
+         'complete bounded canonical guardian status')
+    need(type(receipt['commandPID']) is int and receipt['commandPID'] == status['commandPID'] and
+         status['commandReaped'] is True and receipt['commandReaped'] is True and
+         type(status['returncode']) is int and status['returncode'] == 0 and
+         type(receipt['returncode']) is int and receipt['returncode'] == 0, 'successful reaped actual command')
+    need(type(receipt['guardianReturncode']) is int and receipt['guardianReturncode'] == -signal.SIGKILL and
+         receipt['reaped'] is True and receipt['guardianReaped'] is True and
+         receipt['reapedScope'] == 'DIRECT_GUARDIAN_ONLY', 'live guardian killed and directly reaped')
+    need(receipt['outputComplete'] is True and receipt['failure'] is None and receipt['cleanupFailure'] is None,
+         'incomplete/failed phase cannot qualify')
+    need(type(receipt['streams']) is dict and set(receipt['streams']) == {'stdout', 'stderr'}, 'exact streams')
+    outputs = {}
+    for name in ('stdout', 'stderr'):
+        path = side / (phase + '.' + name)
+        # Bound physical size BEFORE identity() hashes bytes or trusting counts.
+        ad.no_symlink_parents(path)
+        need(path.is_file() and path.resolve(strict=True) == path and
+             path.stat().st_size <= limits[name + 'Bytes'], 'bounded physical raw stream')
+        row = receipt['streams'][name]
+        need(type(row) is dict and set(row) == {'bytesRead', 'bytesWritten', 'eof', 'overflow'}, 'exact stream fields')
+        need(all(type(row[key]) is int and row[key] >= 0 for key in ('bytesRead', 'bytesWritten')) and
+             row['bytesRead'] == row['bytesWritten'] == path.stat().st_size and
+             row['eof'] is True and row['overflow'] is None, 'complete exact raw byte counts')
+        outputs[name] = identity(path)
+    return outputs
+
+
 def phase_bindings(plan, role, record):
     """Validate recorded original-window execution, not reader wall clock."""
     side = Path(plan['buildRoot']) / role
     phases = builder.phases(role)
-    need(record['phases'] == list(phases), 'exact six/reference seven/candidate phases')
+    need(same_json(record['phases'], list(phases)), 'exact six/reference seven/candidate phases')
+    need(not any(side.glob('*-overflow.bin')), 'successful role has overflow artifacts')
     for suffix in ('.command.json', '.receipt.json'):
         need({p.name for p in side.glob('*' + suffix)} == {p + suffix for p in phases}, 'missing/extra supervised phase')
     previous = utc(plan['createdUTC'])
@@ -68,16 +140,17 @@ def phase_bindings(plan, role, record):
         start, finish = utc(command['startedUTC']), utc(receipt['finishedUTC'])
         need(previous <= start <= finish <= end, 'phase outside original clock/order: ' + phase)
         previous = finish
-        need(command['argv'] == receipt['argv'] == builder.phase_command(plan, role, phase), 'exact expanded phase command')
-        need(command['cwd'] == str(ROOT / 'source') and command['environment'] == record['environment'] == builder.environment(plan, role), 'phase environment/cwd')
+        need(same_json(command['argv'], builder.phase_command(plan, role, phase)) and
+             same_json(receipt['argv'], command['argv']), 'exact expanded phase command')
+        need(command['cwd'] == str(ROOT / 'source') and
+             same_json(command['environment'], builder.environment(plan, role)) and
+             same_json(record['environment'], command['environment']), 'phase environment/cwd')
         need(command['inputsSha256'] == inputs, 'before-phase admitted input witness')
-        need(type(receipt['returncode']) is int and receipt['returncode'] == 0 and receipt['failure'] is None,
-             'failed phase cannot qualify')
-        need(type(receipt['pid']) is int and receipt['pid'] > 0 and receipt['pgid'] == receipt['pid'] and receipt['reaped'] is True, 'owned reaped process group required')
+        outputs = phase_protocol(plan, phase, command, receipt, side)
         elapsed = receipt['elapsedSeconds']
         need(type(elapsed) in (float, int) and math.isfinite(elapsed) and 0 <= elapsed <= ad.DEADLINES['maxAgeSeconds'], 'invalid elapsed time')
-        result[phase] = {kind: identity(side / (phase + suffix)) for kind, suffix in
-            [('command', '.command.json'), ('receipt', '.receipt.json'), ('stdout', '.stdout'), ('stderr', '.stderr')]}
+        result[phase] = dict(command=identity(side / (phase + '.command.json')),
+            receipt=identity(side / (phase + '.receipt.json')), **outputs)
     if role == 'candidate':
         seal = record['archive']
         cargo_end = utc(read(side / 'cargo.receipt.json')['finishedUTC'])
