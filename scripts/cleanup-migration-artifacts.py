@@ -9,6 +9,8 @@ import argparse
 import gzip
 import hashlib
 import json
+import lzma
+import _lzma
 import os
 from pathlib import Path
 import stat
@@ -205,7 +207,7 @@ class EncodedDigest:
         return len(block)
 
 
-def _repack_paths(repo, manifest, sha):
+def _repack_paths(repo, manifest, sha, *, require_blob=True):
     archive_root = repo / 'build/migration-evidence-archive'
     relative = Path(manifest)
     if (relative.is_absolute() or '..' in relative.parts or
@@ -215,10 +217,12 @@ def _repack_paths(repo, manifest, sha):
         raise ValueError('explicit archive manifest and lowercase content hash required')
     source = repo / relative
     blob = archive_root / 'blobs' / sha[:2] / (sha + '.gz')
-    for path in (source, blob):
+    for path in ((source, blob) if require_blob else (source,)):
         if path.resolve() != path or not path.is_file():
             raise ValueError('missing/aliased archive input: ' + str(path))
-    if blob.stat().st_nlink != 1:
+    if blob.parent.resolve() != blob.parent or not blob.parent.is_dir():
+        raise ValueError('missing/aliased archive fanout')
+    if require_blob and blob.stat().st_nlink != 1:
         raise ValueError('repack cannot change external hardlink identities')
     manifest_data = json.loads(source.read_bytes())
     if manifest_data['status'] != 'ARCHIVED_VERIFIED_PRUNED':
@@ -342,6 +346,216 @@ def repack_blob(repo, row):
                 status='RAW_RECONSTRUCTED_BEFORE_ATOMIC_REPACK', fingerprintAfter=fingerprint(blob),
                 temporaryPeakAllocatedBytes=encoded.peak_allocated,
                 temporaryPhysicalReservationBytes=REPACK_TEMPORARY_RESERVATION_BYTES)
+
+
+XZ_CODEC = 'XZ-LZMA2-CRC64-preset6-v1'
+
+
+def _xz_runtime():
+    return dict(python=sys.version, zlib=zlib.ZLIB_RUNTIME_VERSION,
+                lzmaExtensionSha256=file_digest(Path(_lzma.__file__).resolve())[0],
+                toolSha256=file_digest(Path(__file__).resolve())[0],
+                readerSha256=file_digest(Path(__file__).resolve().parents[1] /
+                    'source/lab/migration/archive_blobs.py')[0])
+
+
+def _gzip_level(blob):
+    with blob.open('rb') as stream:
+        header = stream.read(10)
+    if len(header) != 10 or header[:3] != b'\x1f\x8b\x08' or header[8] not in (2, 4):
+        raise ValueError('unsupported original gzip encoding')
+    return 9 if header[8] == 2 else 1
+
+
+def _xz_stream(blob, sha, size, output):
+    encoder = lzma.LZMACompressor(format=lzma.FORMAT_XZ,
+                                 check=lzma.CHECK_CRC64, preset=6)
+    h, total = hashlib.sha256(), 0
+    with gzip.open(blob, 'rb') as source:
+        while block := source.read(CHUNK):
+            total += len(block)
+            if total > size:
+                raise ValueError('archive payload exceeds manifest size')
+            h.update(block)
+            output.write(encoder.compress(block))
+    output.write(encoder.flush())
+    if (h.hexdigest(), total) != (sha, size):
+        raise ValueError('archive raw payload mismatch')
+
+
+def plan_xz_blob(repo, manifest, sha):
+    """Measure a new codec without writes; retain the exact old encoding contract."""
+    _, source, blob, size = _repack_paths(repo, manifest, sha)
+    if type(size) is not int or not 0 <= size <= 192 * CHUNK:
+        raise ValueError('XZ raw payload outside bounded domain')
+    if resolve_blob(repo / 'build/migration-evidence-archive', sha) != blob:
+        raise ValueError('XZ planning requires one original gzip blob')
+    before, old = fingerprint(blob), file_digest(blob)
+    level = _gzip_level(blob)
+    recovered = EncodedDigest()
+    _repack_stream(blob, sha, size, level, recovered)
+    if (recovered.hash.hexdigest(), recovered.size) != old:
+        raise ValueError('original gzip encoding not exactly reconstructable')
+    encoded = EncodedDigest()
+    _xz_stream(blob, sha, size, encoded)
+    if fingerprint(blob) != before:
+        raise ValueError('archive changed during XZ planning')
+    if encoded.size >= old[1]:
+        return None
+    return dict(schema='xz-transcode-plan-v1', codec=XZ_CODEC, manifest=manifest,
+                manifestSha256=file_digest(source)[0], sha256=sha, rawSize=size,
+                fingerprint=before, oldGzipLevel=level, oldEncodedSha256=old[0],
+                oldEncodedSize=old[1], newEncodedSha256=encoded.hash.hexdigest(),
+                newEncodedSize=encoded.size, **_xz_runtime())
+
+
+def _verify_xz_encoding(path, row):
+    """Prove raw bytes AND original gzip bytes before either encoding is pruned."""
+    if file_digest(path) != (row['newEncodedSha256'], row['newEncodedSize']):
+        raise ValueError('new XZ encoded bytes mismatch; original retained')
+    decoder = lzma.LZMADecompressor(format=lzma.FORMAT_XZ, memlimit=64 * CHUNK)
+    h, total, recovered = hashlib.sha256(), 0, EncodedDigest()
+    with path.open('rb') as source:
+        with gzip.GzipFile(filename='', mode='wb', fileobj=recovered,
+                           compresslevel=row['oldGzipLevel'], mtime=0) as old:
+            while not decoder.eof:
+                block = source.read(CHUNK) if decoder.needs_input else b''
+                if decoder.needs_input and not block:
+                    raise ValueError('truncated new XZ stream; original retained')
+                raw = decoder.decompress(block, max_length=CHUNK)
+                total += len(raw)
+                if total > row['rawSize']:
+                    raise ValueError('XZ raw size exceeds admission; original retained')
+                h.update(raw)
+                old.write(raw)
+            if decoder.check != lzma.CHECK_CRC64 or decoder.unused_data or source.read(1):
+                raise ValueError('unexpected XZ framing; original retained')
+    if (h.hexdigest(), total) != (row['sha256'], row['rawSize']):
+        raise ValueError('new XZ raw reconstruction mismatch; original retained')
+    if (recovered.hash.hexdigest(), recovered.size) != (row['oldEncodedSha256'], row['oldEncodedSize']):
+        raise ValueError('old gzip reconstruction mismatch; original retained')
+
+
+def _xz_capacity(repo, archive_root, *, reserve=False):
+    allocated = allocated_bytes(archive_root)
+    extra = REPACK_TEMPORARY_RESERVATION_BYTES + 16384 if reserve else 0
+    if allocated + extra > 16 * 1024**3:
+        raise ValueError('XZ temporary/archive allocation exceeds fixed cap')
+    if allocated_bytes(repo / 'build') - allocated > 4 * 1024**3:
+        raise ValueError('XZ live allocation exceeds fixed cap')
+
+
+def _fsync_directory(path):
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def recode_xz_blob(repo, row, *, resume=False):
+    """Convert only admitted names; interruption is fail-closed, never fallback.
+
+    The brief two-codec state is deliberately unreadable by the resolver. An
+    explicit resume verifies both retained byte contracts before finishing it;
+    it cannot renew the historical gzip inode/ctime or any native origin.
+    """
+    runtime = _xz_runtime()
+    fields = {'schema', 'codec', 'manifest', 'manifestSha256', 'sha256', 'rawSize',
+              'fingerprint', 'oldGzipLevel', 'oldEncodedSha256', 'oldEncodedSize',
+              'newEncodedSha256', 'newEncodedSize'} | set(runtime)
+    if (type(resume) is not bool or set(row) != fields or row['schema'] != 'xz-transcode-plan-v1' or
+            row['codec'] != XZ_CODEC or any(row[k] != v for k, v in runtime.items()) or
+            any(type(row[k]) is not int for k in ('rawSize', 'oldEncodedSize', 'newEncodedSize', 'oldGzipLevel')) or
+            type(row['fingerprint']) is not list or len(row['fingerprint']) != 7 or
+            any(type(v) is not int for v in row['fingerprint']) or row['fingerprint'][6] != 1 or
+            any(type(row[k]) is not str or len(row[k]) != 64 or
+                any(c not in '0123456789abcdef' for c in row[k])
+                for k in ('sha256', 'manifestSha256', 'oldEncodedSha256', 'newEncodedSha256')) or
+            not 0 < row['rawSize'] <= 192 * CHUNK or row['oldGzipLevel'] not in (1, 9) or
+            not 0 < row['newEncodedSize'] < min(row['oldEncodedSize'], 20 * CHUNK)):
+        raise ValueError('XZ plan/schema/codec drift or invalid bound')
+    archive_root, manifest, blob, size = _repack_paths(repo, row['manifest'], row['sha256'], require_blob=False)
+    destination, temp = blob.with_suffix('.xz'), blob.with_suffix('.xz-transcode.tmp')
+
+    def check_manifest():
+        if type(size) is not int or size != row['rawSize'] or file_digest(manifest)[0] != row['manifestSha256']:
+            raise ValueError('XZ manifest drift')
+
+    def check_old():
+        if (fingerprint(blob) != row['fingerprint'] or
+                file_digest(blob) != (row['oldEncodedSha256'], row['oldEncodedSize'])):
+            raise ValueError('original gzip identity drift')
+
+    check_manifest()
+    old_exists = os.path.lexists(blob)
+    generated = [p for p in (temp, destination) if os.path.lexists(p)]
+    if generated and not resume:
+        raise ValueError('interrupted XZ conversion requires explicit resume')
+    if resume and not generated:
+        raise ValueError('no interrupted XZ conversion to resume')
+    if old_exists:
+        check_old()
+    elif not (resume and generated == [destination]):
+        raise ValueError('missing original gzip input')
+    _xz_capacity(repo, archive_root, reserve=not generated)
+    peak = 0
+    if not generated:
+        if resolve_blob(archive_root, row['sha256']) != blob:
+            raise ValueError('unexpected original codec')
+        recovered = EncodedDigest()
+        _repack_stream(blob, row['sha256'], size, row['oldGzipLevel'], recovered)
+        if (recovered.hash.hexdigest(), recovered.size) != (row['oldEncodedSha256'], row['oldEncodedSize']):
+            raise ValueError('original gzip not exactly reconstructable')
+        with temp.open('xb') as output:
+            encoded = BoundedEncoding(output, row['newEncodedSize'])
+            _xz_stream(blob, row['sha256'], size, encoded)
+            os.chmod(temp, stat.S_IMODE(row['fingerprint'][5]))
+            output.flush()
+            os.fsync(output.fileno())
+            encoded.observe_allocation()
+            peak = encoded.peak_allocated
+        generated = [temp]
+    stamps = [fingerprint(p) for p in generated]
+    if (any(p.resolve() != p for p in generated) or
+            any(s[6] != len(generated) for s in stamps) or
+            len({tuple(s[:2]) for s in stamps}) != 1):
+        raise ValueError('XZ generated alias/hardlink group outside admitted names')
+    # A resume did not pass through BoundedEncoding in this invocation. Global
+    # headroom cannot substitute for the independent per-inode scratch bound.
+    observed = max(p.lstat().st_blocks * 512 for p in generated)
+    peak = max(peak, observed)
+    if observed > REPACK_TEMPORARY_RESERVATION_BYTES:
+        raise ValueError('resumed XZ physical allocation exceeds reservation; original retained')
+    _verify_xz_encoding(generated[0], row)
+    _xz_capacity(repo, archive_root)
+    check_manifest()
+    if old_exists:
+        check_old()
+    if temp in generated:
+        if destination not in generated:
+            os.link(temp, destination)  # Exclusive install; never replace a late destination.
+        os.unlink(temp)
+    _fsync_directory(blob.parent)
+    if (fingerprint(destination)[6] != 1 or
+            file_digest(destination) != (row['newEncodedSha256'], row['newEncodedSize'])):
+        raise ValueError('installed XZ changed; original retained')
+    _xz_capacity(repo, archive_root)
+    check_manifest()
+    if old_exists:
+        check_old()
+        os.unlink(blob)
+    _fsync_directory(blob.parent)
+    if resolve_blob(archive_root, row['sha256']) != destination:
+        raise ValueError('XZ installation did not resolve uniquely')
+    return dict(sha256=row['sha256'], rawSize=size, oldEncodedSha256=row['oldEncodedSha256'],
+                newEncodedSha256=row['newEncodedSha256'], oldEncodedSize=row['oldEncodedSize'],
+                newEncodedSize=row['newEncodedSize'], fingerprintAfter=fingerprint(destination),
+                temporaryPeakAllocatedBytes=peak,
+                temporaryPhysicalReservationBytes=REPACK_TEMPORARY_RESERVATION_BYTES,
+                resumed=resume, originalEncodingLiveReplayAvailable=False,
+                allocationObservationScope='current invocation only; pre-interruption peak unavailable',
+                status='RAW_AND_OLD_GZIP_RECONSTRUCTED_BEFORE_XZ_CONVERSION')
 
 
 def budget(repo, max_live_gib, max_archive_gib):

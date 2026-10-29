@@ -38,6 +38,15 @@ or native-provider origins. the certificate-pinned original lru semantic verifie
 is deliberately unchanged; its current byte-retention wrapper handles codecs,
 not a replay or replacement of the original verifier.
 
+`plan_xz_blob` / `recode_xz_blob` in the existing cleanup tool preserve the exact
+old gzip encoding as a second reconstruction obligation. a verified new xz file
+is installed exclusively and directory-synced before the old gzip is unlinked.
+interruption can leave two encodings: readers reject that ambiguity; explicit
+resume verifies only the admitted names and byte contracts before finishing.
+resume checks physical scratch allocation too, but cannot recover a pre-crash
+allocation peak or renew the old encoding's live identity. these source APIs need
+a separate bounded selected/complement/protected admission before real CAS use.
+
 ## exercised failure contract
 
 `--self-test` uses disposable roots and the actual shell entrypoint: byte-identical replay; known match; excluded backup/build/rust-target near-matches; alias and conditional alternatives; loop targets; unknown/ambiguous names; source/body/cmake drift; corrupted and deleted output rejected **without repair**; explicit regeneration restores passing checks. it never alters the live catalog. no native build, runtime, saves or remote services are involved.
