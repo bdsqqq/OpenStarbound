@@ -25228,6 +25228,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector-game/enclosure_release.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/static-vector-game/game_build_admission.py",
       "rule": "laboratories"
     },
@@ -25279,6 +25289,16 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/static-vector-game/test_configuration.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector-game/test_enclosure_release.py",
       "rule": "laboratories"
     },
     {
@@ -37923,6 +37943,10 @@
       "sha256": "2662ec6fb88e9f001ace7e64c3c0c894f63ff74280926257acda071d08a16a17"
     },
     {
+      "path": "source/lab/static-vector-game/enclosure_release.py",
+      "sha256": "75dc50fe1b213247210c803fcd37fc9617b1be74195389fd46848e16c6e61f3b"
+    },
+    {
       "path": "source/lab/static-vector-game/game_build_admission.py",
       "sha256": "f4123a05f2e9bd0cfb0317488c3d06e0fabd6163b28243e2f6d282dd4c1b68d5"
     },
@@ -37945,6 +37969,10 @@
     {
       "path": "source/lab/static-vector-game/test_configuration.py",
       "sha256": "1a4f9a6f3209db6e71e3c4c7effecc5b8bc3c73e830aecfadd0b7c9741f0f7a4"
+    },
+    {
+      "path": "source/lab/static-vector-game/test_enclosure_release.py",
+      "sha256": "b53ad023e24ea46eb217ab779e9205536e9edc5fc8e13bef7fc47fa7f8f416c2"
     },
     {
       "path": "source/lab/static-vector-game/test_game_build_admission.py",
@@ -39817,7 +39845,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 680,
+      "oracle/harness": 682,
       "retain-tooling": 35,
       "retained-third-party": 296,
       "rust-candidate": 30,
@@ -39858,14 +39886,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 50,
-      "validation.oracles-harness": 709,
+      "validation.oracles-harness": 711,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2179,
+    "files": 2181,
     "modules": 39,
-    "no_direct_target": 1073
+    "no_direct_target": 1075
   }
 }
