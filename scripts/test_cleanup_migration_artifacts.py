@@ -1,6 +1,8 @@
 import gzip
 import importlib.util
 import json
+import os
+from unittest.mock import patch
 from pathlib import Path
 import tempfile
 import unittest
@@ -8,6 +10,74 @@ import unittest
 spec = importlib.util.spec_from_file_location('cleanup', Path(__file__).with_name('cleanup-migration-artifacts.py'))
 cleanup = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(cleanup)
+
+
+class AllocationTests(unittest.TestCase):
+    @staticmethod
+    def reference(root):
+        total, seen = 0, set()
+        for parent, dirs, files in os.walk(root, followlinks=False):
+            paths = [Path(parent)] + [Path(parent) / name for name in files]
+            paths += [Path(parent) / name for name in dirs if (Path(parent) / name).is_symlink()]
+            for path in paths:
+                info = path.lstat()
+                key = (info.st_dev, info.st_ino)
+                if key not in seen:
+                    seen.add(key)
+                    total += info.st_blocks * 512
+        return total
+
+    def test_matches_reference_sparse_hardlinks_symlinks_and_fifo(self):
+        with tempfile.TemporaryDirectory() as temp:
+            parent = Path(temp).resolve()
+            root = parent / 'tree'
+            (root / 'nested').mkdir(parents=True)
+            data = root / 'nested/data'
+            data.write_bytes(b'x' * 65536)
+            os.link(data, root / 'hardlink')
+            sparse = root / 'sparse'
+            with sparse.open('wb') as stream:
+                stream.seek(4 * 1024**2)
+                stream.write(b'x')
+            outside = parent / 'outside'
+            outside.mkdir()
+            (outside / 'not-counted').write_bytes(b'y' * 262144)
+            (root / 'directory-alias').symlink_to(outside, target_is_directory=True)
+            (root / 'broken-alias').symlink_to(parent / 'missing')
+            os.mkfifo(root / 'pipe')
+            expected = self.reference(root)
+            self.assertEqual(cleanup.allocated_bytes(root), expected)
+            self.assertNotEqual(expected, 0)
+            # An unsafe zero counter is rejected by this same fixture oracle.
+            with self.assertRaises(AssertionError):
+                self.assertEqual(0, expected)
+
+    def test_unreadable_nested_directory_fails_closed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            denied = root / 'denied'
+            denied.mkdir()
+            original = os.scandir
+            def scan(path):
+                if os.fspath(path) == str(denied):
+                    raise PermissionError('isolated unreadable allocation entry')
+                return original(path)
+            with patch.object(cleanup.os, 'scandir', side_effect=scan):
+                with self.assertRaises(PermissionError):
+                    cleanup.allocated_bytes(root)
+
+    def test_root_alias_or_nondirectory_rejected_absence_is_zero(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            alias = root / 'alias'
+            alias.symlink_to(root, target_is_directory=True)
+            (root / 'child').mkdir()
+            file = root / 'file'
+            file.write_text('not a traversal root')
+            for path in (alias, alias / 'child', alias / 'missing', file):
+                with self.subTest(path=path), self.assertRaises(ValueError):
+                    cleanup.allocated_bytes(path)
+            self.assertEqual(cleanup.allocated_bytes(root / 'missing'), 0)
 
 
 class CleanupTests(unittest.TestCase):

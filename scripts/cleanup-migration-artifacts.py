@@ -181,18 +181,35 @@ def verify(archive_root, manifest_path):
 
 
 def allocated_bytes(root):
-    """Like du: count allocated blocks once per inode; never follow links."""
-    total = 0
-    seen = set()
-    for parent, dirs, files in os.walk(root, followlinks=False):
-        paths = [Path(parent), *(Path(parent) / name for name in files),
-                 *(Path(parent) / name for name in dirs if (Path(parent) / name).is_symlink())]
-        for path in paths:
-            s = path.lstat()
-            inode = (s.st_dev, s.st_ino)
-            if inode not in seen:
-                seen.add(inode)
-                total += s.st_blocks * 512
+    """Count blocks once per inode, without hiding unreadable subtrees.
+
+    Direct DirEntry stats avoid repeated Path/lstat work in per-leaf guards.
+    This is still a non-atomic observation, not a cached allocation bound; mount
+    contents stay included and symlinks are charged without following targets.
+    """
+    root = Path(root).absolute()
+    if root.resolve() != root:
+        raise ValueError('allocation root contains an alias or traversal')
+    root = os.fspath(root)
+    try:
+        initial = os.lstat(root)
+    except FileNotFoundError:
+        return 0
+    if not stat.S_ISDIR(initial.st_mode):
+        raise ValueError('allocation root must be a physical directory')
+    total, seen = 0, set()
+    pending = [(root, initial)]
+    while pending:
+        path, info = pending.pop()
+        inode = (info.st_dev, info.st_ino)
+        if inode in seen:
+            continue
+        seen.add(inode)
+        total += info.st_blocks * 512
+        if stat.S_ISDIR(info.st_mode):
+            with os.scandir(path) as entries:
+                for entry in entries:
+                    pending.append((entry.path, entry.stat(follow_symlinks=False)))
     return total
 
 
