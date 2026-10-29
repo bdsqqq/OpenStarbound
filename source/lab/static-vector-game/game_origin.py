@@ -38,12 +38,12 @@ OBSERVER = b'TileSectorArrayObserver'
 IDMAP_OWNER = base.OWNER
 
 
-def strict_compare(obj, image, name):
+def strict_compare(obj, image, name, *, map_data=None, physical_objects=None):
     """Retain exact generic code checks AND bind direct page data destinations.
 
     The generic primitive normalizes PAGE immediates. That alone does not prove
     data origin. TLVP needs the independent descriptor/template/fixup witness;
-    unsupported forms (including weak/coalesced providers) still fail closed.
+    unsupported forms and weak data without a selected physical provider fail closed.
     """
     result = base.strict_compare(obj, image, name)
     original, linked = obj.function(name), image.function(name)
@@ -52,7 +52,8 @@ def strict_compare(obj, image, name):
         typ = reloc['type']
         if typ in (8, 9):
             try:
-                proof = tls.attest_tlvp(obj, image, original, linked, reloc)
+                proof = tls.attest_tlvp(obj, image, original, linked, reloc,
+                                        map_data=map_data, physical_objects=physical_objects)
             except ValueError as exc:
                 raise ValueError('UNAVAILABLE_TLVP_DATA_ORIGIN: ' + str(exc)) from exc
             tls_origins.append(dict(instruction_offset=reloc['offset'], relocation_type=typ, proof=proof))
@@ -100,7 +101,7 @@ def allowed_owner(name, target):
     return False
 
 
-def native_edges(image, world_object):
+def native_edges(image, world_object, *, map_data=None, physical_objects=None):
     """Require actual encoded run/count edges owned by the admitted WorldClient.o.
 
     Strict comparison also binds the native owner's emitted code, not merely a
@@ -120,7 +121,8 @@ def native_edges(image, world_object):
                 if word & 0x7c000000 == 0x14000000 and generic.branch_destination(word, pc) == address:
                     found.append(dict(owner_hex=name.hex(), target_name_hex=target.hex(),
                         instruction_address=pc, instruction_word=hex(word), target_address=address,
-                        native_code=strict_compare(world_object, image, name)))
+                        native_code=strict_compare(world_object, image, name,
+                            map_data=map_data, physical_objects=physical_objects)))
         need(found, 'missing ordinary WorldClient object native edge: ' + repr(target))
         result.extend(found)
     # Preserve IdMap's additional exact owner, without invoking its old attest.
@@ -155,7 +157,7 @@ def seal_archive(archive):
         providers={name.hex(): dict(member_header_offset=m['offset'], member_name_hex=m['name'].hex(), member_sha256=m['sha256']) for name, m in members.items()})
 
 
-def attest(game, archive, world_object):
+def attest(game, archive, world_object, *, map_data=None, physical_objects=None):
     need(all(type(value) is bytes and len(value) <= MAX_INPUT_BYTES for value in (game, archive, world_object)), 'bounded byte inputs')
     image, world = MachO(game), MachO(world_object)
     need(image.kind == 2 and world.kind == 1, 'MH_EXECUTE game and MH_OBJECT actual WorldClient required')
@@ -164,9 +166,11 @@ def attest(game, archive, world_object):
     for name, member in owners.items():
         obj = MachO(member['body'])
         need(obj.kind == 1, 'archive provider must be MH_OBJECT')
-        functions.append(dict(strict_compare(obj, image, name), member_header_offset=member['offset'], member_sha256=member['sha256']))
+        functions.append(dict(strict_compare(obj, image, name, map_data=map_data,
+                            physical_objects=physical_objects), member_header_offset=member['offset'], member_sha256=member['sha256']))
     return dict(schema='static-vector-emitted-code-origin-v1', complete=True,
         game_sha256=sha(game), archive=seal_archive(archive), world_object_sha256=sha(world_object),
-        functions=functions, native_call_edges=native_edges(image, world),
+        functions=functions, native_call_edges=native_edges(image, world, map_data=map_data,
+            physical_objects=physical_objects),
         limitations=['finite linked code and static edges; NOT runtime calling-scope adoption',
                      'strict relocation comparison; missing/inlined owners block, no owner fitting'])

@@ -22,9 +22,13 @@ not evidence that future costs have been measured.
 the emitted-code reader now requires a separate descriptor/template/loader-fixup
 witness for TLS, in addition to normalized instruction identity. narrow classic
 bindings and fully enumerated format6 chained fixups have physical byte tests;
-weak/coalesced TLS data providers and duplicate-named physical archive link-map
-members still fail closed. a historical IdMap member/image byte relation passed
-this lower-level reader; it does not renew historical source/tool/SDK admission.
+external weak TLS data requires a selected physical map/index/object witness,
+matching reference/provider initialization, full descriptor/backing atoms and the
+same loader/template checks. duplicate archive names require agreeing unique
+live external witnesses; missing or ambiguous providers still fail closed.
+these selected-provider paths have synthetic byte tests, not actual game proof.
+a historical IdMap member/image byte relation passed the lower-level strong-TLS
+reader; it does not renew historical source/tool/SDK admission.
 no complete positive whole-origin fixture or actual current game pair has passed.
 these are pending proof mechanisms, not waived origins or permission to build
 with inadequate retention capacity.

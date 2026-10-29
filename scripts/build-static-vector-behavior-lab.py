@@ -32,6 +32,7 @@ def load(name, path):
 ad = load('_sv_builder_admission', ROOT / 'source/lab/static-vector-game/game_build_admission.py')
 code = load('_sv_builder_code', ROOT / 'source/lab/static-vector-game/game_origin.py')
 bp = load('_sv_common_provenance', ROOT / 'source/lab/behavior/build_provenance.py')
+physical = load('_sv_physical_link_map', ROOT / 'source/lab/static-vector-game/physical_link_map.py')
 # This Make grammar is context-independent; it never invokes old build_pair.
 make_rule = load('_sv_dep_grammar', ROOT / 'scripts/build-id-map-behavior-lab.py').make_rule
 PHASES = ('provenance-begin', 'configure', 'provenance-configured', 'cargo', 'compile', 'provenance-seal', 'provenance-verify')
@@ -232,43 +233,92 @@ def compiled_library(path, dependencies):
 def link_map_closure(plan, side, dependencies, seal):
     """Resolve actual linker object origins, including driver-injected archives.
 
-    Map entries bind physical members, not archive basenames. Duplicate named
-    members remain ambiguous and block; no member is assigned after the fact.
+    Map entries bind physical members, not archive basenames. Duplicate names
+    require unique live external-definition witnesses, never first-member order.
     """
     helpers = code.base.helper_identities()
     path = side / 'link.map'
-    entries = code.archive_identity.link_map_objects(path.read_bytes())
-    rows = []
+    map_data = path.read_bytes()
+    entries = physical.indexed_objects(map_data)
+    rows, archives, groups, used_inputs = [], {}, {}, set()
     aggregate = side / 'cmake' / ad.ARCHIVE
-    for entry in entries:
+    for index, entry in entries.items():
         if entry == b'linker synthesized':
-            rows.append(dict(kind='LINKER_SYNTHESIZED', origin_hex=entry.hex()))
+            rows.append(dict(kind='LINKER_SYNTHESIZED', object_index=index, origin_hex=entry.hex()))
             continue
         if entry.endswith(b')') and b'(' in entry:
             raw_path, member_name = entry[:-1].rsplit(b'(', 1)
             library = Path(os.fsdecode(raw_path))
             library = library if library.is_absolute() else side / 'cmake' / library
             library = library.resolve(strict=True)
-            library_id = identity(library)
-            if library == aggregate:
-                ad.need(seal is not None and seal['identity'] == library_id and seal['fileState'] == ad.file_state(library), 'map aggregate differs from prelink seal')
-            elif library.is_relative_to(side / 'cmake'):
-                compiled_library(library, dependencies)
-            else:
-                ad.need(plan['witness']['files'].get(str(library)) == library_id['sha256'], 'unadmitted driver/native archive')
-            members = code.archive_identity.arm64_archive_members(library.read_bytes())
-            matches = [m for m in members if m['name'] == member_name]
-            ad.need(len(matches) == 1, 'unique actual link-map physical archive member required')
-            member = matches[0]
-            rows.append(dict(kind='ARCHIVE_MEMBER', archive=library_id, member_header_offset=member['offset'],
-                member_name_hex=member_name.hex(), member_sha256=member['sha256']))
+            if library not in archives:
+                library_id = identity(library)
+                if library == aggregate:
+                    ad.need(seal is not None and seal['identity'] == library_id and seal['fileState'] == ad.file_state(library), 'map aggregate differs from prelink seal')
+                elif library.is_relative_to(side / 'cmake'):
+                    compiled_library(library, dependencies)
+                else:
+                    ad.need(plan['witness']['files'].get(str(library)) == library_id['sha256'], 'unadmitted driver/native archive')
+                data = library.read_bytes()
+                ad.need(code.sha(data) == library_id['sha256'], 'archive changed during map resolution')
+                archives[library] = (library_id, data)
+            library_id, data = archives[library]
+            key = (raw_path, member_name)
+            if key not in groups:
+                groups[key] = physical.resolve_archive_group(data, map_data, raw_path, member_name)
+            member = groups[key][index]
+            physical_key = (str(library), member['member_header_offset'])
+            ad.need(physical_key not in used_inputs, 'physical archive member repeated through map aliases')
+            used_inputs.add(physical_key)
+            rows.append(dict(kind='ARCHIVE_MEMBER', object_index=index, archive=library_id, **member))
         else:
             obj = Path(os.fsdecode(entry))
             obj = obj if obj.is_absolute() else side / 'cmake' / obj
             obj = obj.resolve(strict=True)
             ad.need(str(obj) in dependencies['objects'], 'link-map object without actual compile/SDK closure')
-            rows.append(dict(kind='COMPILED_OBJECT', object=identity(obj)))
+            ad.need(str(obj) not in used_inputs, 'physical compiled object repeated through map aliases')
+            used_inputs.add(str(obj))
+            rows.append(dict(kind='COMPILED_OBJECT', object_index=index, object=identity(obj)))
     return dict(map=identity(path), objects=rows, imported_helper_sha256=helpers)
+
+
+def link_object_bytes(link):
+    """Re-read a rederived link closure; NOT an independent admission API.
+
+    Physical archive identity and header offset are both mandatory: a matching
+    member name or body hash alone cannot select a duplicate-name provider.
+    """
+    result, archives, seen = {}, {}, set()
+    for row in link['actualOrigins']['objects']:
+        index = row['object_index']
+        ad.need(type(index) is int and index >= 0 and index not in seen, 'unique physical map index')
+        seen.add(index)
+        if row['kind'] == 'LINKER_SYNTHESIZED':
+            continue
+        if row['kind'] == 'COMPILED_OBJECT':
+            record = row['object']
+            path = Path(record['path'])
+            ad.need(identity(path) == record, 'direct link object identity changed')
+            data = path.read_bytes()
+            ad.need(code.sha(data) == record['sha256'], 'direct link object bytes changed')
+        else:
+            ad.need(row['kind'] == 'ARCHIVE_MEMBER', 'unknown physical origin kind')
+            record = row['archive']
+            path = Path(record['path'])
+            if path not in archives:
+                ad.need(identity(path) == record, 'physical archive identity changed')
+                data = path.read_bytes()
+                ad.need(code.sha(data) == record['sha256'], 'physical archive bytes changed')
+                archives[path] = (record, {m['offset']: m for m in physical.archive.arm64_archive_members(data)})
+            cached, members = archives[path]
+            ad.need(cached == record, 'inconsistent archive identity')
+            member = members.get(row['member_header_offset'])
+            ad.need(member is not None and member['name'].hex() == row['member_name_hex']
+                    and member['sha256'] == row['member_sha256'], 'recorded physical archive member changed')
+            data = member['body']
+        ad.need(physical.generic.MachO(data).kind == 1, 'physical link input must be MH_OBJECT')
+        result[index] = data
+    return result
 
 
 def link_closure(plan, role, dependencies, seal):

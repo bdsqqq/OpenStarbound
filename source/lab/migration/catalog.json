@@ -25208,6 +25208,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector-game/physical_link_map.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/static-vector-game/test_configuration.py",
       "rule": "laboratories"
     },
@@ -25229,6 +25239,16 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/static-vector-game/test_game_origin.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector-game/test_physical_link_map.py",
       "rule": "laboratories"
     },
     {
@@ -31534,7 +31554,7 @@
     },
     {
       "path": "scripts/test_build_static_vector_behavior_lab.py",
-      "sha256": "ef3e66991e05170e1be19f4cbde170040d13d811b37033ff6f0e264e85f4657c"
+      "sha256": "29f0f3423320a57859463b0cebbf7285afb198726bf9a34db14b3aea4269c71a"
     },
     {
       "path": "scripts/test_cleanup_migration_artifacts.py",
@@ -36078,7 +36098,7 @@
     },
     {
       "path": "source/lab/behavior/static_vector_origin.py",
-      "sha256": "d2481d30dfaf9306d9168bf25dc2ae7bc2a3b0f0aa016cd8088f7e885f9bbacf"
+      "sha256": "603c449989d486f81ed0babdf35de1a0f64c25eae575553740a0e0b01f2aafbb"
     },
     {
       "path": "source/lab/behavior/static_vector_proof.py",
@@ -37822,7 +37842,11 @@
     },
     {
       "path": "source/lab/static-vector-game/game_origin.py",
-      "sha256": "8c89b2486801fac464d5fa500f7b4e59ddf5ff8deadc3f38a79cae7b817362d6"
+      "sha256": "b5fd4fd41006148d5a51509b9c34254399874e2f7d48db42f45a00b0ad8f9d11"
+    },
+    {
+      "path": "source/lab/static-vector-game/physical_link_map.py",
+      "sha256": "316e113aa0ac3c7adbee55d56ca38525a2ef6fdbfeb9be64821f93793322603e"
     },
     {
       "path": "source/lab/static-vector-game/test_configuration.py",
@@ -37834,7 +37858,11 @@
     },
     {
       "path": "source/lab/static-vector-game/test_game_origin.py",
-      "sha256": "f4640e65f7b75932b77a31c4a16af6a744c8f123b7bc965800b1a61e5ed141c4"
+      "sha256": "7f91397049b041b8fe0b689d57a927bb6907f3ed8a184cea14a0229d0c07a6d3"
+    },
+    {
+      "path": "source/lab/static-vector-game/test_physical_link_map.py",
+      "sha256": "1b167a0549fe5d82cd2ae33dc062ec4395cb790cea7307ece0d7070fe0897c06"
     },
     {
       "path": "source/lab/static-vector-game/test_source.py",
@@ -37846,7 +37874,7 @@
     },
     {
       "path": "source/lab/static-vector-game/test_tls_data_origin.py",
-      "sha256": "c4048e58e138fc79805b8e6e65bf2da3e4dd03cfcf116b0545929aa2cf6c954b"
+      "sha256": "a59db60ac14dafd7b8e7b5b2b2aa20b355ac14e38c1367af358daf50b1c67dff"
     },
     {
       "path": "source/lab/static-vector-game/tls_chained_fixups.py",
@@ -37854,7 +37882,7 @@
     },
     {
       "path": "source/lab/static-vector-game/tls_data_origin.py",
-      "sha256": "67206774ca2fd5005006522bb7518b8a84412a10038f738bfd4f21f771bd4966"
+      "sha256": "af5e1c82b918097bf9f84bdfe952561a25fd595d720092e0ea3a5ff3bc6599be"
     },
     {
       "path": "source/lab/static-vector-production/test_source.py",
@@ -39691,7 +39719,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 674,
+      "oracle/harness": 676,
       "retain-tooling": 32,
       "retained-third-party": 296,
       "rust-candidate": 30,
@@ -39732,14 +39760,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 47,
-      "validation.oracles-harness": 703,
+      "validation.oracles-harness": 705,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2170,
+    "files": 2172,
     "modules": 39,
-    "no_direct_target": 1064
+    "no_direct_target": 1066
   }
 }

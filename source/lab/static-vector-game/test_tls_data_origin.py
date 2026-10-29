@@ -63,6 +63,20 @@ def fixture(linked=False, zero=False, stream=STREAM, info_cmd=0x80000022):
     return buf
 
 
+def weak_fixture():
+    obj, image = fixture(), fixture(True)
+    for data in (obj, image):
+        for index in (1, 2):
+            data[SYMS + 16 * index + 4] = 0xf  # N_SECT|N_EXT, not local weak flags.
+            struct.pack_into('<H', data, SYMS + 16 * index + 6, 0x80)
+    provider = bytearray(obj)
+    provider[-1] = 1  # A distinct physical TU with the same TLS initializer.
+    map_data = (b'# Object files:\n[0] linker synthesized\n[7] /owned/reference.o\n'
+                b'[19] /owned/selected.o\n# Symbols:\n# Address Size File Name\n'
+                b'0x100002010 0x18 [19] _tls\n0x100002030 0x4 [19] _backing\n')
+    return obj, image, provider, map_data
+
+
 def attest(obj=None, image=None, which=0):
     obj = tls.MachO(bytes(fixture() if obj is None else obj))
     image = tls.MachO(bytes(fixture(True) if image is None else image))
@@ -100,6 +114,62 @@ class TLSOriginTests(unittest.TestCase):
         image = fixture(True)
         struct.pack_into('<Q', image, SECTIONS + 80 + 32, BASE + DESC + 4)
         self.bad(image=image)
+
+    def test_weak_definition_requires_selected_physical_data_provider(self):
+        obj, image, provider, map_data = weak_fixture()
+        original = tls.MachO(bytes(obj)); linked = tls.MachO(bytes(image))
+        of, lf = original.function(b'_entry'), linked.function(b'_entry')
+        reloc = original.relocations(of)[0]
+        with self.assertRaisesRegex(ValueError, 'selected-provider context'):
+            tls.attest_tlvp(original, linked, of, lf, reloc)
+        result = tls.attest_tlvp(original, linked, of, lf, reloc,
+            map_data=map_data, physical_objects={7: bytes(obj), 19: bytes(provider)})
+        self.assertEqual(result['selected_data_provider']['object_index'], 19)
+        self.assertNotEqual(result['object_sha256'], result['data_provider_sha256'])
+        self.assertEqual(result['selected_data_provider']['symbol_name_hex'], b'_tls'.hex())
+
+    def test_weak_provider_missing_wrong_address_flags_and_backing_owner_fail(self):
+        obj, image, provider, map_data = weak_fixture()
+        def check(source, linked, data, objects):
+            source, linked = tls.MachO(bytes(source)), tls.MachO(bytes(linked))
+            of, lf = source.function(b'_entry'), linked.function(b'_entry')
+            with self.assertRaises(ValueError):
+                tls.attest_tlvp(source, linked, of, lf, source.relocations(of)[0],
+                    map_data=data, physical_objects=objects)
+        check(obj, image, map_data, {7: bytes(obj)})
+        check(obj, image, map_data.replace(b'0x100002010', b'0x100002018'), {19: bytes(provider)})
+        check(obj, image, map_data.replace(b'0x18 [19] _tls', b'0x8 [19] _tls'), {19: bytes(provider)})
+        check(obj, image, map_data.replace(b'0x4 [19] _backing', b'0x1 [19] _backing'), {19: bytes(provider)})
+        check(obj, image, map_data.replace(b'[19] _backing', b'[7] _backing'),
+              {7: bytes(obj), 19: bytes(provider)})
+        for flags in (0, 0xc0):
+            changed = bytearray(provider)
+            struct.pack_into('<H', changed, SYMS + 16 + 6, flags)
+            check(obj, image, map_data, {19: bytes(changed)})
+        changed = bytearray(image)
+        struct.pack_into('<H', changed, SYMS + 2 * 16 + 6, 0)
+        check(obj, changed, map_data, {19: bytes(provider)})
+        local = bytearray(obj); local[SYMS + 16 + 4] = 0xe
+        check(local, image, map_data, {19: bytes(provider)})
+
+    def test_selected_provider_layout_cannot_alias_text_and_descriptor(self):
+        obj, image, provider, map_data = weak_fixture()
+        struct.pack_into('<I', provider, SECTIONS + 48, DESC)
+        original, linked = tls.MachO(bytes(obj)), tls.MachO(bytes(image))
+        of, lf = original.function(b'_entry'), linked.function(b'_entry')
+        with self.assertRaisesRegex(ValueError, 'overlapping'):
+            tls.attest_tlvp(original, linked, of, lf, original.relocations(of)[0],
+                map_data=map_data, physical_objects={19: bytes(provider)})
+
+    def test_coalesced_reference_initializer_must_equal_selected_provider(self):
+        obj, image, provider, map_data = weak_fixture()
+        provider[DATA] ^= 1
+        image[DATA] ^= 1  # Matching the selected provider alone is insufficient.
+        original, linked = tls.MachO(bytes(obj)), tls.MachO(bytes(image))
+        of, lf = original.function(b'_entry'), linked.function(b'_entry')
+        with self.assertRaisesRegex(ValueError, 'reference and selected-provider initial state'):
+            tls.attest_tlvp(original, linked, of, lf, original.relocations(of)[0],
+                map_data=map_data, physical_objects={19: bytes(provider)})
 
     def test_zerofill(self):
         r = attest(fixture(zero=True), fixture(True, zero=True))

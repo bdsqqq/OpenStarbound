@@ -65,6 +65,18 @@ class CodeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'UNAVAILABLE_TLVP_DATA_ORIGIN.*initial bytes'):
             code.strict_compare(obj, code.MachO(bytes(changed)), b'_entry')
 
+    def test_weak_tls_bridge_requires_and_records_selected_provider(self):
+        from test_tls_data_origin import weak_fixture
+        obj, image, provider, map_data = weak_fixture()
+        original, linked = code.MachO(bytes(obj)), code.MachO(bytes(image))
+        with self.assertRaisesRegex(ValueError, 'UNAVAILABLE_TLVP_DATA_ORIGIN'):
+            code.strict_compare(original, linked, b'_entry')
+        result = code.strict_compare(original, linked, b'_entry',
+            map_data=map_data, physical_objects={7: bytes(obj), 19: bytes(provider)})
+        self.assertEqual(len(result['tls_data_origins']), 2)
+        self.assertTrue(all(r['proof']['selected_data_provider']['object_index'] == 19
+                            for r in result['tls_data_origins']))
+
     def test_page_target_origin_not_just_masked_instruction(self):
         class Object:
             symbols = [{'name': b'_data'}]

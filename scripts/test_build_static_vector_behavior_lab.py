@@ -13,6 +13,7 @@ spec.loader.exec_module(builder)
 G = builder.ad.build_root()
 TOOL = str(Path(sys.executable).resolve())
 TOOLS = {'CMAKE_C_COMPILER': TOOL, 'CMAKE_CXX_COMPILER': TOOL}
+fixture = builder.load('_physical_builder_fixture', builder.ROOT / 'source/lab/static-vector-game/test_physical_link_map.py')
 
 
 class BuilderTests(unittest.TestCase):
@@ -107,6 +108,76 @@ class BuilderTests(unittest.TestCase):
                 files[str(sdk_header)] = '0' * 64
                 with self.assertRaises(ValueError):
                     builder.dependency_witness(plan, configured, {'compile_source_files': {}})
+
+    def test_physical_map_closure_and_selected_bytes(self):
+        with tempfile.TemporaryDirectory(dir=G) as temp:
+            side = Path(temp)
+            (side / 'cmake').mkdir()
+            library = side / 'lib.a'
+            bodies = [fixture.macho(), fixture.macho((b'_right',))]
+            library.write_bytes(fixture.ar(bodies))
+            direct = side / 'cmake/direct.o'
+            direct.write_bytes(fixture.macho((b'_direct',)))
+            data = fixture.linkmap([(4096, 8, 7, b'_right'), (4104, 8, 91, b'_left')],
+                                   path=bytes(library))
+            data = data.replace(b'# Symbols:', b'[150] ' + bytes(direct) + b'\n# Symbols:')
+            (side / 'link.map').write_bytes(data)
+            plan = dict(witness={'files': {str(library): builder.ad.sha(library)}})
+            deps = {'objects': {str(direct): {}}}
+            origins = builder.link_map_closure(plan, side, deps, None)
+            self.assertEqual([r['object_index'] for r in origins['objects']], [0, 7, 91, 150])
+            link = {'actualOrigins': origins}
+            self.assertEqual(builder.link_object_bytes(link), {7: bodies[1], 91: bodies[0], 150: direct.read_bytes()})
+            # Wrong recorded offset must reject even when a first-member shortcut is tempting.
+            first = origins['objects'][1]
+            old = first['member_header_offset']
+            first['member_header_offset'] = origins['objects'][2]['member_header_offset']
+            with self.assertRaises(ValueError):
+                builder.link_object_bytes(link)
+            first['member_header_offset'] = old
+            original_direct = direct.read_bytes()
+            direct.write_bytes(fixture.macho((b'_changed',)))
+            with self.assertRaises(ValueError):
+                builder.link_object_bytes(link)
+            direct.write_bytes(original_direct)
+            library.write_bytes(fixture.ar(list(reversed(bodies))))
+            with self.assertRaises(ValueError):
+                builder.link_object_bytes(link)
+
+    def test_map_aliases_cannot_assign_one_physical_input_twice(self):
+        with tempfile.TemporaryDirectory(dir=G) as temp:
+            side = Path(temp); (side / 'cmake').mkdir()
+            library = side / 'lib.a'
+            library.write_bytes(fixture.ar([fixture.macho()]))
+            direct = side / 'cmake/direct.o'
+            direct.write_bytes(fixture.macho((b'_direct',)))
+            plan = dict(witness={'files': {str(library): builder.ad.sha(library)}})
+            deps = {'objects': {str(direct): {}}}
+            for first, second in [
+                    (bytes(library) + b'(dup\xff.o)', bytes(library.parent) + b'/./lib.a(dup\xff.o)'),
+                    (bytes(direct), bytes(direct.parent) + b'/./direct.o')]:
+                data = (b'# Object files:\n[0] linker synthesized\n[7] ' + first +
+                        b'\n[19] ' + second + b'\n# Symbols:\n')
+                (side / 'link.map').write_bytes(data)
+                with self.subTest(first=first), self.assertRaisesRegex(ValueError, 'map aliases'):
+                    builder.link_map_closure(plan, side, deps, None)
+
+    def test_physical_member_name_sha_and_kind_guards(self):
+        with tempfile.TemporaryDirectory(dir=G) as temp:
+            path = Path(temp) / 'lib.a'
+            path.write_bytes(fixture.ar([fixture.macho()]))
+            member = builder.physical.archive.arm64_archive_members(path.read_bytes())[0]
+            row = dict(kind='ARCHIVE_MEMBER', object_index=7, archive=builder.identity(path),
+                       member_header_offset=member['offset'], member_name_hex=member['name'].hex(),
+                       member_sha256=member['sha256'])
+            for field, value in [('member_name_hex', b'wrong.o'.hex()), ('member_sha256', '0' * 64),
+                                 ('member_header_offset', member['offset'] + 1)]:
+                with self.subTest(field=field), self.assertRaises(ValueError):
+                    builder.link_object_bytes({'actualOrigins': {'objects': [dict(row, **{field: value})]}})
+            obj = Path(temp) / 'bad.o'
+            obj.write_bytes(b'not Mach-O')
+            with self.assertRaises(ValueError):
+                builder.link_object_bytes({'actualOrigins': {'objects': [dict(kind='COMPILED_OBJECT', object_index=9, object=builder.identity(obj))]}})
 
     def test_archive_file_state_detects_replacement(self):
         with tempfile.TemporaryDirectory(dir=G) as temp:

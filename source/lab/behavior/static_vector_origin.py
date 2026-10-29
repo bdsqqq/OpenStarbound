@@ -141,6 +141,8 @@ def role_binding(plan, role, record, proof):
     need(deps == read(side / 'dependencies.json'), 'actual compiler/SDK dependencies drift')
     commands = phase_bindings(plan, role, record)
     seal = record['archive']
+    link = builder.link_closure(plan, role, deps, seal)
+    need(record['link'] == link, 'actual complete link closure drift')
     binary = side / 'bin/starbound'
     need(binary.stat().st_size <= code.MAX_INPUT_BYTES, 'bounded native game')
     if role == 'candidate':
@@ -150,14 +152,13 @@ def role_binding(plan, role, record, proof):
         need(seal == read(side / 'prelink-archive.json') and seal['physical'] == code.seal_archive(archive.read_bytes()), 'actual canonical prelink archive drift')
         need(seal['cargo'] == read(side / 'cargo-expanded.json') == builder.cargo_command(plan, side / 'cmake'), 'fresh actual Cargo source/tool/argv proof')
         world = Path(configured['objects']['world']['object'])
-        emitted = code.attest(binary.read_bytes(), archive.read_bytes(), world.read_bytes())
+        emitted = code.attest(binary.read_bytes(), archive.read_bytes(), world.read_bytes(),
+            map_data=(side / 'link.map').read_bytes(), physical_objects=builder.link_object_bytes(link))
     else:
         need(seal is None, 'reference aggregate excluded')
         image = code.MachO(binary.read_bytes())
         need(image.kind == 2 and not any(s['name'] in code.NAMES[:4] for s in image.symbols), 'reference native-only exports')
         emitted = dict(status='NO_RUST', game_sha256=ad.sha(binary))
-    link = builder.link_closure(plan, role, deps, seal)
-    need(record['link'] == link, 'actual complete link closure drift')
     return dict(record=identity(side / 'static-vector-build.json'), binary=record['binary'],
                 compiledSources=proof['compile_source_files'], dependencies=record['dependencies'],
                 common=common, commands=commands, link=link, emittedCode=emitted)

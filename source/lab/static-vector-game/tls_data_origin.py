@@ -17,8 +17,10 @@ Supported subset: descriptor arrays, named nlist-bounded TLS data spans,
 external UNSIGNED64 zero-addend object fields, and either one explicit classic
 bind or fully enumerated format6 chains (see tls_chained_fixups.py). Template
 spans use the next distinct nlist symbol/section end, not an invented atom size.
-Weak/coalesced symbols and relocations within a backing span reject. Unknown
-forms fail closed. This does
+External N_WEAK_DEF data requires a concrete selected map/index/object witness,
+matching reference/provider initial state, and same-provider weak backing. Other
+symbol flags and relocations within a backing span reject. Unknown forms fail
+closed. This does
 not prove runtime dyld resolution or whole-source/game provenance.
 """
 import hashlib
@@ -30,6 +32,10 @@ _chain_spec = importlib.util.spec_from_file_location(
     'tls_origin_chained', Path(__file__).with_name('tls_chained_fixups.py'))
 _chain = importlib.util.module_from_spec(_chain_spec)
 _chain_spec.loader.exec_module(_chain)
+_provider_spec = importlib.util.spec_from_file_location(
+    'tls_physical_provider', Path(__file__).with_name('physical_link_map.py'))
+_provider = importlib.util.module_from_spec(_provider_spec)
+_provider_spec.loader.exec_module(_provider)
 
 _spec = importlib.util.spec_from_file_location(
     'tls_origin_generic', Path(__file__).resolve().parents[1] /
@@ -59,12 +65,14 @@ def _desc(m, symbol):
     return struct.unpack_from('<H', m.data, symoff + 16 * symbol['index'] + 6)[0]
 
 
-def _definition(m, name):
+def _definition(m, name, allow_weak=False):
     matches = m.definitions(name)
     require(len(matches) == 1 and sum(s['name'] == name for s in m.symbols) == 1,
             'unique exact TLS definition/name required')
     symbol = matches[0]
-    require(_desc(m, symbol) == 0, 'weak/coalesced TLS definition unsupported')
+    flags = _desc(m, symbol)
+    require(flags == 0 or (allow_weak and flags == 0x80 and symbol['type'] & 1),
+            'TLS definition flags unsupported or weak provider unbound')
     return symbol
 
 
@@ -127,8 +135,8 @@ def _layout(m):
     return descriptors, templates
 
 
-def _symbol_span(m, name, kinds, descriptor=False):
-    s = _definition(m, name)
+def _symbol_span(m, name, kinds, descriptor=False, allow_weak=False):
+    s = _definition(m, name, allow_weak=allow_weak)
     sec = m.sections[s['section'] - 1]
     require(sec['flags'] & 255 in kinds and sec['address'] <= s['value'] < sec['address'] + sec['size'],
             'TLS symbol section/address bounds')
@@ -277,7 +285,17 @@ def _classic_bind(m, d):
                 library_hex=LIBSYSTEM.hex(), symbol_hex=BOOTSTRAP.hex(), address=d['address'])
 
 
-def attest_tlvp(obj, image, original_function, linked_function, reloc):
+def _data_definition(obj, name, allow_weak):
+    _, ds, descriptor = _symbol_span(obj, name, (0x13,), descriptor=True, allow_weak=allow_weak)
+    backing = _object_fields(obj, descriptor, ds)
+    symbol, section, span = _symbol_span(obj, backing['name'], (0x11, 0x12), allow_weak=allow_weak)
+    require(symbol == backing, 'object backing relocation target')
+    require(not _span_relocs(obj, section, span), 'object backing data relocations unsupported')
+    return backing, span
+
+
+def attest_tlvp(obj, image, original_function, linked_function, reloc, *,
+                map_data=None, physical_objects=None):
     """Return a finite artifact-bound descriptor/template witness or ValueError.
 
     Inputs are the unchanged generic MachO parser's objects/function/relocation
@@ -304,9 +322,24 @@ def attest_tlvp(obj, image, original_function, linked_function, reloc):
             a['type'] == 8 and b['type'] == 9 and a['target'] == b['target'] and
             (a['length'], a['external'], a['pcrel']) == (2, 1, 1), 'TLVP pair target/encoding')
     target = obj.symbols[a['target']]
-    os, ods, od = _symbol_span(obj, target['name'], (0x13,), descriptor=True)
+    linked_symbols = image.definitions(target['name'])
+    require(len(linked_symbols) == 1, 'unique linked descriptor required')
+    weak = _desc(obj, target) == 0x80 or _desc(image, linked_symbols[0]) == 0x80
+    provider_obj, provider_binding = obj, None
+    if weak:
+        require(type(map_data) is bytes and type(physical_objects) is dict,
+                'weak/coalesced TLS requires physical selected-provider context')
+        selected = _provider.selected_definition(map_data, image, physical_objects, target['name'])
+        provider_obj, provider_binding = selected['object'], selected['binding']
+        _layout(provider_obj)  # A selected object is a third artifact, not the already-checked reference.
+        require(provider_binding['size'] == 24, 'selected descriptor atom must cover all three fields')
+        provider_symbol = _definition(provider_obj, target['name'], allow_weak=True)
+        require(all(_desc(m, s) == 0x80 and s['type'] & 1 for m, s in
+                    ((obj, target), (image, linked_symbols[0]), (provider_obj, provider_symbol))),
+                'weak descriptor flags must agree across reference, selected provider and image')
+    os, _, _ = _symbol_span(obj, target['name'], (0x13,), descriptor=True, allow_weak=weak)
     require(os == target, 'actual object descriptor required')
-    _, _, ld = _symbol_span(image, target['name'], (0x13,), descriptor=True)
+    _, _, ld = _symbol_span(image, target['name'], (0x13,), descriptor=True, allow_weak=weak)
     require(pageoff >= 0 and pageoff % 4 == 0, 'TLVP instruction alignment')
     aw, bw = struct.unpack('<II', bounded(of['code'], pageoff, 8, 'original TLVP pair'))
     al, bl = struct.unpack('<II', bounded(lf['code'], pageoff, 8, 'linked TLVP pair'))
@@ -321,15 +354,27 @@ def attest_tlvp(obj, image, original_function, linked_function, reloc):
             '64-bit TLVP pointer load with ordinary registers required')
     require((bw >> 5) & 31 == aw & 31, 'TLVP LDR base must be ADRP destination')
     _base.local_tlvp_lea(obj, image, bw, bl, b)
-    backing = _object_fields(obj, od, ods)
-    bs, ots, ot = _symbol_span(obj, backing['name'], (0x11, 0x12))
-    require(bs == backing, 'object backing relocation target')
-    _, _, lt = _symbol_span(image, backing['name'], (0x11, 0x12))
+    backing, ot = _data_definition(provider_obj, target['name'], weak)
+    if weak:
+        reference_backing, reference_span = _data_definition(obj, target['name'], True)
+        require(reference_backing['name'] == backing['name'] and
+                (reference_span['flags'] & 255, reference_span['size']) == (ot['flags'] & 255, ot['size']) and
+                _section_bytes(obj, reference_span) == _section_bytes(provider_obj, ot),
+                'coalesced reference and selected-provider initial state differ')
+        if _desc(provider_obj, backing) == 0x80:
+            backing_provider = _provider.selected_definition(map_data, image, physical_objects, backing['name'])
+            require(backing_provider['binding']['object_index'] == provider_binding['object_index'] and
+                    backing_provider['object'].data == provider_obj.data and
+                    backing_provider['binding']['size'] == ot['size'],
+                    'coalesced descriptor/backing must share the selected physical provider')
+    linked_backing, _, lt = _symbol_span(image, backing['name'], (0x11, 0x12), allow_weak=weak)
+    if weak:
+        require(_desc(obj, reference_backing) == _desc(provider_obj, backing) == _desc(image, linked_backing),
+                'coalesced backing flags differ across reference, selected provider and image')
     require(ot['flags'] & 255 == lt['flags'] & 255 and lt['size'] >= ot['size'],
             'TLS backing kind/extent differs')
-    require(not _span_relocs(obj, ots, ot), 'object backing data relocations unsupported')
     lt = dict(lt, size=ot['size'])
-    require(_section_bytes(obj, ot) == _section_bytes(image, lt), 'TLS initial bytes differ')
+    require(_section_bytes(provider_obj, ot) == _section_bytes(image, lt), 'TLS initial bytes differ')
     # ld64 OutputFile.cpp:520-548: offset from FIRST template section, not a pointer.
     expected_offset = lt['address'] - linked_templates[0]['address']
     thunk, key, offset = struct.unpack('<QQQ', _section_bytes(image, ld))
@@ -362,4 +407,6 @@ def attest_tlvp(obj, image, original_function, linked_function, reloc):
                 extent_contract='object next distinct section nlist symbol or section end; linked span must cover it',
                 key_prelaunch=0, bootstrap_fixup=fixup,
                 object_sha256=hashlib.sha256(obj.data).hexdigest(),
+                selected_data_provider=provider_binding,
+                data_provider_sha256=hashlib.sha256(provider_obj.data).hexdigest(),
                 image_sha256=hashlib.sha256(image.data).hexdigest())
