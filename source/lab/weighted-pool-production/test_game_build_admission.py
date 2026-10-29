@@ -285,6 +285,20 @@ class Retirement(HermeticCase):
     def test_exact_retirement_reconstruction_and_preservation(self):
         a.check_retirement()
 
+    def test_xz_retirement_reconstruction_and_raw_tamper(self):
+        import lzma
+        for entry in self.entries:
+            sha = entry['sha256']
+            blob = self.root / 'build/migration-evidence-archive/blobs' / sha[:2] / (sha + '.gz')
+            blob.with_suffix('.xz').write_bytes(lzma.compress(gzip.decompress(blob.read_bytes())))
+            blob.unlink()
+        a.check_retirement()
+        sha = self.entries[0]['sha256']
+        blob = self.root / 'build/migration-evidence-archive/blobs' / sha[:2] / (sha + '.xz')
+        blob.write_bytes(lzma.compress(b'wrong identity'))
+        with self.assertRaisesRegex(ValueError, 'reconstruction hash'):
+            a.check_retirement()
+
     def test_manifest_status_membership_and_physical_pin(self):
         original = self.path.read_bytes()
         self.path.write_text('unrelated')

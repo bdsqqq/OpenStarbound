@@ -15,6 +15,10 @@ import re
 import stat
 import sys
 
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'source/lab'))
+from migration.archive_blobs import resolve_blob, open_blob
+
 CHUNK = 1024 * 1024
 MAX_JSON = 64 * CHUNK
 MIN_BYTES = 2 * CHUNK
@@ -245,10 +249,10 @@ def retired_product_bindings(repo, specification, protected):
              'retired product size/link bound')
         physical(original.parent, 'directory')
         need(not os.path.lexists(original), 'retired product must be absent, never replace a live input')
-        blob = repo / 'build/migration-evidence-archive/blobs' / row['sha256'][:2] / (row['sha256'] + '.gz')
-        physical(blob)
+        archive = repo / 'build/migration-evidence-archive'
+        blob = resolve_blob(archive, row['sha256'])
         before = fingerprint(blob)
-        with gzip.open(blob, 'rb') as stream:
+        with open_blob(archive, row['sha256']) as stream:
             need(digest(stream, row['size']) == (row['sha256'], row['size']),
                  'retired product reconstructed bytes mismatch')
         need(fingerprint(blob) == before, 'retired product blob changed')
@@ -431,18 +435,23 @@ def verify(closure_path, closure_sha, repo=None, archive_manifest=None, archive_
          'growth bound below blob allocation')
     verified_blobs = set()
     for pin, size in sizes.items():
-        blob = repo / 'build/migration-evidence-archive/blobs' / pin[:2] / (pin + '.gz')
+        archive = repo / 'build/migration-evidence-archive'
         if after or pin in old:
-            physical(blob)
+            blob = resolve_blob(archive, pin)
             before = fingerprint(blob)
-            with gzip.open(blob, 'rb') as stream:
+            with open_blob(archive, pin) as stream:
                 need(digest(stream, size) == (pin, size), 'archive reconstructed bytes mismatch')
             need(fingerprint(blob) == before, 'blob changed during reconstruction')
             if pin in new:
                 need(blob.stat().st_size == new[pin], 'exact codec blob size mismatch')
             verified_blobs.add(pin)
         else:
-            need(not os.path.lexists(blob), 'projected new blob already exists')
+            try:
+                resolve_blob(archive, pin)
+            except FileNotFoundError:
+                pass
+            else:
+                raise ValueError('projected new blob already exists')
             key = next(key for key in selected if rows[key]['sha256'] == pin)
             need(codec_size(repo / key) == new[pin] and fingerprint(repo / key) == rows[key]['fingerprint'],
                  'exact codec projection mismatch')

@@ -4,9 +4,11 @@
 Not a semantic replay or tool/SDK/product source resolver. Inode/ctime assertions
 on archived originals become historical; current complement remains live-bound.
 """
-import argparse,gzip,hashlib,json,os,stat
+import argparse,hashlib,json,os,stat,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[3]
+sys.path.insert(0,str(ROOT/'source/lab'))
+from migration.archive_blobs import resolve_blob, open_blob
 THRESHOLD=3*1024**2
 SESSION='build/id-map-rust-r1/target/aarch64-apple-darwin/debug/incremental/star_engine_ffi-39bvlel73630p/s-hnmx9d5wm1-0gv3wu9-dqegfmlr9lde362ncax1ufol1'
 DEPS='build/id-map-rust-r1/target/aarch64-apple-darwin/release/deps'
@@ -54,8 +56,8 @@ def verify(repo,closure,manifest=None):
   entries=manifest['entries'];need(len(entries)==3 and sorted(e['path']for e in entries)==sorted(selected),'exact manifest selection')
   for e in entries:
    expected=closure['inventory'][e['path']];need(e['sha256']==expected['sha256']and e['size']==expected['size']and e['fingerprint']==expected['fingerprint'],'original source pin')
-   h=hashlib.sha256();size=0;blob=repo/'build/migration-evidence-archive/blobs'/e['sha256'][:2]/(e['sha256']+'.gz')
-   with gzip.open(blob,'rb')as f:
+   h=hashlib.sha256();size=0
+   with open_blob(repo/'build/migration-evidence-archive',e['sha256'])as f:
     while b:=f.read(min(1024**2,e['size']-size+1)):
      size+=len(b);need(size<=e['size'],'bounded reconstruction size');h.update(b)
    need((h.hexdigest(),size)==(e['sha256'],e['size']),'exact reconstructed cache bytes')

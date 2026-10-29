@@ -5,13 +5,15 @@ Archive JSON is data, never a source/tool resolver or renewed native admission.
 The parent alone runs the existing archiver; this gate never archives or restores.
 """
 import argparse
-import gzip
 import hashlib
 import json
 import os
 from pathlib import Path
 import stat
+import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'source/lab'))
+from migration.archive_blobs import resolve_blob, open_blob
 from cache_retention import row
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -142,11 +144,11 @@ def archive_allocated(repo):
 
 def reconstructed(repo, expected):
     h = expected['sha256']
-    blob = physical(repo, ARCHIVE + '/blobs/' + h[:2] + '/' + h + '.gz')
-    # Limit both compressed input and decompressed output; do not trust gzip ISIZE.
+    blob = resolve_blob(repo / ARCHIVE, h)
+    # Bound encoded input and decoded output independently of the codec header.
     need(blob.stat().st_size <= expected['size'] + 1024**2, 'bounded compressed blob')
     digest, size = hashlib.sha256(), 0
-    with gzip.open(blob, 'rb') as source:
+    with open_blob(repo / ARCHIVE, h) as source:
         while block := source.read(min(1024**2, expected['size'] - size + 1)):
             size += len(block)
             need(size <= expected['size'], 'bounded reconstruction size')

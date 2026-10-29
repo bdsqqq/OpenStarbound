@@ -8,7 +8,6 @@ The snapshot supplements the runtime report (which does not itself enumerate
 its files); it does not retroactively add producer bindings to that report.
 """
 import argparse
-import gzip
 import hashlib
 import importlib.util
 import json
@@ -20,6 +19,8 @@ import sys
 
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'source/lab'))
+from migration.archive_blobs import resolve_blob, open_blob
 CERT = 'build/ttl-final-qualification-r2/certificate.json'
 CERT_SHA = '79d91cc33412c429a496cde890e5254c31bdce65b71445410a2ea467d63aa417'
 OUT = 'build/ttl-retention-r1'
@@ -170,10 +171,10 @@ class Resolver:
         row, manifest = self.index[str(p)]
         need(row['sha256'] == sha and (size is None or row['size'] == size),
              'archive member hash/size: ' + name)
-        blob = ROOT / 'build/migration-evidence-archive/blobs' / sha[:2] / (sha + '.gz')
+        archive = ROOT / 'build/migration-evidence-archive'
+        blob = resolve_blob(archive, sha)
         if sha not in self.blobs:
-            need(blob.resolve() == blob and regular(blob), 'archive blob regular physical path')
-            with gzip.open(blob, 'rb') as stream:
+            with open_blob(archive, sha) as stream:
                 need(digest(stream) == (sha, row['size']), 'archive reconstructed byte integrity')
             self.blobs[sha] = row['size']
         need(self.blobs[sha] == row['size'], 'inconsistent blob size')
@@ -183,7 +184,7 @@ class Resolver:
     def read(self, name, sha, role='input'):
         path, _, kind = self.resolve(name, sha, role)
         if kind == 'archive':
-            with gzip.open(path, 'rb') as stream:
+            with open_blob(ROOT / 'build/migration-evidence-archive', sha) as stream:
                 return stream.read()
         return path.read_bytes()
 

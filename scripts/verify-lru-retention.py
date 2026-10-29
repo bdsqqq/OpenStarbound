@@ -8,13 +8,15 @@ changed current source never renews an old origin seal. No restore, subprocess,
 source waiver, hash-only fallback or receipt rewrite.
 """
 import argparse
-import gzip
 import hashlib
 import json
 from pathlib import Path
 import stat
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'source/lab'))
+from migration.archive_blobs import resolve_blob, open_blob
 ARCHIVE = ROOT / 'build/migration-evidence-archive'
 CERTIFICATE = ROOT / 'build/lru-final-qualification-r3/qualification.json'
 CERT_SHA = '7b22bb0d323d85282aa958cb68054d119d5ad035a0bf5eb175901cc6eee40635'
@@ -110,10 +112,7 @@ def verify(successors, source_versions=None):
             need(name in index, 'missing exact archive membership: ' + name)
             row, manifest = index[name]
             need((row['sha256'], row['size']) == expected, 'archive member hash/size: ' + name)
-            blob = ARCHIVE / 'blobs' / old['sha256'][:2] / (old['sha256'] + '.gz')
-            need(blob.resolve() == blob.absolute() and stat.S_ISREG(blob.lstat().st_mode),
-                 'regular archive blob')
-            with gzip.open(blob, 'rb') as stream:
+            with open_blob(ARCHIVE, old['sha256']) as stream:
                 need(stream_hash(stream) == expected, 'archive reconstructed byte integrity: ' + name)
             archived.append(dict(path=name, sha256=old['sha256'], size=old['size'],
                                  manifest=manifest, originalOrigin=old['kind']))

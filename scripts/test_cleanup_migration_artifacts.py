@@ -37,7 +37,7 @@ class CleanupTests(unittest.TestCase):
             with gzip.open(blob) as stream:
                 self.assertEqual(stream.read(), payload)
             blob.write_bytes(b'corrupt')
-            with self.assertRaises((OSError, EOFError)):
+            with self.assertRaisesRegex(ValueError, 'suffix/magic mismatch'):
                 cleanup.verify(arc, arc / 'runs/test/manifest.json')
 
     def test_rejects_outside_alias_overlap_and_preserves_external_hardlinks(self):
@@ -79,6 +79,50 @@ class CleanupTests(unittest.TestCase):
             self.assertTrue(cleanup.budget(repo, 1, 1))
             self.assertFalse(cleanup.budget(repo, 1, 0))
 
+    def test_reuses_existing_xz_and_verifies_before_pruning(self):
+        import hashlib
+        import lzma
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp).resolve()
+            tree = repo / 'build/old'
+            tree.mkdir(parents=True)
+            data = b'previously archived raw bytes' * 100
+            (tree / 'a').write_bytes(data)
+            sha = hashlib.sha256(data).hexdigest()
+            arc = repo / 'build/migration-evidence-archive'
+            blob = arc / 'blobs' / sha[:2] / (sha + '.xz')
+            blob.parent.mkdir(parents=True)
+            blob.write_bytes(lzma.compress(data))
+            before = blob.read_bytes()
+            cleanup.archive(repo, ['build/old'], arc, 'reuse-xz', 1)
+            self.assertFalse((tree / 'a').exists())
+            self.assertFalse(blob.with_suffix('.gz').exists())
+            self.assertEqual(blob.read_bytes(), before)
+            cleanup.verify(arc, arc / 'runs/reuse-xz/manifest.json')
+            with self.assertRaisesRegex(ValueError, 'missing/aliased'):
+                cleanup.plan_repack_blob(repo, 'build/migration-evidence-archive/runs/reuse-xz/manifest.json', sha)
+
+    def test_xz_corruption_or_codec_ambiguity_retains_original(self):
+        import hashlib
+        import lzma
+        for mode in ('wrong-raw', 'ambiguous'):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temp:
+                repo = Path(temp).resolve()
+                tree = repo / 'build/old'
+                tree.mkdir(parents=True)
+                data = b'original must survive'
+                (tree / 'a').write_bytes(data)
+                sha = hashlib.sha256(data).hexdigest()
+                arc = repo / 'build/migration-evidence-archive'
+                blob = arc / 'blobs' / sha[:2] / (sha + '.xz')
+                blob.parent.mkdir(parents=True)
+                blob.write_bytes(lzma.compress(data if mode == 'ambiguous' else b'wrong'))
+                if mode == 'ambiguous':
+                    blob.with_suffix('.gz').write_bytes(gzip.compress(data))
+                with self.assertRaises(ValueError):
+                    cleanup.archive(repo, ['build/old'], arc, 'reject', 1)
+                self.assertEqual((tree / 'a').read_bytes(), data)
+
     def test_corrupt_existing_blob_never_prunes_new_input(self):
         import hashlib
         with tempfile.TemporaryDirectory() as temp:
@@ -92,7 +136,7 @@ class CleanupTests(unittest.TestCase):
             blob = arc / 'blobs' / sha[:2] / (sha + '.gz')
             blob.parent.mkdir(parents=True)
             blob.write_bytes(b'invalid')
-            with self.assertRaises(OSError):
+            with self.assertRaisesRegex(ValueError, 'suffix/magic mismatch'):
                 cleanup.archive(repo, ['build/old'], arc, 'corrupt', 1)
             self.assertEqual((tree / 'a').read_bytes(), data)
 

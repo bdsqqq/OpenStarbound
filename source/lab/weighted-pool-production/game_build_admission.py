@@ -7,7 +7,6 @@ Retired live inode seals are deliberately not reused as current evidence.
 """
 import argparse
 import datetime as dt
-import gzip
 import hashlib
 import json
 import os
@@ -18,6 +17,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.dont_write_bytecode = True
+sys.path.insert(0, str(ROOT / 'source/lab'))
+from migration.archive_blobs import open_blob
 sys.path.insert(0, str(ROOT / 'source/lab/ttl-production'))
 from game_syntax import closure, unchanged
 sys.path.insert(0, str(ROOT / 'source/lab/ttl-rust'))
@@ -173,10 +174,8 @@ def check_retirement():
         digest = entry['sha256']
         need(re.fullmatch('[0-9a-f]{64}', digest), 'invalid archive digest')
         if digest not in verified:
-            blob = ROOT / 'build/migration-evidence-archive/blobs' / digest[:2] / (digest + '.gz')
-            need(not blob.is_symlink(), 'symlink archive blob')
             h, size = hashlib.sha256(), 0
-            with gzip.open(blob, 'rb') as stream:
+            with open_blob(ROOT / 'build/migration-evidence-archive', digest) as stream:
                 for block in iter(lambda: stream.read(1024 * 1024), b''):
                     h.update(block)
                     size += len(block)

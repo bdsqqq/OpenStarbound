@@ -1,6 +1,6 @@
-"""Hermetic byte-retention controls; fixtures remain in the owned output tree.
+"""Hermetic byte-retention controls; each test removes only its own fixture.
 
-No native processes, canonical source edits, archive restores or fixture cleanup.
+No native processes, canonical source edits, archive restores or old-fixture cleanup.
 Each negative changes only an isolated fixture, never accepted evidence.
 """
 import gzip
@@ -25,7 +25,9 @@ class RetentionTests(unittest.TestCase):
         spec.loader.exec_module(self.m)
         fixtures = ROOT / 'build/ttl-retention-r1/fixtures'
         fixtures.mkdir(parents=True, exist_ok=True)
-        self.root = Path(tempfile.mkdtemp(prefix='case-', dir=fixtures)).resolve()
+        self.temp = tempfile.TemporaryDirectory(prefix='case-', dir=fixtures)
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve()
         self.m.ROOT = self.root
         self.codec = self.put('source/lab/native_evidence_json.py',
                               (ROOT / 'source/lab/native_evidence_json.py').read_bytes())

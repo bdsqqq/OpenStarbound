@@ -3,7 +3,7 @@
 
 No automatic discovery/deletion policy: the coordinator must name inactive roots.
 Reports retain their original meaning; archived inode/ctime seals are historical.
-Blobs are SHA256-addressed gzip, shared across runs. Nothing follows symlinks.
+Blobs are SHA256-addressed gzip or XZ, shared across runs. Nothing follows symlinks.
 """
 import argparse
 import gzip
@@ -15,6 +15,9 @@ import stat
 import sys
 import time
 import zlib
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'source/lab'))
+from migration.archive_blobs import resolve_blob, open_blob
 
 CHUNK = 1024 * 1024
 # Encoded length is NOT an upper bound on st_blocks. Admit a separate physical
@@ -104,7 +107,10 @@ def archive(repo, roots, archive_root, run, min_bytes):
     verified = set()
     for entry in entries:
         sha = entry['sha256']
-        blob = archive_root / 'blobs' / sha[:2] / (sha + '.gz')
+        try:
+            blob = resolve_blob(archive_root, sha)
+        except FileNotFoundError:
+            blob = archive_root / 'blobs' / sha[:2] / (sha + '.gz')
         if sha in verified:
             continue
         blob.parent.mkdir(parents=True, exist_ok=True)
@@ -127,7 +133,7 @@ def archive(repo, roots, archive_root, run, min_bytes):
             finally:
                 os.close(fd)
         else:
-            with gzip.open(blob, 'rb') as source:
+            with open_blob(archive_root, sha) as source:
                 if digest(source) != (sha, entry['size']):
                     raise ValueError('existing archive reconstruction mismatch')
         verified.add(sha)
@@ -165,7 +171,7 @@ def verify(archive_root, manifest_path):
         sha = entry['sha256']
         if sha in seen:
             continue
-        with gzip.open(archive_root / 'blobs' / sha[:2] / (sha + '.gz'), 'rb') as source:
+        with open_blob(archive_root, sha) as source:
             if digest(source) != (sha, entry['size']):
                 raise ValueError('archive reconstruction mismatch: ' + sha)
         seen.add(sha)

@@ -23,6 +23,21 @@ cmake evidence is a union of **static alternatives**, never an evaluated configu
 
 includes, parent-directory variables/conditions, function/macro execution, generator expressions, cache/toolchain values, generated build paths, globs and dynamic loop expressions are not evaluated. file-local variable assignments are conservatively unioned, so overwritten values can appear as alternatives. target-object/link aggregation is deliberately not expanded into transitive source ownership. rust files are registered by filesystem scope, not falsely attributed to a native cmake source list. `configure_file` input declarations and unresolved source expressions are reported separately. these limits require configured build evidence before any retirement decision.
 
+## archived byte codecs
+
+legacy manifests name **raw** sha256 and size, not a compression promise. current
+retention readers use `archive_blobs.py` so a later, explicitly admitted lossless
+encoding change need not rewrite those manifests or historical receipts. gzip
+remains the default archive writer; this reader addition does not admit conversion.
+
+the resolver rejects two encodings for one raw hash rather than choosing a
+plausible owner. xz requires crc64 on every stream, bounded decoder memory, and
+valid trailing bytes; consumers still check full raw sha256 and size. codec or
+byte-reconstruction success never renews archived inode/ctime, source, sdk, tool,
+or native-provider origins. the certificate-pinned original lru semantic verifier
+is deliberately unchanged; its current byte-retention wrapper handles codecs,
+not a replay or replacement of the original verifier.
+
 ## exercised failure contract
 
 `--self-test` uses disposable roots and the actual shell entrypoint: byte-identical replay; known match; excluded backup/build/rust-target near-matches; alias and conditional alternatives; loop targets; unknown/ambiguous names; source/body/cmake drift; corrupted and deleted output rejected **without repair**; explicit regeneration restores passing checks. it never alters the live catalog. no native build, runtime, saves or remote services are involved.

@@ -1819,6 +1819,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "tools.release",
+      "path": "scripts/test_migration_archive_blobs.py",
+      "rule": "release-scripts"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "retain-tooling",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "tools.release",
       "path": "scripts/test_verify_lru_retention.py",
       "rule": "release-scripts"
     },
@@ -31474,7 +31484,7 @@
     },
     {
       "path": "scripts/cleanup-migration-artifacts.py",
-      "sha256": "4cd79a1e5a070f35fc1ece1ffe409416dbbefc027171a407fe8551c64cd3fa56"
+      "sha256": "d8d5be49396c39b25260d3caeac044f9abb93bd1422a4ca792b4ca7fc414bab5"
     },
     {
       "path": "scripts/credits/generate-contributors.sh",
@@ -31558,7 +31568,11 @@
     },
     {
       "path": "scripts/test_cleanup_migration_artifacts.py",
-      "sha256": "41d88d15028535d27c254663a5db4dd53b8c1e9d1e2364ceaa6cc480e5c460ac"
+      "sha256": "5bc9a6b3f3c076718e42ecb90121f66756e92c4428a4d35779278bad4b760c78"
+    },
+    {
+      "path": "scripts/test_migration_archive_blobs.py",
+      "sha256": "b3b8067f471f7e1ba9bb063b2877207de7ef01ca35d8c51020f50e1277f65d40"
     },
     {
       "path": "scripts/test_verify_lru_retention.py",
@@ -31566,7 +31580,7 @@
     },
     {
       "path": "scripts/test_verify_ttl_retention.py",
-      "sha256": "3308cba36dbc9931bb46f2bfd07559e351f68f6abf129cdf56d21dfa54734f65"
+      "sha256": "d0e53f9c8e6ec93291577487a92f5ea1849c8909bae1c298f10ace80e069bf2d"
     },
     {
       "path": "scripts/test_verify_weighted_pool_retention.py",
@@ -31574,15 +31588,15 @@
     },
     {
       "path": "scripts/verify-lru-retention.py",
-      "sha256": "4c16a71d9abaf350d86a2e6ef05cc04a61136a960790e6ec3cdddbb0273b646e"
+      "sha256": "0dbf198f04f29348943f9474ecbd99f5d8df22740575b76fb7424fae07377b6b"
     },
     {
       "path": "scripts/verify-ttl-retention.py",
-      "sha256": "83ca36173da412ba408a074c724a2ec7ac96a341c3a502acde0c9cb82564e204"
+      "sha256": "a765e69dcfe97af175b20f939eec768bac39f3f14089512b737b6ec61bd45a06"
     },
     {
       "path": "scripts/verify-weighted-pool-retention.py",
-      "sha256": "03a6421039fb14d8257b1fd37f933d9d4e2dfe544dba5ccd0803443c10b181ab"
+      "sha256": "c3842f0667946a3ede55710daf3dc6d25dad72735cca22d8d53e645a3cd39efd"
     },
     {
       "path": "source/CMakeLists.txt",
@@ -36930,7 +36944,7 @@
     },
     {
       "path": "source/lab/id-map-production/cache_retention.py",
-      "sha256": "89fc26c966f68cb7438cc262bd9eca9e5ee1ec08c89c2eb10eaa1b3079f6f037"
+      "sha256": "2cb1f0f2be06df47e54aeec4023390c90f19efdbec026e9e6b401f21b71a9b2a"
     },
     {
       "path": "source/lab/id-map-production/configuration.py",
@@ -36946,7 +36960,7 @@
     },
     {
       "path": "source/lab/id-map-production/product_retention.py",
-      "sha256": "ac73e33a0be998cd3498d770be48684fe8191135598853bbf6cb96c7fa060e55"
+      "sha256": "710b99146377a6924357d7ffcef37207a65188a74dd40927a45ae29c8e2b0f9e"
     },
     {
       "path": "source/lab/id-map-production/test_allocation.py",
@@ -38470,7 +38484,7 @@
     },
     {
       "path": "source/lab/weighted-pool-production/game_build_admission.py",
-      "sha256": "550febf006239977234d32b7d0e79113830b1685d00e63314eb8ae53b71c45fe"
+      "sha256": "5d4757dbffe342b3a8c5ac224b73298536467671fcb88db6db53c7ff5980e2c3"
     },
     {
       "path": "source/lab/weighted-pool-production/game_origin.py",
@@ -38514,7 +38528,7 @@
     },
     {
       "path": "source/lab/weighted-pool-production/test_game_build_admission.py",
-      "sha256": "00a1bc0544aee7bc1f93d42918c90f51ecc40aa5756970bb5a63082c8afa7c42"
+      "sha256": "6fc59ab3682f492a605299c812019e133ec5f5a62e11ec707ad3466ce9837057"
     },
     {
       "path": "source/lab/weighted-pool-production/test_game_origin.py",
@@ -39720,7 +39734,7 @@
       "migrate": 960,
       "migrate-adapter": 24,
       "oracle/harness": 676,
-      "retain-tooling": 32,
+      "retain-tooling": 33,
       "retained-third-party": 296,
       "rust-candidate": 30,
       "test": 57
@@ -39759,15 +39773,15 @@
       "sessions.orchestration": 47,
       "sessions.persistence": 6,
       "tools.inactive": 21,
-      "tools.release": 47,
+      "tools.release": 48,
       "validation.oracles-harness": 705,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2172,
+    "files": 2173,
     "modules": 39,
-    "no_direct_target": 1066
+    "no_direct_target": 1067
   }
 }
