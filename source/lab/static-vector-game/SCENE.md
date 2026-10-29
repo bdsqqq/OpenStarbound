@@ -192,3 +192,42 @@ compact reports, failures, raw stdio/dependencies/receipts and readers remain in
 `build/behavior/static-vector-combined-r1/`. original live-path/inode/ctime/sdk
 admission replay is **UNAVAILABLE_ARCHIVED**; reconstruction is DATA only, never
 an executable/tool/sdk replacement. no game/runtime/restoration claim follows.
+
+## profile and receipt guards — fixture-tested, not acquired
+
+`configuration.py` extends the existing current IdMap production policy with the
+StaticVector selector; it does not load a historical admission or invent an
+all-on profile. source/default declarations and actual cache must contain exactly
+30 selectors. explicit compiler definitions must match the supported role,
+including split `-D NAME` spellings; duplicate/unknown/value-bearing definitions,
+undefines and opaque response files are refused. `NAME=0` is not treated as OFF:
+the production headers use `#ifdef`. actual fresh source/tool/dependency binding
+remains a separate requirement.
+
+`source/lab/behavior/static_vector_proof.py` checks the predeclared producer
+contract independently: precise wrap coverage and offsets, actual two-sided
+world/render sample membership and indices, scoped constructor counter deltas
+(including uint64 wrapping), native zero counters, latest frame/scope identity,
+normal lit painter submission, monotonic three-stage identity and acknowledged
+restoration bound to a successful process exit. its observation projection drops
+only individually validated backend/configuration/counter/frame-identity fields;
+it does not mask pixels or remove arbitrary semantic fields.
+
+run the ten configuration tests and seven receipt tests:
+
+```sh
+python3 -I -B source/lab/static-vector-game/test_configuration.py
+python3 -I -B source/lab/behavior/test_static_vector_proof.py
+```
+
+controls cover unsupported all-on and malformed/cache/flag profiles, scope-free
+positive counters, wrong geometry/order/offsets, fake/missing/duplicate samples,
+counter/schema/scalar corruption, stale frame identity, missing painter/lighting,
+and failed/missing/unacknowledged restoration. the profile guard also accepted all
+eight previously acquired successful argv records and rejected the original
+unsupported argv, without invoking a compiler again.
+
+receipt positives are **synthetic fixtures only**. the scene26 capture frontend,
+current30-selector whole-game origin validator, actual game acquisition, image
+inspection and old25/auxiliary integration remain pending. these tests cannot
+qualify game adoption, actual restoration or whole-game parity.
