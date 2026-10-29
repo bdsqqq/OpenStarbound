@@ -13,6 +13,8 @@ import os
 from pathlib import Path
 import pwd
 import shlex
+import secrets
+import selectors
 import signal
 import subprocess
 import sys
@@ -74,47 +76,221 @@ def remaining(plan):
     return (dt.datetime.fromisoformat(plan['createdUTC']) + dt.timedelta(seconds=ad.DEADLINES['maxAgeSeconds']) - dt.datetime.now(dt.timezone.utc)).total_seconds()
 
 
+def phase_output_limits(phase):
+    ad.need(phase in PHASES, 'undeclared phase')
+    return dict(stdoutBytes=(64 if phase in ('provenance-seal', 'provenance-verify') else 8) * 1024**2,
+                stderrBytes=2 * 1024**2, readChunkBytes=65536, overflowBytes=65536)
+
+
+def pair_phase_output_bound():
+    """only the 13 known phase logs and their overflow evidence, not other artifacts."""
+    return sum(limits['stdoutBytes'] + limits['stderrBytes'] + 2 * limits['overflowBytes']
+               for role in ('reference', 'candidate') for phase in phases(role)
+               for limits in (phase_output_limits(phase),))
+
+
+GUARDIAN = ROOT / 'scripts/static-vector-phase-guardian.py'
+GUARDIAN_SCHEMA = 'static-vector-phase-guardian-v1'
+STATUS_BYTES = 4096
+
+
+def guardian_status(data, pid, token, source_sha):
+    ad.need(0 < len(data) <= STATUS_BYTES, 'guardian status size')
+
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            ad.need(key not in result, 'duplicate guardian status key')
+            result[key] = value
+        return result
+
+    text = data.decode('utf-8')
+    row, end = json.JSONDecoder(object_pairs_hook=unique).raw_decode(text)
+    ad.need(end == len(text), 'trailing guardian status bytes')
+    keys = {'schema', 'token', 'sourceSha256', 'guardianPID', 'guardianPGID', 'guardianSID',
+            'commandPID', 'returncode', 'commandReaped', 'launchError'}
+    ad.need(type(row) is dict and set(row) == keys, 'guardian status schema keys')
+    ad.need(row['schema'] == GUARDIAN_SCHEMA and row['token'] == token
+            and row['sourceSha256'] == source_sha, 'guardian status identity')
+    ad.need(all(type(row[key]) is int and row[key] == pid
+                for key in ('guardianPID', 'guardianPGID', 'guardianSID')), 'guardian session identity')
+    child = row['commandPID']
+    ad.need(child is None or (type(child) is int and 0 < child < 2**31 and child != pid), 'guardian command pid')
+    ad.need(type(row['commandReaped']) is bool, 'guardian command reaping type')
+    error = row['launchError']
+    ad.need(error is None or (type(error) is str and 0 < len(error.encode('utf-8')) <= 512), 'guardian error bound')
+    if row['commandReaped']:
+        ad.need(child is not None and type(row['returncode']) is int and error is None, 'guardian completed command')
+    else:
+        ad.need(row['returncode'] is None and error is not None, 'guardian failed command')
+    return row
+
+
 def supervise(argv, cwd, env, output, plan):
-    """Owned PGID, original clock, complete reaping, immutable failures."""
+    """bounded raw-byte capture; overflow is retained evidence, never a qualified pass."""
+    phase = output.name
+    limits = phase_output_limits(phase)
     ad.validate(plan)
+    python = Path(sys.executable).resolve(strict=True)
+    ad.need(Path(plan.get('python', str(python))).resolve(strict=True) == python, 'guardian trusted Python mismatch')
+    launcher = dict(python=identity(python), guardian=identity(GUARDIAN))
+    token = secrets.token_hex(32)
     started = dt.datetime.now(dt.timezone.utc).isoformat()
-    ad.dump(output.with_suffix('.command.json'), dict(argv=argv, cwd=str(cwd), environment=env,
-            startedUTC=started, inputsSha256=code.sha(json.dumps(plan['witness'], sort_keys=True).encode())))
     start = time.monotonic()
-    with output.with_suffix('.stdout').open('xb') as stdout, output.with_suffix('.stderr').open('xb') as stderr:
+    proc, selector, status_pipe, status_write = None, None, None, None
+    status_data, status, status_eof, status_bytes_read = bytearray(), None, False, 0
+    launch_argv, command_record = None, None
+    streams, files = {}, {}
+    failure, complete, reaped, group_stopped = None, False, False, False
+    counts = {name: dict(bytesRead=0, bytesWritten=0, eof=False, overflow=None)
+              for name in ('stdout', 'stderr')}
+
+    def stop_group(sig):
+        # the guardian stays live after its report; never poll/reap it before
+        # the final group signal, and never reinterpret EPERM as success.
+        try:
+            os.killpg(proc.pid, sig)
+        except ProcessLookupError:
+            pass
+
+    try:
+        for name in counts:
+            files[name] = output.with_suffix('.' + name).open('xb')
         remaining(plan)
         ad.validate(plan)
-        proc = subprocess.Popen(argv, cwd=cwd, env=env, stdout=stdout, stderr=stderr, start_new_session=True)
-        failure = None
+        status_read, status_write = os.pipe()
         try:
-            while True:
-                try:
-                    proc.wait(timeout=min(2, remaining(plan)))
-                    break
-                except subprocess.TimeoutExpired:
-                    ad.validate(plan)
-        except BaseException as exc:
-            failure = str(exc)
-            try:
-                os.killpg(proc.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
-            try:
-                proc.wait(timeout=min(3, max(0.001, remaining(plan))))
-            except (subprocess.TimeoutExpired, ValueError):
-                pass
+            status_pipe = os.fdopen(status_read, 'rb', buffering=0)
+        except BaseException:
+            os.close(status_read)
             raise
+        launch_argv = [str(python), '-B', str(GUARDIAN), '--status-fd', str(status_write),
+                       '--token', token, '--source-sha', launcher['guardian']['sha256'],
+                       '--environment-json', json.dumps(env, sort_keys=True), '--'] + list(argv)
+        ad.dump(output.with_suffix('.command.json'), dict(argv=argv, launchArgv=launch_argv,
+            launcher=launcher, guardianSchema=GUARDIAN_SCHEMA, statusBytes=STATUS_BYTES,
+            cwd=str(cwd), environment=env, phase=phase, outputLimits=limits, startedUTC=started,
+            inputsSha256=code.sha(json.dumps(plan['witness'], sort_keys=True).encode())))
+        command_record = identity(output.with_suffix('.command.json'))
+        ad.need(launcher == dict(python=identity(python), guardian=identity(GUARDIAN)), 'guardian launcher drift')
+        proc = subprocess.Popen(launch_argv, cwd=cwd, env=env, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, start_new_session=True, pass_fds=(status_write,))
+        streams = dict(stdout=proc.stdout, stderr=proc.stderr)
+        os.close(status_write)
+        status_write = None
+        selector = selectors.DefaultSelector()
+        for name, stream in dict(streams, status=status_pipe).items():
+            os.set_blocking(stream.fileno(), False)
+            selector.register(stream, selectors.EVENT_READ, name)
+        next_validation = time.monotonic() + 2
+        while True:
+            left = remaining(plan)
+            ad.need(left > 0, 'original phase deadline expired')
+            now = time.monotonic()
+            if now >= next_validation:
+                ad.validate(plan)
+                next_validation = time.monotonic() + 2
+            if not group_stopped and status is not None:
+                stop_group(signal.SIGKILL)
+                group_stopped = True
+            if group_stopped and all(row['eof'] for row in counts.values()):
+                break
+            # pipe EOF alone does not mean command exit; the guardian's private
+            # one-shot report is the only command completion barrier.
+            delay = min(0.1, left, max(0, next_validation - time.monotonic()))
+            for key, _ in selector.select(delay):
+                name, stream = key.data, key.fileobj
+                try:
+                    size = STATUS_BYTES + 1 - len(status_data) if name == 'status' else limits['readChunkBytes']
+                    data = os.read(stream.fileno(), size)
+                except BlockingIOError:
+                    continue
+                if name == 'status':
+                    if data:
+                        status_bytes_read += len(data)
+                        ad.need(status_bytes_read <= STATUS_BYTES, 'guardian status size')
+                        status_data.extend(data)
+                    else:
+                        status_eof = True
+                        selector.unregister(stream)
+                        status = guardian_status(bytes(status_data), proc.pid, token, launcher['guardian']['sha256'])
+                    continue
+                row = counts[name]
+                if not data:
+                    row['eof'] = True
+                    selector.unregister(stream)
+                    continue
+                row['bytesRead'] += len(data)
+                allowed = max(0, limits[name + 'Bytes'] - row['bytesWritten'])
+                prefix = data[:allowed]
+                files[name].write(prefix)
+                row['bytesWritten'] += len(prefix)
+                overflow = data[len(prefix):]
+                if overflow:
+                    path = output.with_suffix('.' + name + '-overflow.bin')
+                    with path.open('xb') as evidence:
+                        evidence.write(overflow)
+                    row['overflow'] = dict(path=str(path), sizeBytes=len(overflow), sha256=code.sha(overflow))
+                    raise ValueError('OUTPUT_LIMIT_EXCEEDED')
+        for file in files.values():
+            file.flush()
+        proc.wait()
+        reaped = True
+        ad.need(status['commandReaped'], 'guardian command launch or wait failed; logs retained')
+        ad.need(status['returncode'] == 0, 'native phase failed; logs retained')
+        ad.need(proc.returncode == -signal.SIGKILL, 'guardian did not remain live until group cleanup')
+        ad.need(launcher == dict(python=identity(python), guardian=identity(GUARDIAN)), 'guardian launcher drift')
+        ad.validate(plan)
+        complete = True
+    except BaseException as exc:
+        failure = str(exc) or type(exc).__name__
+        raise
+    finally:
+        try:
+            if proc is not None and not reaped:
+                # no intermediate TERM: it could retire the live guardian
+                # before final cleanup and recreate zombie-only Darwin EPERM.
+                # no poll/wait before this last group signal either.
+                try:
+                    if not group_stopped:
+                        stop_group(signal.SIGKILL)
+                finally:
+                    proc.wait()
+                    reaped = True
         finally:
-            try:
-                os.killpg(proc.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            proc.wait()
-            ad.dump(output.with_suffix('.receipt.json'), dict(argv=argv, returncode=proc.returncode,
-                elapsedSeconds=time.monotonic() - start, failure=failure, pid=proc.pid, pgid=proc.pid,
-                reaped=True, finishedUTC=dt.datetime.now(dt.timezone.utc).isoformat()))
-    ad.need(proc.returncode == 0, 'native phase failed; logs retained')
-    ad.validate(plan)
+            cleanup_error = None
+            if status_write is not None:
+                try:
+                    os.close(status_write)
+                except BaseException as exc:
+                    cleanup_error = exc
+            for resource in [selector, status_pipe] + list(streams.values()) + list(files.values()):
+                if resource is not None:
+                    try:
+                        resource.close()
+                    except BaseException as exc:
+                        if cleanup_error is None:
+                            cleanup_error = exc
+            raise_cleanup = cleanup_error is not None and failure is None
+            if cleanup_error is not None:
+                complete = False
+                failure = failure or str(cleanup_error) or type(cleanup_error).__name__
+            ad.dump(output.with_suffix('.receipt.json'), dict(argv=argv, launchArgv=launch_argv,
+                launcher=launcher, command=command_record, phase=phase, guardianStatus=status,
+                guardianStatusBytes=status_bytes_read, guardianStatusEOF=status_eof,
+                commandPID=status['commandPID'] if status is not None else None,
+                commandReaped=status['commandReaped'] if status is not None else False,
+                guardianReturncode=proc.returncode if proc is not None else None,
+                outputLimits=limits, streams=counts, outputComplete=complete,
+                returncode=status['returncode'] if status is not None else None,
+                elapsedSeconds=time.monotonic() - start, failure=failure,
+                cleanupFailure=str(cleanup_error) if cleanup_error is not None else None,
+                pid=proc.pid if proc is not None else None,
+                pgid=proc.pid if proc is not None else None, reaped=reaped,
+                guardianReaped=reaped, reapedScope='DIRECT_GUARDIAN_ONLY',
+                finishedUTC=dt.datetime.now(dt.timezone.utc).isoformat()))
+            if raise_cleanup:
+                raise cleanup_error
 
 
 def cargo_command(plan, build):

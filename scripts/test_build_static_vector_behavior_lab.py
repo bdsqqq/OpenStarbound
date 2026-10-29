@@ -8,7 +8,8 @@ from pathlib import Path
 import tempfile
 import unittest
 import sys
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+from types import SimpleNamespace
 
 spec = importlib.util.spec_from_file_location('_sv_builder_test', Path(__file__).with_name('build-static-vector-behavior-lab.py'))
 builder = importlib.util.module_from_spec(spec)
@@ -68,6 +69,423 @@ def dependency_fixture(role='candidate', extra_tus=0, shared_headers=0):
         yield plan, configured, {'compile_source_files': {}}, closures
 
 
+class StreamSelector:
+    def __init__(self):
+        self.keys = {}
+        self.unregistered = []
+        self.closed = False
+        self.on_select = None
+
+    def register(self, stream, events, data):
+        self.keys[stream.fileno()] = SimpleNamespace(fileobj=stream, data=data)
+
+    def unregister(self, stream):
+        self.unregistered.append(stream)
+        del self.keys[stream.fileno()]
+
+    def select(self, timeout):
+        if self.on_select:
+            self.on_select(timeout)
+        return [(key, builder.selectors.EVENT_READ) for key in list(self.keys.values())]
+
+    def close(self):
+        self.closed = True
+
+
+@contextmanager
+def capture_fixture(stdout=(b'',), stderr=(b'',), returncode=0):
+    """all process/OS readiness is synthetic; only tiny output files are real."""
+    with tempfile.TemporaryDirectory(dir=G) as temp:
+        output = Path(temp) / 'compile'
+        streams = {name: Mock() for name in ('stdout', 'stderr')}
+        streams['stdout'].fileno.return_value = 11
+        streams['stderr'].fileno.return_value = 12
+        status_pipe = Mock()
+        status_pipe.fileno.return_value = 13
+        record = dict(schema=builder.GUARDIAN_SCHEMA, token='fixture-token',
+            sourceSha256=builder.identity(builder.GUARDIAN)['sha256'],
+            guardianPID=4242, guardianPGID=4242, guardianSID=4242,
+            commandPID=4343, returncode=returncode, commandReaped=True, launchError=None)
+        chunks = {11: list(stdout), 12: list(stderr), 13: [json.dumps(record).encode(), b'']}
+        events = []
+        proc = Mock(pid=4242, returncode=-builder.signal.SIGKILL, **streams)
+        proc.wait.side_effect = lambda: events.append(('wait',)) or proc.returncode
+        selector = StreamSelector()
+        limits = dict(stdoutBytes=8, stderrBytes=4, readChunkBytes=4, overflowBytes=4)
+
+        def read(fd, size):
+            if not chunks[fd]:
+                return b''
+            data = chunks[fd].pop(0)
+            if isinstance(data, BaseException):
+                raise data
+            assert len(data) <= size, 'fixture exceeds the read request'
+            return data
+
+        with patch.object(builder.ad, 'validate') as validate, \
+             patch.object(builder, 'remaining', return_value=10) as clock, \
+             patch.object(builder, 'phase_output_limits', return_value=limits), \
+             patch.object(builder.subprocess, 'Popen', return_value=proc) as launch, \
+             patch.object(builder.secrets, 'token_hex', return_value='fixture-token'), \
+             patch.object(builder.os, 'pipe', return_value=(13, 14)), \
+             patch.object(builder.os, 'fdopen', return_value=status_pipe), \
+             patch.object(builder.os, 'close') as close_fd, \
+             patch.object(builder.selectors, 'DefaultSelector', return_value=selector), \
+             patch.object(builder.os, 'set_blocking') as blocking, \
+             patch.object(builder.os, 'read', side_effect=read), \
+             patch.object(builder.os, 'killpg', side_effect=lambda pid, sig: events.append(('kill', sig))) as kill:
+            yield SimpleNamespace(output=output, streams=streams, chunks=chunks, proc=proc,
+                status_pipe=status_pipe, record=record, close_fd=close_fd,
+                selector=selector, launch=launch, validate=validate,
+                clock=clock, blocking=blocking, kill=kill, limits=limits, events=events,
+                run=lambda: builder.supervise(['/never-executed'], builder.ROOT / 'source', {}, output, {'witness': {}}),
+                receipt=lambda: json.loads(output.with_suffix('.receipt.json').read_text()))
+
+
+class CaptureTests(unittest.TestCase):
+    def test_declared_limits_and_whole_pair_log_only_bound(self):
+        for phase in builder.PHASES:
+            limits = builder.phase_output_limits(phase)
+            self.assertEqual(limits, dict(stdoutBytes=(64 if phase in ('provenance-seal', 'provenance-verify') else 8) * 1024**2,
+                stderrBytes=2 * 1024**2, readChunkBytes=65536, overflowBytes=65536))
+        # four full-JSON logs, nine ordinary logs, thirteen stderr logs,
+        # twenty-six single-read overflow evidence files. not a metadata bound.
+        self.assertEqual(builder.pair_phase_output_bound(), 354 * 1024**2 + 26 * 65536)
+        with self.assertRaisesRegex(ValueError, 'undeclared phase'):
+            builder.phase_output_limits('mock-phase')
+
+    def test_raw_binary_both_streams_exact_cap_and_eof(self):
+        with capture_fixture(stdout=(b'\xff\x00\r\n', b'abcd', b''), stderr=(b'\x80\r\n\x00', b'')) as rig:
+            rig.run()
+            self.assertEqual(rig.output.with_suffix('.stdout').read_bytes(), b'\xff\x00\r\nabcd')
+            self.assertEqual(rig.output.with_suffix('.stderr').read_bytes(), b'\x80\r\n\x00')
+            for name, size in (('stdout', 8), ('stderr', 4)):
+                self.assertEqual(rig.receipt()['streams'][name], dict(bytesRead=size, bytesWritten=size, eof=True, overflow=None))
+            self.assertEqual(rig.blocking.call_count, 3)
+
+    def test_each_stream_overflow_retains_entire_first_read_remainder(self):
+        for name in ('stdout', 'stderr'):
+            with self.subTest(stream=name), capture_fixture(
+                    stdout=(b'1234', b'567', b'89xy') if name == 'stdout' else (b'',),
+                    stderr=(b'abc', b'dXYZ') if name == 'stderr' else (b'',)) as rig:
+                with self.assertRaisesRegex(ValueError, 'OUTPUT_LIMIT_EXCEEDED'):
+                    rig.run()
+                receipt = rig.receipt()
+                self.assertEqual(receipt['failure'], 'OUTPUT_LIMIT_EXCEEDED')
+                self.assertIs(receipt['outputComplete'], False)
+                row = receipt['streams'][name]
+                self.assertEqual(row['bytesWritten'], rig.limits[name + 'Bytes'])
+                raw = rig.output.with_suffix('.' + name).read_bytes()
+                overflow = rig.output.with_suffix('.' + name + '-overflow.bin').read_bytes()
+                self.assertEqual(overflow, b'9xy' if name == 'stdout' else b'XYZ')
+                self.assertEqual(row['bytesRead'], len(raw) + len(overflow))
+                self.assertEqual(row['overflow']['sha256'], builder.code.sha(overflow))
+                self.assertEqual(row['overflow']['sizeBytes'], len(overflow))
+                self.assertLessEqual(len(overflow), rig.limits['overflowBytes'])
+                self.assertIs(receipt['reaped'], True)
+                self.assertTrue(rig.selector.closed)
+                for stream in rig.streams.values():
+                    stream.close.assert_called_once()
+
+    def test_known_unsafe_unbounded_writer_mutant_accepts_oversize(self):
+        chunks = (b'1234', b'567', b'89xy')
+        # the previous direct-file contract has no cap check: this tiny fixture
+        # distinguishes it from the production supervisor, without huge files.
+        with tempfile.TemporaryDirectory(dir=G) as temp:
+            unsafe = Path(temp) / 'unsafe.stdout'
+            with unsafe.open('xb') as file:
+                for chunk in chunks:
+                    file.write(chunk)
+            self.assertGreater(unsafe.stat().st_size, 8)
+        with capture_fixture(stdout=chunks) as rig:
+            with self.assertRaisesRegex(ValueError, 'OUTPUT_LIMIT_EXCEEDED'):
+                rig.run()
+
+    def test_launch_failure_has_no_invented_pid_or_reaping(self):
+        with capture_fixture() as rig:
+            rig.launch.side_effect = OSError('launch failed')
+            with self.assertRaisesRegex(OSError, 'launch failed'):
+                rig.run()
+            row = rig.receipt()
+            self.assertIsNone(row['pid'])
+            self.assertIsNone(row['pgid'])
+            self.assertIsNone(row['returncode'])
+            self.assertFalse(row['reaped'])
+            self.assertFalse(row['outputComplete'])
+            rig.kill.assert_not_called()
+
+    def test_nonzero_and_final_validation_failure_have_failed_receipts(self):
+        for case in ('nonzero', 'validation'):
+            with self.subTest(case=case), capture_fixture(returncode=7 if case == 'nonzero' else 0) as rig:
+                if case == 'validation':
+                    rig.validate.side_effect = [None, None, ValueError('final validation')]
+                with self.assertRaisesRegex(ValueError, 'native phase failed' if case == 'nonzero' else 'final validation'):
+                    rig.run()
+                self.assertFalse(rig.receipt()['outputComplete'])
+                self.assertTrue(rig.receipt()['reaped'])
+                self.assertEqual(rig.events[-1], ('wait',))
+                self.assertEqual(rig.events.count(('wait',)), 1)
+
+    def test_original_clock_periodic_validation_and_inherited_pipe_failure(self):
+        with capture_fixture(stdout=(BlockingIOError(),) * 4) as rig:
+            rig.chunks[13] = [BlockingIOError()] * 4
+            # initial prelaunch check plus each loop; no fresh clock is created.
+            rig.clock.side_effect = [10, 9, 8, ValueError('original clock expired')]
+            rig.selector.on_select = lambda delay: self.assertLessEqual(delay, 0.1)
+            with self.assertRaisesRegex(ValueError, 'original clock expired'):
+                rig.run()
+            self.assertEqual(rig.events, [('kill', builder.signal.SIGKILL), ('wait',)])
+            self.assertFalse(rig.receipt()['outputComplete'])
+        with capture_fixture(stdout=(BlockingIOError(),)) as rig:
+            ticks = iter(range(100))
+            with patch.object(builder.time, 'monotonic', side_effect=lambda: next(ticks)):
+                rig.validate.side_effect = [None, None, ValueError('periodic validation')]
+                with self.assertRaisesRegex(ValueError, 'periodic validation'):
+                    rig.run()
+            self.assertTrue(rig.receipt()['reaped'])
+        with capture_fixture(stdout=(BlockingIOError(),) * 4) as rig:
+            # leader exit does not imply EOF: inherited/unread pipe prevents PASS.
+            rig.clock.side_effect = [10, 9, 8, 7, ValueError('inherited pipe deadline')]
+            with self.assertRaisesRegex(ValueError, 'inherited pipe deadline'):
+                rig.run()
+            self.assertEqual(rig.events, [('kill', builder.signal.SIGKILL), ('wait',)])
+            self.assertFalse(rig.receipt()['streams']['stdout']['eof'])
+
+    def test_eof_before_exit_does_not_kill_running_child(self):
+        with capture_fixture() as rig:
+            rig.chunks[13] = [BlockingIOError(), json.dumps(rig.record).encode(), b'']
+            rig.run()
+            self.assertEqual(rig.events, [('kill', builder.signal.SIGKILL), ('wait',)])
+
+    def test_read_selector_and_registration_exceptions_cleanup(self):
+        for case in ('read', 'select', 'register', 'status'):
+            with self.subTest(case=case), capture_fixture(stdout=(OSError('read failed'),)) as rig:
+                if case == 'select':
+                    rig.selector.on_select = Mock(side_effect=OSError('select failed'))
+                elif case == 'register':
+                    rig.selector.register = Mock(side_effect=OSError('register failed'))
+                elif case == 'status':
+                    rig.chunks[11] = [b'']
+                    rig.chunks[13] = [OSError('status failed')]
+                with self.assertRaisesRegex(OSError, case + ' failed'):
+                    rig.run()
+                self.assertTrue(rig.receipt()['reaped'])
+                self.assertTrue(rig.selector.closed)
+                rig.status_pipe.close.assert_called_once()
+                self.assertEqual(rig.events[-1], ('wait',))
+                self.assertEqual(rig.proc.wait.call_count, 1)
+                for stream in rig.streams.values():
+                    stream.close.assert_called_once()
+
+    def test_status_writer_close_failure_still_closes_launched_pipes(self):
+        with capture_fixture() as rig:
+            rig.close_fd.side_effect = [OSError('status close failed'), None]
+            with self.assertRaisesRegex(OSError, 'status close failed'):
+                rig.run()
+            self.assertEqual(rig.events, [('kill', builder.signal.SIGKILL), ('wait',)])
+            for stream in rig.streams.values():
+                stream.close.assert_called_once()
+            rig.status_pipe.close.assert_called_once()
+            self.assertFalse(rig.receipt()['outputComplete'])
+            self.assertTrue(rig.receipt()['guardianReaped'])
+
+    def test_cleanup_failure_still_closes_other_fds_and_fails_receipt(self):
+        with capture_fixture() as rig:
+            rig.selector.close = Mock(side_effect=OSError('selector close failed'))
+            with self.assertRaisesRegex(OSError, 'selector close failed'):
+                rig.run()
+            rig.status_pipe.close.assert_called_once()
+            for stream in rig.streams.values():
+                stream.close.assert_called_once()
+            self.assertFalse(rig.receipt()['outputComplete'])
+            self.assertEqual(rig.receipt()['cleanupFailure'], 'selector close failed')
+            self.assertTrue(rig.receipt()['reaped'])
+
+    def test_eperm_is_not_silently_accepted_even_after_pipe_eof(self):
+        with capture_fixture() as rig:
+            rig.kill.side_effect = PermissionError(1, 'Operation not permitted')
+            with self.assertRaises(PermissionError):
+                rig.run()
+            row = rig.receipt()
+            self.assertTrue(all(stream['eof'] for stream in row['streams'].values()))
+            self.assertTrue(row['reaped'])
+            self.assertFalse(row['outputComplete'])
+            self.assertIn('Operation not permitted', row['failure'])
+            self.assertEqual(rig.kill.call_count, 2)
+            rig.proc.wait.assert_called_once()
+
+    def test_before_launch_deadline_and_pipe_setup_failure(self):
+        with capture_fixture() as rig:
+            rig.clock.side_effect = ValueError('original clock expired')
+            with self.assertRaisesRegex(ValueError, 'original clock expired'):
+                rig.run()
+            rig.launch.assert_not_called()
+            self.assertFalse(rig.receipt()['reaped'])
+        with capture_fixture() as rig:
+            with patch.object(builder.os, 'pipe', side_effect=OSError('setup failed')):
+                with self.assertRaisesRegex(OSError, 'setup failed'):
+                    rig.run()
+            self.assertEqual(rig.events, [])
+            self.assertFalse(rig.receipt()['reaped'])
+
+    def test_command_and_receipt_are_exclusive(self):
+        with capture_fixture() as rig:
+            rig.run()
+            command = rig.output.with_suffix('.command.json').read_bytes()
+            receipt = rig.output.with_suffix('.receipt.json').read_bytes()
+            with self.assertRaises(FileExistsError):
+                rig.run()
+            self.assertEqual(command, rig.output.with_suffix('.command.json').read_bytes())
+            self.assertEqual(receipt, rig.output.with_suffix('.receipt.json').read_bytes())
+            self.assertEqual(rig.launch.call_count, 1)
+
+
+class GuardianTests(unittest.TestCase):
+    def test_protocol_rejects_unknown_duplicate_trailing_and_typed_identities(self):
+        with capture_fixture() as rig:
+            good = rig.record
+            cases = [b'', b'\xff', b'{' + b'x' * 4096, json.dumps(good).encode() + b'{}', json.dumps(good).encode() + b'\n',
+                     json.dumps(good).encode()[:-1] + b',"token":"fixture-token"}']
+            for key, value in [('extra', 1), ('guardianPID', True), ('guardianPGID', 9),
+                    ('guardianSID', 9), ('commandPID', True), ('commandPID', 4242),
+                    ('commandPID', -1), ('returncode', False), ('commandReaped', 1),
+                    ('token', 'wrong'), ('sourceSha256', 'wrong'), ('launchError', 'x' * 513),
+                    ('commandReaped', False), ('commandPID', None), ('schema', 'wrong')]:
+                cases.append(json.dumps(dict(good, **{key: value})).encode())
+            for data in cases:
+                with self.subTest(data=data[:100]), self.assertRaises((ValueError, UnicodeError)):
+                    builder.guardian_status(data, 4242, 'fixture-token', good['sourceSha256'])
+
+    def test_protocol_eof_oversize_and_launch_failure_never_pass(self):
+        for case in ('empty', 'oversize', 'launch', 'mismatch'):
+            with self.subTest(case=case), capture_fixture() as rig:
+                if case == 'empty':
+                    rig.chunks[13] = [b'']
+                elif case == 'oversize':
+                    rig.chunks[13] = [b'x' * 4097]
+                else:
+                    row = dict(rig.record)
+                    if case == 'launch':
+                        row.update(commandPID=None, returncode=None, commandReaped=False, launchError='launch failed')
+                    else:
+                        row['guardianPGID'] = 9999
+                    rig.chunks[13] = [json.dumps(row).encode(), b'']
+                with self.assertRaises(ValueError):
+                    rig.run()
+                self.assertFalse(rig.receipt()['outputComplete'])
+                self.assertTrue(rig.receipt()['reaped'])
+                self.assertEqual(rig.events[-1], ('wait',))
+                self.assertLessEqual(rig.receipt()['guardianStatusBytes'], 4097)
+
+    def test_status_first_preserves_raw_drain_and_actual_returncode(self):
+        with capture_fixture(stdout=(b'abcd', b'efgh', b'')) as rig:
+            rig.run()
+            row = rig.receipt()
+            self.assertEqual(row['returncode'], 0)
+            self.assertEqual(row['guardianReturncode'], -9)
+            self.assertEqual(row['commandPID'], 4343)
+            self.assertTrue(row['commandReaped'])
+            command = json.loads(rig.output.with_suffix('.command.json').read_text())
+            self.assertEqual(command['argv'], ['/never-executed'])
+            self.assertEqual(command['launchArgv'][-2:], ['--', '/never-executed'])
+            self.assertEqual(rig.launch.call_args.kwargs['pass_fds'], (14,))
+            self.assertEqual(command['launcher']['guardian'], builder.identity(builder.GUARDIAN))
+            rig.proc.poll.assert_not_called()
+
+    def test_fragmented_status_and_stream_eof_before_report(self):
+        with capture_fixture() as rig:
+            raw = json.dumps(rig.record).encode()
+            rig.chunks[13] = [raw[:3], BlockingIOError(), raw[3:17], raw[17:], b'']
+            rig.run()
+            self.assertEqual(rig.receipt()['guardianStatusBytes'], len(raw))
+            self.assertTrue(rig.receipt()['guardianStatusEOF'])
+            self.assertTrue(rig.receipt()['guardianReaped'])
+            self.assertEqual(rig.receipt()['reapedScope'], 'DIRECT_GUARDIAN_ONLY')
+            self.assertEqual(rig.events, [('kill', builder.signal.SIGKILL), ('wait',)])
+
+    def test_unexpected_guardian_exit_and_pin_drift_fail(self):
+        with capture_fixture() as rig:
+            rig.proc.returncode = 0
+            with self.assertRaisesRegex(ValueError, 'did not remain live'):
+                rig.run()
+            self.assertFalse(rig.receipt()['outputComplete'])
+        with capture_fixture() as rig:
+            original = builder.identity
+            calls = []
+            def drift(path):
+                result = original(path)
+                calls.append(path)
+                if path == builder.GUARDIAN and calls.count(path) > 1:
+                    result['sha256'] = '0' * 64
+                return result
+            with patch.object(builder, 'identity', side_effect=drift):
+                with self.assertRaisesRegex(ValueError, 'launcher drift'):
+                    rig.run()
+            rig.launch.assert_not_called()
+
+    def test_guardian_main_preserves_native_argv_and_declared_environment(self):
+        guardian = builder.load('_guardian_main_test', builder.GUARDIAN)
+        args = [str(builder.GUARDIAN), '--status-fd', '14', '--token', 'token',
+                '--source-sha', 'pin', '--environment-json', '{"EXACT":"value"}',
+                '--', '/native', '--source-sha', 'native-argument']
+        with patch.object(sys, 'argv', args), patch.object(guardian, 'guard') as guard:
+            guardian.main()
+        guard.assert_called_once_with(['/native', '--source-sha', 'native-argument'], 14, 'token', 'pin', {'EXACT': 'value'})
+        self.assertLessEqual(len(guardian.bounded_error(ValueError('😀' * 1000)).encode('utf-8')), 512)
+
+    def test_guardian_rejects_wrong_session_and_source_before_native_launch(self):
+        guardian = builder.load('_guardian_identity_test', builder.GUARDIAN)
+        for case in ('session', 'source'):
+            with self.subTest(case=case):
+                writes = []
+                with patch.object(guardian.os, 'getpid', return_value=4242), \
+                     patch.object(guardian.os, 'getpgrp', return_value=4242), \
+                     patch.object(guardian.os, 'getsid', return_value=9999 if case == 'session' else 4242), \
+                     patch.object(guardian.os, 'close'), \
+                     patch.object(guardian.os, 'write', side_effect=lambda fd, data: writes.append(data) or len(data)), \
+                     patch.object(guardian.subprocess, 'Popen') as spawn, \
+                     patch.object(guardian.signal, 'pause', side_effect=RuntimeError('mock idle stop')):
+                    with self.assertRaisesRegex(RuntimeError, 'mock idle stop'):
+                        guardian.guard(['/never'], 14, 'token', 'wrong-pin', {})
+                spawn.assert_not_called()
+                row = json.loads(b''.join(writes))
+                self.assertFalse(row['commandReaped'])
+                self.assertIsNone(row['commandPID'])
+                self.assertIsNone(row['returncode'])
+                self.assertIn('fresh session' if case == 'session' else 'source pin', row['launchError'])
+
+    def test_guardian_launch_reap_private_fd_and_idle_are_mocked(self):
+        guardian = builder.load('_guardian_test', builder.GUARDIAN)
+        for failure in (False, True):
+            with self.subTest(launchFailure=failure):
+                proc = Mock(pid=4343)
+                proc.wait.return_value = 7
+                writes, closes, events = [], [], []
+                def write(fd, data):
+                    writes.append(data)
+                    events.append('status')
+                    return len(data)
+                proc.wait.side_effect = lambda: events.append('wait-command') or 7
+                with patch.object(guardian.os, 'getpid', return_value=4242), \
+                     patch.object(guardian.os, 'getpgrp', return_value=4242), \
+                     patch.object(guardian.os, 'getsid', return_value=4242), \
+                     patch.object(guardian.os, 'set_inheritable') as private, \
+                     patch.object(guardian.os, 'close', side_effect=lambda fd: closes.append(fd)), \
+                     patch.object(guardian.os, 'write', side_effect=write), \
+                     patch.object(guardian.subprocess, 'Popen', side_effect=OSError('x' * 1000) if failure else None, return_value=proc) as spawn, \
+                     patch.object(guardian.signal, 'pause', side_effect=RuntimeError('mock idle stop')):
+                    with self.assertRaisesRegex(RuntimeError, 'mock idle stop'):
+                        guardian.guard(['/exact', '--flag'], 14, 'fixture-token', builder.identity(builder.GUARDIAN)['sha256'], {'EXACT': 'declared'})
+                row = builder.guardian_status(b''.join(writes), 4242, 'fixture-token', builder.identity(builder.GUARDIAN)['sha256'])
+                self.assertEqual(row['commandReaped'], not failure)
+                self.assertEqual(closes, [1, 2, 14])
+                self.assertLessEqual(len(b''.join(writes)), 4096)
+                self.assertEqual(spawn.call_args.args, (['/exact', '--flag'],))
+                self.assertEqual(spawn.call_args.kwargs, dict(env={'EXACT': 'declared'}, close_fds=True, pass_fds=()))
+                private.assert_called_once_with(14, False)
+                self.assertEqual(events, ['status'] if failure else ['wait-command', 'status'])
+
+
 class BuilderTests(unittest.TestCase):
     def test_candidate_cargo_barrier_and_no_reference_cargo(self):
         self.assertEqual(len(builder.phases('candidate')), 7)
@@ -79,20 +497,20 @@ class BuilderTests(unittest.TestCase):
         self.assertNotIn('RUSTFLAGS', builder.environment(plan, 'candidate'))
 
     def test_supervision_owned_group_is_mocked_and_reaped(self):
-        from unittest.mock import Mock
-        with tempfile.TemporaryDirectory(dir=G) as temp:
-            output = Path(temp) / 'mock-phase'
-            proc = Mock(pid=4242, returncode=0)
-            proc.wait.return_value = 0
-            with patch.object(builder.ad, 'validate'), patch.object(builder, 'remaining', return_value=1), \
-                 patch.object(builder.subprocess, 'Popen', return_value=proc) as launch, patch.object(builder.os, 'killpg') as kill:
-                builder.supervise(['/never-executed'], builder.ROOT / 'source', {}, output, {'witness': {}})
-                self.assertTrue(launch.call_args.kwargs['start_new_session'])
-                kill.assert_called_once_with(4242, builder.signal.SIGKILL)
-                self.assertGreaterEqual(proc.wait.call_count, 2)
-            receipt = json.loads(output.with_suffix('.receipt.json').read_text())
-            self.assertIs(receipt['reaped'], True)
-            self.assertEqual(receipt['pgid'], 4242)
+        with capture_fixture() as rig:
+            rig.run()
+            self.assertTrue(rig.launch.call_args.kwargs['start_new_session'])
+            self.assertEqual(rig.launch.call_args.kwargs['stdout'], builder.subprocess.PIPE)
+            self.assertEqual(rig.launch.call_args.kwargs['stderr'], builder.subprocess.PIPE)
+            self.assertEqual(rig.events, [('kill', builder.signal.SIGKILL), ('wait',)])
+            self.assertIs(rig.receipt()['reaped'], True)
+            self.assertIs(rig.receipt()['outputComplete'], True)
+            self.assertEqual(rig.receipt()['pgid'], 4242)
+            self.assertTrue(rig.selector.closed)
+            rig.status_pipe.close.assert_called_once()
+            for stream in rig.streams.values():
+                stream.close.assert_called_once()
+                self.assertTrue(rig.selector.unregistered.count(stream) == 1)
 
     def test_make_dependency_grammar(self):
         self.assertEqual(builder.make_rule('a.o: source\\ file.hpp path$$name\n'), ('a.o', ['source file.hpp', 'path$name']))

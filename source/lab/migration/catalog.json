@@ -1789,6 +1789,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "tools.release",
+      "path": "scripts/static-vector-phase-guardian.py",
+      "rule": "release-scripts"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "retain-tooling",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "tools.release",
       "path": "scripts/test_build_id_map_behavior_lab.py",
       "rule": "release-scripts"
     },
@@ -31569,12 +31579,16 @@
       "sha256": "15792866d691684843d42ad7ee87ada12ebbffc7cac10a40ceaaa71d3f57b8fb"
     },
     {
+      "path": "scripts/static-vector-phase-guardian.py",
+      "sha256": "90165e90a38ed0fc82be7a10652cd69b76495f00e53bdb32a3c8c3f704915273"
+    },
+    {
       "path": "scripts/test_build_id_map_behavior_lab.py",
       "sha256": "fd0e6a35bc041336e758b32540f37dfbd6ce9ca0a2bdaf24eeeacc42920d12c8"
     },
     {
       "path": "scripts/test_build_static_vector_behavior_lab.py",
-      "sha256": "6db40653e6973b26bbdbe806448014e0360218774a3ad52450fc00b970fd1db8"
+      "sha256": "35a3a714935ef10462a8ae068ec8ab133dc3ebf18f362bcfaa02e215d4f14ff5"
     },
     {
       "path": "scripts/test_cleanup_migration_artifacts.py",
@@ -39748,7 +39762,7 @@
       "migrate": 960,
       "migrate-adapter": 24,
       "oracle/harness": 676,
-      "retain-tooling": 34,
+      "retain-tooling": 35,
       "retained-third-party": 296,
       "rust-candidate": 30,
       "test": 57
@@ -39787,15 +39801,15 @@
       "sessions.orchestration": 47,
       "sessions.persistence": 6,
       "tools.inactive": 21,
-      "tools.release": 49,
+      "tools.release": 50,
       "validation.oracles-harness": 705,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2174,
+    "files": 2175,
     "modules": 39,
-    "no_direct_target": 1068
+    "no_direct_target": 1069
   }
 }
