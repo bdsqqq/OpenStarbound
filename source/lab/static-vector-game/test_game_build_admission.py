@@ -1,6 +1,8 @@
 """Pure guards; no tool invocation or actual game admission."""
 import datetime as dt
 import importlib.util
+import inspect
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -14,6 +16,76 @@ G = ad.build_root()
 
 
 class AdmissionTests(unittest.TestCase):
+    def test_finite_controller_destinations_and_logical_bound(self):
+        outputs = ad.controller_outputs()
+        self.assertEqual(len(outputs), 41)
+        self.assertTrue(all(type(v) is int and v > 0 for v in outputs.values()))
+        self.assertEqual(ad.controller_output_bound(), 2 * sum(outputs.values()))
+        self.assertNotIn(G / 'reference/cargo.command.json', outputs)
+        for path in (G / 'unknown.json', G / 'reference/build-inputs.json',
+                     G / 'another-attempt/plan.json', G / 'candidate/configure-extra.receipt.json'):
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                ad.controller_limit(path)
+
+    def test_controller_dump_uses_real_bounded_publication(self):
+        with tempfile.TemporaryDirectory(dir=G) as temp:
+            root = Path(temp)
+            path = root / 'completion.json'
+            value = {'unicode': '\u2603', 'state': ['complete', 3]}
+            with patch.object(ad, 'build_root', return_value=root):
+                result = ad.dump(path, value)
+                self.assertEqual(path.read_bytes(), (json.dumps(value, indent=2, sort_keys=True) + '\n').encode())
+                self.assertEqual(result, ad.identity(path))
+                with self.assertRaisesRegex(ValueError, 'already exists'):
+                    ad.dump(path, value)
+                self.assertFalse((root / '.completion.json.partial').exists())
+                unknown = root / 'undeclared.json'
+                with self.assertRaises(ValueError):
+                    ad.dump(unknown, value)
+                self.assertFalse(unknown.exists())
+
+    def test_controller_overflow_retains_bounded_partial_and_blocks_retry(self):
+        with tempfile.TemporaryDirectory(dir=G) as temp:
+            root = Path(temp)
+            path = root / 'failure.json'
+            with patch.object(ad, 'build_root', return_value=root):
+                with self.assertRaisesRegex(ValueError, 'byte limit'):
+                    ad.dump(path, {'error': 'x' * (64 * 1024)})
+                partial = root / '.failure.json.partial'
+                self.assertLessEqual(partial.stat().st_size, 64 * 1024)
+                before = partial.read_bytes()
+                with self.assertRaises(FileExistsError):
+                    ad.dump(path, {'error': 'different attempt'})
+                self.assertEqual(partial.read_bytes(), before)
+                self.assertFalse(path.exists())
+
+    def test_sidecar_supplement_is_pinned_and_preserves_compact_bytes(self):
+        with tempfile.TemporaryDirectory(dir=G) as temp:
+            root = Path(temp)
+            path = root / 'reference/bin/starbound.behavior-build.json'
+            path.parent.mkdir(parents=True)
+            path.write_text('{"schema": "synthetic"}')
+            original = ad.identity(path)
+            value = {'schema': 'synthetic', 'gameOrigin': {'status': 'fixture'}}
+            with patch.object(ad, 'build_root', return_value=root):
+                ad.supplement_sidecar(path, value, original)
+                self.assertEqual(path.read_bytes(), json.dumps(value, sort_keys=True).encode())
+                with self.assertRaisesRegex(ValueError, 'identity'):
+                    ad.supplement_sidecar(path, value, original)
+                with self.assertRaises(ValueError):
+                    ad.supplement_sidecar(root / 'failure.json', value, original)
+
+    def test_prepare_rejects_alternate_admission_before_input_acquisition(self):
+        with tempfile.TemporaryDirectory(dir=G) as temp:
+            root = Path(temp)
+            created = dt.datetime.now(dt.timezone.utc).isoformat()
+            with patch.object(ad, 'build_root', return_value=root), patch.object(ad, 'current_inputs') as inputs:
+                with self.assertRaisesRegex(ValueError, 'one canonical'):
+                    ad.prepare(root / 'another-attempt', ad.CHECKPOINT, {}, root / 'forecast', 'x', created_utc=created)
+                inputs.assert_not_called()
+                self.assertEqual(list(root.iterdir()), [])
+        self.assertNotIn('json.dump(', inspect.getsource(ad.prepare))
+
     def test_current30_profiles_and_source(self):
         ad.config.validate_source()
         self.assertEqual(len(ad.SELECTORS), 30)

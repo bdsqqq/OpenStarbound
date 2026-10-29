@@ -37,7 +37,7 @@ bp = load('_sv_common_provenance', ROOT / 'source/lab/behavior/build_provenance.
 physical = load('_sv_physical_link_map', ROOT / 'source/lab/static-vector-game/physical_link_map.py')
 # This Make grammar is context-independent; it never invokes old build_pair.
 make_rule = load('_sv_dep_grammar', ROOT / 'scripts/build-id-map-behavior-lab.py').make_rule
-PHASES = ('provenance-begin', 'configure', 'provenance-configured', 'cargo', 'compile', 'provenance-seal', 'provenance-verify')
+PHASES = ad.PHASES
 SCHEMA = 'static-vector-whole-game-origin-v1'
 identity = ad.identity
 
@@ -130,6 +130,9 @@ def supervise(argv, cwd, env, output, plan):
     """bounded raw-byte capture; overflow is retained evidence, never a qualified pass."""
     phase = output.name
     limits = phase_output_limits(phase)
+    # Reject undeclared locations before even creating raw capture files.
+    for suffix in ('.command.json', '.receipt.json'):
+        ad.controller_limit(output.with_suffix(suffix))
     ad.validate(plan)
     python = Path(sys.executable).resolve(strict=True)
     ad.need(Path(plan.get('python', str(python))).resolve(strict=True) == python, 'guardian trusted Python mismatch')
@@ -627,9 +630,9 @@ def build_pair(plan_path, pin, run=supervise):
                 builder=identity(Path(__file__).resolve()), limitation='built input binding, NOT runtime qualification')
             ad.dump(side / 'static-vector-build.json', record)
             # Supplement the common proof; do not replace its top-level/cache.
+            original_sidecar = identity(bp.sidecar(binary))
             proof['gameOrigin'] = record
-            with bp.sidecar(binary).open('w') as stream:
-                json.dump(proof, stream, sort_keys=True)
+            ad.supplement_sidecar(bp.sidecar(binary), proof, original_sidecar)
         ad.validate(plan)
         ad.dump(root / 'completion.json', dict(schema=SCHEMA, status='BUILT_NOT_GAME_QUALIFIED', admissionSha256=pin,
                 backends={r: identity(root / r / 'static-vector-build.json') for r in ad.profiles()}))

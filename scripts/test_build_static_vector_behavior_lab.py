@@ -96,7 +96,8 @@ class StreamSelector:
 def capture_fixture(stdout=(b'',), stderr=(b'',), returncode=0):
     """all process/OS readiness is synthetic; only tiny output files are real."""
     with tempfile.TemporaryDirectory(dir=G) as temp:
-        output = Path(temp) / 'compile'
+        output = Path(temp) / 'reference/compile'
+        output.parent.mkdir()
         streams = {name: Mock() for name in ('stdout', 'stderr')}
         streams['stdout'].fileno.return_value = 11
         streams['stderr'].fileno.return_value = 12
@@ -122,7 +123,11 @@ def capture_fixture(stdout=(b'',), stderr=(b'',), returncode=0):
             assert len(data) <= size, 'fixture exceeds the read request'
             return data
 
-        with patch.object(builder.ad, 'validate') as validate, \
+        # Readiness/FDs are synthetic here. Exercise real bounded publication in
+        # admission/writer tests, not through these process-IO monkeypatches.
+        with patch.object(builder.ad, 'build_root', return_value=Path(temp)), \
+             patch.object(builder.ad, 'dump', side_effect=builder.ad.primitives.dump), \
+             patch.object(builder.ad, 'validate') as validate, \
              patch.object(builder, 'remaining', return_value=10) as clock, \
              patch.object(builder, 'phase_output_limits', return_value=limits), \
              patch.object(builder.subprocess, 'Popen', return_value=proc) as launch, \
@@ -143,6 +148,15 @@ def capture_fixture(stdout=(b'',), stderr=(b'',), returncode=0):
 
 
 class CaptureTests(unittest.TestCase):
+    def test_undeclared_output_rejected_before_files_or_launch(self):
+        with tempfile.TemporaryDirectory(dir=G) as temp:
+            output = Path(temp) / 'compile'
+            with patch.object(builder.subprocess, 'Popen') as launch:
+                with self.assertRaisesRegex(ValueError, 'undeclared controller'):
+                    builder.supervise(['/never-executed'], builder.ROOT / 'source', {}, output, {})
+                launch.assert_not_called()
+            self.assertEqual(list(Path(temp).iterdir()), [])
+
     def test_declared_limits_and_whole_pair_log_only_bound(self):
         for phase in builder.PHASES:
             limits = builder.phase_output_limits(phase)

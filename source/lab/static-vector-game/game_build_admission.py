@@ -44,7 +44,64 @@ PREDECESSORS = {
 sha = primitives.sha
 physical = primitives.physical
 no_symlink_parents = primitives.no_symlink_parents
-dump = primitives.dump
+bounded = load('_sv_bounded_outputs', Path(__file__).with_name('bounded_outputs.py'))
+PHASES = ('provenance-begin', 'configure', 'provenance-configured', 'cargo', 'compile', 'provenance-seal', 'provenance-verify')
+
+
+def controller_outputs(root=None):
+    """Finite logical JSON destinations, NOT native/physical allocation bounds.
+
+    Caps are failure thresholds, not forecasts of future artifact sizes. Common
+    provenance subprocess writes, logs, captures and native products are outside
+    this contract. A retained partial blocks another attempt at the same path.
+    """
+    root = root or build_root()
+    mib = 1024**2
+    result = {root / 'current30-admission/plan.json': 64 * mib,
+              root / 'completion.json': 64 * 1024, root / 'failure.json': 64 * 1024}
+    for role in profiles():
+        side = root / role
+        for phase in PHASES:
+            if phase == 'cargo' and role == 'reference':
+                continue
+            for suffix in ('.command.json', '.receipt.json'):
+                result[side / (phase + suffix)] = 256 * 1024
+        for name in ('inputs-before.json', 'complete-tool-admission.json',
+                     'dependencies.json', 'static-vector-build.json'):
+            result[side / name] = 64 * mib
+        if role == 'candidate':
+            result[side / 'cargo-expanded.json'] = 8 * mib
+            result[side / 'prelink-archive.json'] = 8 * mib
+        result[side / 'bin/starbound.behavior-build.json'] = 128 * mib
+    return result
+
+
+def controller_limit(path):
+    path = Path(path)
+    need(path.is_absolute() and '..' not in path.parts and path in controller_outputs(),
+         'undeclared controller output path')
+    return controller_outputs()[path]
+
+
+def controller_output_bound():
+    """Published + fixed partial logical bytes only; directory blocks excluded."""
+    return 2 * sum(controller_outputs().values())
+
+
+def dump(path, value):
+    return bounded.write_json(path, value, controller_limit(path))
+
+
+def supplement_sidecar(path, value, expected):
+    path = Path(path)
+    need(path in {build_root() / role / 'bin/starbound.behavior-build.json' for role in profiles()},
+         'exact generated sidecar required')
+    limit = controller_limit(path)
+    need(type(expected['size']) is int and 0 <= expected['size'] <= limit,
+         'existing common proof exceeds sidecar contract')
+    # Match the former compact sidecar serialization byte-for-byte below cap.
+    return bounded.write_json(path, value, limit, indent=None, newline=False, replace_expected=expected)
+
 unchanged = primitives.unchanged
 tree_members = primitives.tree_members
 
@@ -229,7 +286,8 @@ def prepare(output, checkpoint, initial_metadata, retention, retention_sha, *, c
     need('..' not in output.parts, 'no admission output traversal')
     no_symlink_parents(output)
     root = build_root()
-    need(output.is_relative_to(root) and not os.path.lexists(output), 'new admission output inside G required')
+    need(output == root / 'current30-admission' and not os.path.lexists(output),
+         'one canonical fresh current30 admission required')
     need(checkpoint == CHECKPOINT, 'current base checkpoint required')
     config.validate_source()
     need(metadata_inventory(root) == initial_metadata, 'explicit exact metadata-only initial inventory')
@@ -257,8 +315,8 @@ def prepare(output, checkpoint, initial_metadata, retention, retention_sha, *, c
     plan['commands'] = {r: commands(plan, r) for r in profiles()}
     validate(plan)
     output.mkdir()
-    with (output / 'plan.json').open('x') as stream:
-        json.dump(plan, stream, sort_keys=True, separators=(',', ':'))
+    bounded.write_json(output / 'plan.json', plan, controller_limit(output / 'plan.json'),
+                       indent=None, separators=(',', ':'), newline=False)
     validate(plan)
     return plan
 
