@@ -22,6 +22,31 @@ class VerifyTests(unittest.TestCase):
         result.update({k + '-run': json.dumps(v.model.semantic_mutant(doc, k)) for k in v.MUTANTS})
         return result
 
+    def test_engine_archive_identity_not_rust_word(self):
+        self.assertTrue(v.engine_archive('/tmp/libstar_engine_ffi.a'))
+        self.assertTrue(v.engine_archive('/tmp/libstar_engine_ffi.a[4](body.o)'))
+        self.assertFalse(v.engine_archive('/tmp/libabsl_demangle_rust.a'))
+        self.assertFalse(v.engine_archive('/tmp/libabsl_decode_rust_punycode.a(part.o)'))
+
+    def test_staged_preparation_never_accepts_native_receipts(self):
+        runner = v.load('_static_vector_staging_fixture', Path(__file__).with_name('run.py'))
+        with tempfile.TemporaryDirectory() as temporary:
+            out = Path(temporary).resolve()
+            for name in ('inputs', 'home', 'tmp'):
+                (out / name).mkdir()
+            for name, text in v.mutant_headers((runner.HERE / 'StarStaticVector.original.hpp').read_text()).items():
+                (out / 'inputs' / (name + '.hpp')).write_text(text)
+            (out / 'inputs/initializer-assignment.cpp').write_text(v.negative_source())
+            (out / 'inputs/expected-cases.json').write_text(json.dumps(v.model.expected_cases()))
+            runner.staged_inputs(out)
+            (out / 'baseline.started.json').write_text('{}')
+            with self.assertRaisesRegex(ValueError, 'pre-native'):
+                runner.staged_inputs(out)
+            (out / 'baseline.started.json').unlink()
+            (out / 'inputs/initializer-assignment.cpp').write_text('// changed')
+            with self.assertRaisesRegex(ValueError, 'changed staged'):
+                runner.staged_inputs(out)
+
     def test_actual_disjoint_budget_uses_allocated_bytes(self):
         runner = v.load('_static_vector_budget_fixture', Path(__file__).with_name('run.py'))
         with tempfile.TemporaryDirectory() as temporary:

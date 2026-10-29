@@ -132,14 +132,19 @@ def consumed_map(path):
                                              Path(path).read_bytes(), re.M)]
 
 
+def engine_archive(name):
+    # Abseil's C++ Rust-symbol demanglers are not our engine Rust runtime.
+    return Path(name.split('(', 1)[0].split('[', 1)[0]).name == 'libstar_engine_ffi.a'
+
+
 def providers(path, role, out, admission):
     data = Path(path).read_bytes()
     objects = [os.fsdecode(p) for p in re.findall(rb'^\[\s*\d+\] (.*)\r?$', data, re.M)]
     fixture = str(out / (role + '.o'))
     need(fixture in objects, 'missing actual fixture object provider')
-    need(not any('rust' in p.lower() and '.a(' in p for p in objects), 'unexpected Rust archive provider')
+    need(not any(engine_archive(p) for p in objects), 'unexpected engine Rust archive provider')
     for name in objects:
-        native = name.split('(', 1)[0]
+        native = re.sub(r'\[\d+\]$', '', name.split('(', 1)[0])
         if native == fixture:
             continue
         if Path(native).is_absolute() and (native.endswith('.o') or native.endswith('.a')):

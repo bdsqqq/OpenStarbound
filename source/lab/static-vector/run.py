@@ -80,7 +80,7 @@ def recipe():
     selectors = re.findall(r'^(STAR_USE_RUST[^:]*):BOOL=(.*)$', (cm / 'CMakeCache.txt').read_text(), re.M)
     need(len(selectors) == len(dict(selectors)) == 29 and all(x == 'OFF' for _, x in selectors), 'exact all29OFF')
     need('-O3' in flags and '-ffast-math' in flags and not any('STAR_USE_RUST' in x for x in flags), 'optimized native flags')
-    need(not any('rust' in x.lower() for x in libs), 'no Rust archive')
+    need(not any(v.engine_archive(x) for x in libs), 'no engine Rust archive')
     sdk = flags[flags.index('-isysroot') + 1]
     need(sdk == old['sdk'], 'selected requested SDK')
     return dict(cm=str(cm), compiler=args[0], flags=flags, libraries=libs,
@@ -139,20 +139,40 @@ def imports():
         if getattr(m, '__file__', None) and Path(m.__file__).is_file()})
 
 
-def prepare(out, checkpoint, started, deadline):
+def staged_inputs(out):
+    expected = {name + '.hpp': text for name, text in v.mutant_headers(
+        (HERE / 'StarStaticVector.original.hpp').read_text()).items()}
+    expected['initializer-assignment.cpp'] = v.negative_source()
+    need({p.name for p in out.iterdir()} == {'inputs', 'home', 'tmp'}, 'only pre-native staged directories allowed')
+    need(all((out / n).is_dir() and (out / n).resolve() == out / n for n in ('inputs', 'home', 'tmp')), 'physical staged directories')
+    need(all(p.is_file() and p.resolve() == p for p in (out / 'inputs').iterdir()), 'physical staged input files')
+    need(not list((out / 'home').iterdir()) and not list((out / 'tmp').iterdir()), 'staged runtime directories must be empty')
+    need({p.name for p in (out / 'inputs').iterdir()} == {*expected, 'expected-cases.json'}, 'exact staged input membership')
+    for name, text in expected.items():
+        need((out / 'inputs' / name).read_text() == text, 'changed staged input: ' + name)
+    need(read(out / 'inputs/expected-cases.json') == v.model.expected_cases(), 'staged literal drift')
+
+
+def prepare(out, checkpoint, started, deadline, staged=False):
     v.window(started, deadline, time.time())
     need(re.fullmatch('[0-9a-f]{40}', checkpoint) is not None, 'full base checkpoint')
-    need(not out.exists() and out.is_relative_to(ROOT / 'build'), 'fresh owned build output only')
-    out.mkdir(parents=True)
-    (out / 'inputs').mkdir()
-    (out / 'home').mkdir()
-    (out / 'tmp').mkdir()
+    need(out.is_relative_to(ROOT / 'build'), 'owned build output only')
     need(sha(ROOT / 'source/core/StarStaticVector.hpp') == sha(HERE / 'StarStaticVector.original.hpp') == v.HEADER_SHA, 'raw header identity')
-    raw = (HERE / 'StarStaticVector.original.hpp').read_text()
-    for name, text in v.mutant_headers(raw).items():
-        (out / 'inputs' / (name + '.hpp')).write_text(text)
-    (out / 'inputs/initializer-assignment.cpp').write_text(v.negative_source())
-    dump(out / 'inputs/expected-cases.json', v.model.expected_cases())
+    if staged:
+        # Only an interrupted pre-admission preparation is eligible. No receipt,
+        # SDK witness or native output may be relabeled or overwritten.
+        staged_inputs(out)
+    else:
+        need(not out.exists(), 'fresh owned build output only')
+        out.mkdir(parents=True)
+        (out / 'inputs').mkdir()
+        (out / 'home').mkdir()
+        (out / 'tmp').mkdir()
+        raw = (HERE / 'StarStaticVector.original.hpp').read_text()
+        for name, text in v.mutant_headers(raw).items():
+            (out / 'inputs' / (name + '.hpp')).write_text(text)
+        (out / 'inputs/initializer-assignment.cpp').write_text(v.negative_source())
+        dump(out / 'inputs/expected-cases.json', v.model.expected_cases())
     r = recipe()
     roots = roots_for(out, r)
     witness = v.syntax.closure(map(Path, roots))
@@ -343,6 +363,7 @@ def main():
     group.add_argument('--prepare', action='store_true')
     group.add_argument('--execute', action='store_true')
     parser.add_argument('--admission-sha256')
+    parser.add_argument('--continue-preparation', action='store_true', help='exact pre-admission inputs only; never native resume')
     args = parser.parse_args()
     out = Path(args.output).absolute()
     need(out.resolve() == out, 'no output aliases')
@@ -352,7 +373,7 @@ def main():
              (args.checkpoint, args.started, args.deadline), 'no checkpoint/window renewal')
         execute(out, a, args.admission_sha256)
     else:
-        a = prepare(out, args.checkpoint, args.started, args.deadline)
+        a = prepare(out, args.checkpoint, args.started, args.deadline, staged=args.continue_preparation)
         print('admission', sha(out / 'admission.json'), flush=True)
         if not args.prepare:
             execute(out, a, sha(out / 'admission.json'))
