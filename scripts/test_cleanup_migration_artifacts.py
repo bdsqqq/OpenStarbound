@@ -97,5 +97,145 @@ class CleanupTests(unittest.TestCase):
             self.assertEqual((tree / 'a').read_bytes(), data)
 
 
+class RepackTests(unittest.TestCase):
+    def fixture(self, repo):
+        tree = repo / 'build/old'
+        tree.mkdir(parents=True)
+        (tree / 'payload').write_bytes(b'repeated archived bytes\x00\xff' * 100000)
+        arc = repo / 'build/migration-evidence-archive'
+        cleanup.archive(repo, ['build/old'], arc, 'repack-test', 0)
+        manifest = arc / 'runs/repack-test/manifest.json'
+        sha = json.loads(manifest.read_bytes())['entries'][0]['sha256']
+        blob = arc / 'blobs' / sha[:2] / (sha + '.gz')
+        row = cleanup.plan_repack_blob(repo, str(manifest.relative_to(repo)), sha)
+        self.assertIsNotNone(row)
+        return arc, manifest, blob, row
+
+    def test_repack_preserves_raw_manifest_and_proves_old_encoding_reconstructable(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp).resolve()
+            arc, manifest, blob, row = self.fixture(repo)
+            before_manifest = manifest.read_bytes()
+            old = blob.read_bytes()
+            result = cleanup.repack_blob(repo, row)
+            self.assertLess(blob.stat().st_size, len(old))
+            self.assertEqual(manifest.read_bytes(), before_manifest)
+            cleanup.verify(arc, manifest)
+            regenerated = cleanup.EncodedDigest()
+            cleanup._repack_stream(blob, row['sha256'], row['rawSize'], 1, regenerated)
+            import hashlib
+            self.assertEqual(regenerated.hash.hexdigest(), hashlib.sha256(old).hexdigest())
+            self.assertEqual(result['status'], 'RAW_RECONSTRUCTED_BEFORE_ATOMIC_REPACK')
+            self.assertNotEqual(result['fingerprintAfter'], row['fingerprint'])
+
+    def test_wrong_temporary_hash_never_replaces_original(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp).resolve()
+            _, _, blob, row = self.fixture(repo)
+            before = blob.read_bytes()
+            row['newEncodedSha256'] = '0' * 64
+            with self.assertRaisesRegex(ValueError, 'temporary encoded bytes mismatch'):
+                cleanup.repack_blob(repo, row)
+            self.assertEqual(blob.read_bytes(), before)
+            self.assertTrue(blob.with_suffix('.repack.tmp').exists())
+
+    def test_manifest_old_encoding_and_codec_drift_reject_before_temp(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp).resolve()
+            _, _, blob, row = self.fixture(repo)
+            before = blob.read_bytes()
+            for key in ('manifestSha256', 'oldEncodedSha256', 'python', 'zlib'):
+                bad = dict(row, **{key: 'wrong'})
+                with self.assertRaisesRegex(ValueError, 'plan/input/codec drift'):
+                    cleanup.repack_blob(repo, bad)
+                self.assertFalse(blob.with_suffix('.repack.tmp').exists())
+                self.assertEqual(blob.read_bytes(), before)
+
+    def test_corrupt_payload_and_manifest_size_reject_without_replacement(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp).resolve()
+            _, manifest, blob, row = self.fixture(repo)
+            data = json.loads(manifest.read_bytes())
+            data['entries'][0]['size'] -= 1
+            manifest.write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError, 'exceeds manifest size'):
+                cleanup.plan_repack_blob(repo, str(manifest.relative_to(repo)), row['sha256'])
+            blob.write_bytes(b'corrupt')
+            with self.assertRaises(OSError):
+                cleanup.plan_repack_blob(repo, str(manifest.relative_to(repo)), row['sha256'])
+            self.assertEqual(blob.read_bytes(), b'corrupt')
+
+    def test_path_alias_traversal_and_external_hardlinks_rejected(self):
+        import os
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp).resolve()
+            _, manifest, blob, row = self.fixture(repo)
+            for name in ('../manifest.json', str(manifest), 'storage/manifest.json'):
+                with self.assertRaises(ValueError):
+                    cleanup.plan_repack_blob(repo, name, row['sha256'])
+            alias = manifest.with_name('alias.json')
+            alias.symlink_to(manifest)
+            with self.assertRaises(ValueError):
+                cleanup.plan_repack_blob(repo, str(alias.relative_to(repo)), row['sha256'])
+            os.link(blob, repo / 'external')
+            with self.assertRaisesRegex(ValueError, 'external hardlink'):
+                cleanup.repack_blob(repo, row)
+
+    def test_temporary_capacity_and_oversize_plan_reject_without_writing(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp).resolve()
+            _, _, blob, row = self.fixture(repo)
+            before = blob.read_bytes()
+            with patch.object(cleanup, 'allocated_bytes', return_value=16 * 1024**3):
+                with self.assertRaisesRegex(ValueError, 'fixed archive cap'):
+                    cleanup.repack_blob(repo, row)
+            bad = dict(row, newEncodedSize=20 * cleanup.CHUNK)
+            with self.assertRaises(ValueError):
+                cleanup.repack_blob(repo, bad)
+            self.assertFalse(blob.with_suffix('.repack.tmp').exists())
+            self.assertEqual(blob.read_bytes(), before)
+
+    def test_understated_size_is_enforced_before_write_and_original_is_retained(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp).resolve()
+            _, _, blob, row = self.fixture(repo)
+            original = blob.read_bytes()
+            row['newEncodedSize'] = 1
+            with self.assertRaisesRegex(ValueError, 'exceeds admitted size'):
+                cleanup.repack_blob(repo, row)
+            self.assertLessEqual(blob.with_suffix('.repack.tmp').stat().st_size, 1)
+            self.assertEqual(blob.read_bytes(), original)
+
+    def test_forged_noncanonical_old_encoding_rejected_at_execution(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp).resolve()
+            _, _, blob, row = self.fixture(repo)
+            with gzip.open(blob, 'rb') as source:
+                payload = source.read()
+            with blob.open('wb') as stream:
+                with gzip.GzipFile(filename='', mode='wb', fileobj=stream, compresslevel=1, mtime=17) as out:
+                    out.write(payload)
+            original = blob.read_bytes()
+            row['fingerprint'] = cleanup.fingerprint(blob)
+            row['oldEncodedSha256'], row['oldEncodedSize'] = cleanup.file_digest(blob)
+            with self.assertRaisesRegex(ValueError, 'not exactly reconstructable'):
+                cleanup.repack_blob(repo, row)
+            self.assertFalse(blob.with_suffix('.repack.tmp').exists())
+            self.assertEqual(blob.read_bytes(), original)
+
+    def test_unfinished_manifest_and_wrong_raw_hash_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp).resolve()
+            _, manifest, blob, row = self.fixture(repo)
+            data = json.loads(manifest.read_bytes())
+            data['status'] = 'PLANNED_NOT_PRUNED'
+            manifest.write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError, 'only completed'):
+                cleanup.plan_repack_blob(repo, str(manifest.relative_to(repo)), row['sha256'])
+            with self.assertRaisesRegex(ValueError, 'raw payload mismatch'):
+                cleanup._repack_stream(blob, '0' * 64, row['rawSize'], 9, cleanup.EncodedDigest())
+
+
 if __name__ == '__main__':
     unittest.main()

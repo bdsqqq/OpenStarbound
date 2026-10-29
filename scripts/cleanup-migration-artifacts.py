@@ -14,6 +14,7 @@ from pathlib import Path
 import stat
 import sys
 import time
+import zlib
 
 CHUNK = 1024 * 1024
 
@@ -181,6 +182,139 @@ def allocated_bytes(root):
                 seen.add(inode)
                 total += s.st_blocks * 512
     return total
+
+
+class EncodedDigest:
+    def __init__(self):
+        self.hash = hashlib.sha256()
+        self.size = 0
+
+    def write(self, block):
+        self.hash.update(block)
+        self.size += len(block)
+        return len(block)
+
+
+def _repack_paths(repo, manifest, sha):
+    archive_root = repo / 'build/migration-evidence-archive'
+    relative = Path(manifest)
+    if (relative.is_absolute() or '..' in relative.parts or
+            relative.parts[:3] != ('build', 'migration-evidence-archive', 'runs') or
+            relative.name != 'manifest.json' or len(sha) != 64 or
+            any(c not in '0123456789abcdef' for c in sha)):
+        raise ValueError('explicit archive manifest and lowercase content hash required')
+    source = repo / relative
+    blob = archive_root / 'blobs' / sha[:2] / (sha + '.gz')
+    for path in (source, blob):
+        if path.resolve() != path or not path.is_file():
+            raise ValueError('missing/aliased archive input: ' + str(path))
+    if blob.stat().st_nlink != 1:
+        raise ValueError('repack cannot change external hardlink identities')
+    manifest_data = json.loads(source.read_bytes())
+    if manifest_data['status'] != 'ARCHIVED_VERIFIED_PRUNED':
+        raise ValueError('only completed archive manifests can be repacked')
+    sizes = {e['size'] for e in manifest_data['entries'] if e['sha256'] == sha}
+    if len(sizes) != 1:
+        raise ValueError('manifest must identify one raw payload size')
+    return archive_root, source, blob, sizes.pop()
+
+
+def _repack_stream(blob, sha, size, level, output):
+    raw_hash = hashlib.sha256()
+    total = 0
+    with gzip.open(blob, 'rb') as source:
+        with gzip.GzipFile(filename='', mode='wb', fileobj=output,
+                           compresslevel=level, mtime=0) as encoded:
+            while block := source.read(CHUNK):
+                total += len(block)
+                if total > size:
+                    raise ValueError('archive payload exceeds manifest size')
+                raw_hash.update(block)
+                encoded.write(block)
+    if (raw_hash.hexdigest(), total) != (sha, size):
+        raise ValueError('archive raw payload mismatch')
+
+
+def plan_repack_blob(repo, manifest, sha):
+    """Measure gzip-9 without writes; prove the old gzip-1 encoding recoverable.
+
+    CAS names/manifests describe RAW bytes. Repacking never changes that contract
+    and records both encodings instead of rewriting historical receipts.
+    """
+    _, source, blob, size = _repack_paths(repo, manifest, sha)
+    before = fingerprint(blob)
+    old_hash, old_size = file_digest(blob)
+    original = EncodedDigest()
+    _repack_stream(blob, sha, size, 1, original)
+    if (original.hash.hexdigest(), original.size) != (old_hash, old_size):
+        raise ValueError('original encoding is not exactly reconstructable gzip-1')
+    new = EncodedDigest()
+    _repack_stream(blob, sha, size, 9, new)
+    if fingerprint(blob) != before:
+        raise ValueError('archive changed during repack planning')
+    if new.size >= old_size:
+        return None
+    return dict(manifest=manifest, manifestSha256=file_digest(source)[0], sha256=sha,
+                rawSize=size, fingerprint=before, oldEncodedSha256=old_hash,
+                oldEncodedSize=old_size, newEncodedSha256=new.hash.hexdigest(),
+                newEncodedSize=new.size, python=sys.version, zlib=zlib.ZLIB_RUNTIME_VERSION)
+
+
+class BoundedEncoding:
+    """Enforce the admitted encoded size BEFORE each write, including gzip headers."""
+    def __init__(self, stream, limit):
+        self.stream = stream
+        self.limit = limit
+        self.size = 0
+
+    def write(self, block):
+        if self.size + len(block) > self.limit:
+            raise ValueError('temporary encoding exceeds admitted size; original retained')
+        written = self.stream.write(block)
+        self.size += written
+        return written
+
+
+def repack_blob(repo, row):
+    """Verify a temporary encoding AND its decoded bytes before atomic replacement."""
+    archive_root, source, blob, size = _repack_paths(repo, row['manifest'], row['sha256'])
+    if (size != row['rawSize'] or file_digest(source)[0] != row['manifestSha256'] or
+            fingerprint(blob) != row['fingerprint'] or
+            file_digest(blob) != (row['oldEncodedSha256'], row['oldEncodedSize']) or
+            row['python'] != sys.version or row['zlib'] != zlib.ZLIB_RUNTIME_VERSION or
+            not 0 < row['newEncodedSize'] < min(row['oldEncodedSize'], 20 * CHUNK)):
+        raise ValueError('repack plan/input/codec drift or invalid temporary bound')
+    # Temporary allocation is inside the SAME 16-GiB archive budget, not waived.
+    bound = ((row['newEncodedSize'] + 4095) // 4096) * 4096 + 16384
+    if allocated_bytes(archive_root) + bound > 16 * 1024**3:
+        raise ValueError('repack temporary would exceed fixed archive cap')
+    original = EncodedDigest()
+    _repack_stream(blob, row['sha256'], size, 1, original)
+    if (original.hash.hexdigest(), original.size) != (row['oldEncodedSha256'], row['oldEncodedSize']):
+        raise ValueError('original encoding is not exactly reconstructable gzip-1')
+    temp = blob.with_suffix('.repack.tmp')
+    with temp.open('xb') as output:
+        _repack_stream(blob, row['sha256'], size, 9, BoundedEncoding(output, row['newEncodedSize']))
+        output.flush()
+        os.fsync(output.fileno())
+    if file_digest(temp) != (row['newEncodedSha256'], row['newEncodedSize']):
+        raise ValueError('temporary encoded bytes mismatch; original retained')
+    with gzip.open(temp, 'rb') as decoded:
+        if digest(decoded) != (row['sha256'], size):
+            raise ValueError('temporary reconstruction mismatch; original retained')
+    if fingerprint(blob) != row['fingerprint'] or file_digest(source)[0] != row['manifestSha256']:
+        raise ValueError('input changed before repack replacement; original retained')
+    os.chmod(temp, stat.S_IMODE(row['fingerprint'][5]))
+    os.replace(temp, blob)
+    fd = os.open(blob.parent, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    return dict(sha256=row['sha256'], rawSize=size,
+                oldEncodedSha256=row['oldEncodedSha256'], newEncodedSha256=row['newEncodedSha256'],
+                oldEncodedSize=row['oldEncodedSize'], newEncodedSize=row['newEncodedSize'],
+                status='RAW_RECONSTRUCTED_BEFORE_ATOMIC_REPACK', fingerprintAfter=fingerprint(blob))
 
 
 def budget(repo, max_live_gib, max_archive_gib):
