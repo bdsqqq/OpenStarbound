@@ -27583,6 +27583,16 @@
       "language": "rust",
       "line": 1,
       "membership_status": "no-direct-target-found",
+      "module": "foundation.collections",
+      "path": "source/rust/ffi/src/static_vector.rs",
+      "rule": "rust-static-vector"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "rust-candidate",
+      "language": "rust",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
       "module": "foundation.text",
       "path": "source/rust/ffi/src/string_view.rs",
       "rule": "rust-string-view"
@@ -32462,7 +32472,7 @@
     },
     {
       "path": "source/core/StarRustStaticVector.h",
-      "sha256": "389992ae5cc34dc8c4a3773ce00e252d6e34022c6c7a85bd02c0bd98a89e7fe5"
+      "sha256": "e6ed5a1ed2986ec908879cebcb6c190c581a483074c65e3c3fbf4b4b461b41f4"
     },
     {
       "path": "source/core/StarRustStringView.h",
@@ -37118,7 +37128,7 @@
     },
     {
       "path": "source/lab/migration/modules.json",
-      "sha256": "699d967060843341264910e6dc98e5f42e7a22dbb319456fbc062c15adb6bc36"
+      "sha256": "71373b377568e0ce6f5ea414b6dfe51c786a5b65eaa40cb4301682b38242601d"
     },
     {
       "path": "source/lab/native_artifacts.py",
@@ -37442,7 +37452,7 @@
     },
     {
       "path": "source/lab/static-vector-boundary/test_schema.py",
-      "sha256": "19eeb612338826840d9241d55fee376029161b76cf6262ef9f77b93230d8bd51"
+      "sha256": "8274488d9f61578b1cf0e75029af6523a39c11b302703b8a0666bf59e44af890"
     },
     {
       "path": "source/lab/static-vector/StarStaticVector.original.hpp",
@@ -38386,7 +38396,7 @@
     },
     {
       "path": "source/rust/ffi/src/lib.rs",
-      "sha256": "475eb1beae2a2e72550badeffc4a0c7b7eb21128c0fe1570347a55698ebf5116"
+      "sha256": "23efc7f67e3a08c8f4c67721eeb67e0c3d4c8fa05a8ec403c5b9f858a271dbd7"
     },
     {
       "path": "source/rust/ffi/src/line_query.rs",
@@ -38415,6 +38425,10 @@
     {
       "path": "source/rust/ffi/src/shell.rs",
       "sha256": "a9cf495dbad6019e0caae695a4ce0f62e96c99d0718c14b8b7b30d6cd558e249"
+    },
+    {
+      "path": "source/rust/ffi/src/static_vector.rs",
+      "sha256": "80f15789cb41f398c5da7d6de66421ce1a7203a2ca352824cfeaebb39c92cc4d"
     },
     {
       "path": "source/rust/ffi/src/string_view.rs",
@@ -39274,14 +39288,14 @@
       "oracle/harness": 648,
       "retain-tooling": 31,
       "retained-third-party": 296,
-      "rust-candidate": 29,
+      "rust-candidate": 30,
       "test": 57
     },
     "by_module": {
       "base.animation": 2,
       "base.geometry": 6,
       "base.lighting": 6,
-      "foundation.collections": 32,
+      "foundation.collections": 33,
       "foundation.compression-crypto": 18,
       "foundation.math-geometry": 16,
       "foundation.media": 14,
@@ -39318,8 +39332,8 @@
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2140,
+    "files": 2141,
     "modules": 39,
-    "no_direct_target": 1034
+    "no_direct_target": 1035
   }
 }

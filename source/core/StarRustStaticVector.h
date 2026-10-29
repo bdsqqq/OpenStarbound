@@ -7,6 +7,8 @@ extern "C" {
 /* Only scalar control crosses this boundary. Elements, inline aligned storage,
  * iterators, typed references, arguments, temporaries and exceptions stay C++.
  * Every callback catches ALL C++ exceptions; rethrow only AFTER Rust returns.
+ * The result must initially contain a valid versioned reply (normally VOID0).
+ * Success replaces it; errors leave it untouched and preserve native mutation.
  */
 enum { SB_STATIC_VECTOR_ABI_VERSION = 1 };
 enum { SB_STATIC_VECTOR_OK = 0, SB_STATIC_VECTOR_EXCEPTION = 1,

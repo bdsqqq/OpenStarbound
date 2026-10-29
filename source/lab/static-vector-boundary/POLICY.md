@@ -51,8 +51,11 @@ all 41 owned definitions have a route:
 the header specifies their exact permitted slots, reply tags and throw protocol.
 ROOT results: SIZE returns SIZE_VALUE; EMPTY/EQUAL/NOT_EQUAL/LESS return BOOL;
 all others VOID0. LESS CONTINUE returns SIZE_VALUE 0(equal)/1(less)/2(greater).
-invalid mode/stage, null context/host or null/misaligned result, unknown status, wrong shape,
-reserved bytes, tags, bool/range or native-size overflow fail closed. a throw
+the caller initializes the output to a valid versioned reply, normally VOID0,
+as in the existing IdMap boundary. success replaces it; errors leave it unchanged.
+invalid mode/stage, null context/host or null/misaligned result, unknown status,
+wrong initial/host reply shape, reserved bytes, tags, bool/range or native-size
+overflow fail closed. a throw
 leaf returning OK is invalid. no callback on an invalid entry envelope.
 
 DEFAULT_CTOR performs no host work. CTOR_INSERT/CTOR_RESIZE/PUSH_BACK/INSERT_ONE/

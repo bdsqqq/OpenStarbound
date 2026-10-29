@@ -35,6 +35,17 @@ def validate(text):
         raise ValueError('ABI constant drift')
     return c
 
+def validate_rust(text, header):
+    pairs = re.findall(r'const ([A-Z_]+): (?:u32|usize) = ([0-9]+);', text)
+    if len(pairs) != len(dict(pairs)):
+        raise ValueError('duplicate Rust constant')
+    aliases = {'VERSION': 'ABI_VERSION', 'MODES': 'MODE_COUNT',
+               'STAGES': 'STAGE_COUNT', 'OPS': 'OP_COUNT'}
+    actual = {aliases.get(k, k): int(v) for k, v in pairs}
+    if actual != validate(header):
+        raise ValueError('Rust/header constant drift')
+    return actual
+
 class Schema(unittest.TestCase):
     def test_complete_schema(self):
         validate(HEADER.read_text())
@@ -49,6 +60,14 @@ class Schema(unittest.TestCase):
     def test_duplicate_is_rejected(self):
         with self.assertRaises(ValueError):
             validate(HEADER.read_text() + '\nSB_STATIC_VECTOR_ROOT = 0')
+
+    def test_rust_constants_and_known_failure(self):
+        rust = (ROOT / 'source/rust/ffi/src/static_vector.rs').read_text()
+        header = HEADER.read_text()
+        self.assertEqual(len(validate_rust(rust, header)), 79)
+        with self.assertRaises(ValueError):
+            validate_rust(rust.replace('const DEFAULT_CTOR: u32 = 0;',
+                                      'const DEFAULT_CTOR: u32 = 99;'), header)
 
     def test_scalar_c_shapes_and_signatures(self):
         text = HEADER.read_text()

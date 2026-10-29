@@ -8,6 +8,11 @@ mod weighted_pool;
 pub use weighted_pool::{sb_wp_count, sb_wp_run, SbWpHost, SbWpReply, SbWpRequest};
 mod id_map;
 pub use id_map::{sb_idmap_count, sb_idmap_run, SbIdMapHost, SbIdMapReply, SbIdMapRequest};
+mod static_vector;
+pub use static_vector::{
+    sb_static_vector_count, sb_static_vector_run, SbStaticVectorHost,
+    SbStaticVectorReply, SbStaticVectorRequest,
+};
 
 mod string_view;
 pub use string_view::{star_string_view_call_count, star_string_view_run, StarStringViewHost};
