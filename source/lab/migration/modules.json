@@ -52,6 +52,7 @@
     {"id":"lru-cache-lab-contract","module":"validation.oracles-harness","disposition":"harness","pattern":"source/base/StarLruCacheLab\\.hpp"},
     {"id":"rust-id-map-host","module":"foundation.collections","disposition":"ffi-adapter","pattern":"source/core/StarIdMapHost\\.hpp"},
     {"id":"rust-id-map-abi","module":"foundation.collections","disposition":"ffi-adapter","pattern":"source/core/StarRustIdMap\\.h"},
+    {"id":"rust-static-vector-abi","module":"foundation.collections","disposition":"ffi-adapter","pattern":"source/core/StarRustStaticVector\\.h"},
     {"id":"rust-id-map","module":"foundation.collections","disposition":"rust-candidate","pattern":"source/rust/ffi/src/id_map\\.rs"},
     {"id":"rust-lru-cache-abi","module":"foundation.storage","disposition":"ffi-adapter","pattern":"source/core/StarRustLruCache\\.h"},
     {"id":"rust-lru-cache-host","module":"foundation.storage","disposition":"ffi-adapter","pattern":"source/core/StarLruCacheHost\\.hpp"},
