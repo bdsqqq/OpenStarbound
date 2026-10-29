@@ -17,6 +17,10 @@ import time
 import zlib
 
 CHUNK = 1024 * 1024
+# Encoded length is NOT an upper bound on st_blocks. Admit a separate physical
+# scratch allowance, then observe it while writing; never infer allocation from
+# a gzip byte count or call an estimated saving a guaranteed reclamation.
+REPACK_TEMPORARY_RESERVATION_BYTES = 64 * CHUNK
 
 
 def digest(stream):
@@ -266,13 +270,22 @@ class BoundedEncoding:
         self.stream = stream
         self.limit = limit
         self.size = 0
+        self.peak_allocated = 0
 
     def write(self, block):
         if self.size + len(block) > self.limit:
             raise ValueError('temporary encoding exceeds admitted size; original retained')
         written = self.stream.write(block)
         self.size += written
+        self.observe_allocation()
         return written
+
+    def observe_allocation(self):
+        self.stream.flush()
+        allocated = os.fstat(self.stream.fileno()).st_blocks * 512
+        self.peak_allocated = max(self.peak_allocated, allocated)
+        if allocated > REPACK_TEMPORARY_RESERVATION_BYTES:
+            raise ValueError('temporary physical allocation exceeds reservation; original retained')
 
 
 def repack_blob(repo, row):
@@ -284,8 +297,10 @@ def repack_blob(repo, row):
             row['python'] != sys.version or row['zlib'] != zlib.ZLIB_RUNTIME_VERSION or
             not 0 < row['newEncodedSize'] < min(row['oldEncodedSize'], 20 * CHUNK)):
         raise ValueError('repack plan/input/codec drift or invalid temporary bound')
-    # Temporary allocation is inside the SAME 16-GiB archive budget, not waived.
-    bound = ((row['newEncodedSize'] + 4095) // 4096) * 4096 + 16384
+    # Logical gzip length underestimated physical allocation on the actual host.
+    # The allowance includes scratch storage independently of encoded size; the
+    # extra directory margin is not available to the encoded writer.
+    bound = REPACK_TEMPORARY_RESERVATION_BYTES + 16384
     if allocated_bytes(archive_root) + bound > 16 * 1024**3:
         raise ValueError('repack temporary would exceed fixed archive cap')
     original = EncodedDigest()
@@ -294,9 +309,13 @@ def repack_blob(repo, row):
         raise ValueError('original encoding is not exactly reconstructable gzip-1')
     temp = blob.with_suffix('.repack.tmp')
     with temp.open('xb') as output:
-        _repack_stream(blob, row['sha256'], size, 9, BoundedEncoding(output, row['newEncodedSize']))
+        encoded = BoundedEncoding(output, row['newEncodedSize'])
+        _repack_stream(blob, row['sha256'], size, 9, encoded)
         output.flush()
         os.fsync(output.fileno())
+        encoded.observe_allocation()
+    if allocated_bytes(archive_root) > 16 * 1024**3:
+        raise ValueError('observed archive allocation exceeds fixed cap; original retained')
     if file_digest(temp) != (row['newEncodedSha256'], row['newEncodedSize']):
         raise ValueError('temporary encoded bytes mismatch; original retained')
     with gzip.open(temp, 'rb') as decoded:
@@ -314,7 +333,9 @@ def repack_blob(repo, row):
     return dict(sha256=row['sha256'], rawSize=size,
                 oldEncodedSha256=row['oldEncodedSha256'], newEncodedSha256=row['newEncodedSha256'],
                 oldEncodedSize=row['oldEncodedSize'], newEncodedSize=row['newEncodedSize'],
-                status='RAW_RECONSTRUCTED_BEFORE_ATOMIC_REPACK', fingerprintAfter=fingerprint(blob))
+                status='RAW_RECONSTRUCTED_BEFORE_ATOMIC_REPACK', fingerprintAfter=fingerprint(blob),
+                temporaryPeakAllocatedBytes=encoded.peak_allocated,
+                temporaryPhysicalReservationBytes=REPACK_TEMPORARY_RESERVATION_BYTES)
 
 
 def budget(repo, max_live_gib, max_archive_gib):

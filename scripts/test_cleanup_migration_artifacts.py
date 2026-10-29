@@ -127,6 +127,7 @@ class RepackTests(unittest.TestCase):
             self.assertEqual(regenerated.hash.hexdigest(), hashlib.sha256(old).hexdigest())
             self.assertEqual(result['status'], 'RAW_RECONSTRUCTED_BEFORE_ATOMIC_REPACK')
             self.assertNotEqual(result['fingerprintAfter'], row['fingerprint'])
+            self.assertLessEqual(result['temporaryPeakAllocatedBytes'], cleanup.REPACK_TEMPORARY_RESERVATION_BYTES)
 
     def test_wrong_temporary_hash_never_replaces_original(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -195,6 +196,33 @@ class RepackTests(unittest.TestCase):
                 cleanup.repack_blob(repo, bad)
             self.assertFalse(blob.with_suffix('.repack.tmp').exists())
             self.assertEqual(blob.read_bytes(), before)
+
+    def test_encoded_size_does_not_admit_insufficient_physical_scratch(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp).resolve()
+            _, _, blob, row = self.fixture(repo)
+            before = blob.read_bytes()
+            # The old encoded-size+16KiB assumption would admit this state.
+            with patch.object(cleanup, 'allocated_bytes', return_value=16 * 1024**3 - 1024**2):
+                with self.assertRaisesRegex(ValueError, 'fixed archive cap'):
+                    cleanup.repack_blob(repo, row)
+            self.assertFalse(blob.with_suffix('.repack.tmp').exists())
+            self.assertEqual(blob.read_bytes(), before)
+
+    def test_actual_physical_scratch_overrun_retains_original(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp).resolve()
+            _, _, blob, row = self.fixture(repo)
+            before = blob.read_bytes()
+            allocation = SimpleNamespace(st_blocks=cleanup.REPACK_TEMPORARY_RESERVATION_BYTES // 512 + 1)
+            with patch.object(cleanup.os, 'fstat', return_value=allocation):
+                with self.assertRaisesRegex(ValueError, 'physical allocation exceeds reservation'):
+                    cleanup.repack_blob(repo, row)
+            self.assertEqual(blob.read_bytes(), before)
+            self.assertTrue(blob.with_suffix('.repack.tmp').exists())
 
     def test_understated_size_is_enforced_before_write_and_original_is_retained(self):
         with tempfile.TemporaryDirectory() as temp:

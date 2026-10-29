@@ -31284,7 +31284,7 @@
     },
     {
       "path": "scripts/cleanup-migration-artifacts.py",
-      "sha256": "df7762ef461c9b354b704d65c10d5e2446925374ea5d5bb89a592dca7b0406ca"
+      "sha256": "4cd79a1e5a070f35fc1ece1ffe409416dbbefc027171a407fe8551c64cd3fa56"
     },
     {
       "path": "scripts/credits/generate-contributors.sh",
@@ -31364,7 +31364,7 @@
     },
     {
       "path": "scripts/test_cleanup_migration_artifacts.py",
-      "sha256": "7a587ca97794de148ff0ad43507e1579d74f471fcd9eb908b52bb894ecbe4692"
+      "sha256": "41d88d15028535d27c254663a5db4dd53b8c1e9d1e2364ceaa6cc480e5c460ac"
     },
     {
       "path": "scripts/test_verify_lru_retention.py",
