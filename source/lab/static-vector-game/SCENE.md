@@ -5,6 +5,27 @@ at `f29e41d44ae6d9e79261bd112c72cc413a757f25`. **not object-built, linked,
 game-built or runtime-tested.** no actual game admission or parity claim.
 parent owns integration, readers, retention and commits.
 
+## current capture/build frontend status
+
+`behavior_lab_static_vector.py` and `static_vector_capture.py` own their actual
+producer identities, all26 dispatch and current30 origin binding. pure tests
+cover decoded states, full rgba comparison, restoration and process receipts;
+they do not qualify a live capture.
+
+`scripts/build-static-vector-behavior-lab.py` separates fresh Cargo production
+and a physical archive seal from native compilation/linking. admission requires
+a conservative allocated archive forecast for predecessor/new binaries, native
+objects/libraries, Cargo products and admission/capture evidence (including
+archive overhead). a four-binary-only forecast is rejected. coverage checks are
+not evidence that future costs have been measured.
+
+the current emitted-code reader **fails closed on TLS descriptor pointer/fixup
+provenance**, even when generic normalized instructions match. duplicate-named
+link-map archive members also block qualification. no complete positive
+whole-origin fixture or actual current game pair has passed. these are pending
+proof mechanisms, not waived origins or permission to build with inadequate
+retention capacity.
+
 ## why this seam
 
 `WorldClient::render` fills the ordinary `renderData.tiles` through its existing
