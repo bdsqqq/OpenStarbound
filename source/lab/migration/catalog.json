@@ -31668,7 +31668,7 @@
     },
     {
       "path": "scripts/test_build_static_vector_behavior_lab.py",
-      "sha256": "8218b8765651de466b74fe1bba1afa56270a667fc2a46bad5b631af5628ad2a5"
+      "sha256": "eebec2deb6dc4794784a059539c308d04fd4221398b1c72e76e200b7d13a9eea"
     },
     {
       "path": "scripts/test_cleanup_migration_artifacts.py",
@@ -36352,7 +36352,7 @@
     },
     {
       "path": "source/lab/behavior/test_static_vector_origin.py",
-      "sha256": "16406baa9ab8486bf81bdb5911ee9575b5742e8abcece2f76cb9e04279071438"
+      "sha256": "52767f5f86c306ee3a709fe58254a12200b7d33feb6ee70bab71871cb6a179f5"
     },
     {
       "path": "source/lab/behavior/test_static_vector_proof.py",
@@ -37972,7 +37972,7 @@
     },
     {
       "path": "source/lab/static-vector-game/game_build_admission.py",
-      "sha256": "f4123a05f2e9bd0cfb0317488c3d06e0fabd6163b28243e2f6d282dd4c1b68d5"
+      "sha256": "ab41d38d64a666107b4752bb7cf04d75a13f2c57a7225f41b27e46dc5cfec5f9"
     },
     {
       "path": "source/lab/static-vector-game/game_origin.py",
@@ -38004,7 +38004,7 @@
     },
     {
       "path": "source/lab/static-vector-game/test_game_build_admission.py",
-      "sha256": "c6b07d305d13785b63d9662c314693c3229b2849de7e8cc0fa4d5851f14c5479"
+      "sha256": "1ebb62fcae16cacb9f7093715eca4a6329f51035b70e2961707d1f06260ac9eb"
     },
     {
       "path": "source/lab/static-vector-game/test_game_origin.py",

@@ -1,14 +1,16 @@
 """Current30 admission. Old plans select paths, never source epochs or receipts.
 
-All output, including admission and SDK observations, belongs under G. Existing
-metadata must be explicitly inventoried; role product directories are always new.
+Products and admission evidence belong on P, inside enclosure E; all of G,
+including backing E/image.dmg, remains charged. Role product trees are fresh.
 """
 import datetime as dt
+import hashlib
 import importlib.util
 import json
 import os
 from pathlib import Path
 import shlex
+import stat
 import sys
 
 sys.dont_write_bytecode = True
@@ -32,7 +34,7 @@ SELECTORS = config.SELECTORS
 CAPS = dict(allocation.CAPS)
 DEADLINES = dict(primitives.DEADLINES)
 CHECKPOINT = '825c30e46055e3c1c486b572dddf173c9017b889'
-STAGE = 'STATIC_VECTOR_CURRENT30_SOURCE_ADMISSION_V1'
+STAGE = 'STATIC_VECTOR_CURRENT30_SOURCE_ADMISSION_V2'
 SCOPE = 'source/tool admission only; NOT game qualification'
 HEADER = 'source/lab/behavior/static_vector_scene.hpp'
 ARCHIVE = 'rust-engine-ffi/aarch64-apple-darwin/release/libstar_engine_ffi.a'
@@ -45,6 +47,10 @@ sha = primitives.sha
 physical = primitives.physical
 no_symlink_parents = primitives.no_symlink_parents
 bounded = load('_sv_bounded_outputs', Path(__file__).with_name('bounded_outputs.py'))
+er = load('_sv_enclosure_release', Path(__file__).with_name('enclosure_release.py'))
+LIFECYCLE_TOOLS = {'hdiutil': '/usr/bin/hdiutil', 'sandbox-exec': '/usr/bin/sandbox-exec'}
+FILESYSTEM_METADATA = frozenset(('.fseventsd', '.Trashes', '.metadata_never_index'))
+FILESYSTEM_METADATA_CLASS = 'GENERATED_MUTABLE_FILESYSTEM_NOT_SOURCE'
 PHASES = ('provenance-begin', 'configure', 'provenance-configured', 'cargo', 'compile', 'provenance-seal', 'provenance-verify')
 
 
@@ -119,8 +125,76 @@ unchanged = primitives.unchanged
 tree_members = primitives.tree_members
 
 
-def build_root():
+def allocation_root():
     return ROOT / 'build/behavior/static-vector-combined-r1'
+
+
+def enclosure_root():
+    return allocation_root() / 'current30-enclosure'
+
+
+def build_root():
+    return enclosure_root() / 'products'
+
+
+def _bounded_owner_file(path):
+    """Check physical type/link/size BEFORE any hash or read; pin both identities."""
+    path = er.physical(str(path))
+    before = path.lstat()
+    need(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and
+         0 < before.st_size <= 1024**2, 'bounded regular single-link ownership file')
+    fields = ('st_dev', 'st_ino', 'st_size', 'st_mtime_ns', 'st_ctime_ns', 'st_nlink')
+    state = {key: getattr(before, key) for key in fields}
+    with path.open('rb') as stream:
+        raw = stream.read(1024**2 + 1)
+    after = path.lstat()
+    need(len(raw) == before.st_size and
+         {key: getattr(after, key) for key in fields} == state,
+         'ownership file changed during read')
+    record = dict(path=str(path), sha256=hashlib.sha256(raw).hexdigest(), size=len(raw))
+    return raw, dict(identity=record, physical=state)
+
+
+def _owner_json(raw):
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            need(key not in result, 'duplicate owner JSON key')
+            result[key] = value
+        return result
+    def invalid(value):
+        raise ValueError('nonfinite owner JSON')
+    return json.loads(raw, object_pairs_hook=unique, parse_constant=invalid)
+
+
+def enclosure_state():
+    """Recorded setup association plus CURRENT physical pins, not live attestation.
+
+    No mutable backing bytes are hashed. Recorded device info cannot detect a
+    reverted intervening mount; future native checks still recheck all pins.
+    """
+    raw, owner_file = _bounded_owner_file(enclosure_root() / 'owner.json')
+    info, info_file = _bounded_owner_file(enclosure_root() / 'ownership-info.plist')
+    owner = _owner_json(raw)
+    er.validate_owner(owner)
+    need(owner['root'] == str(enclosure_root()) and
+         owner['image']['path'] == str(enclosure_root() / 'image.dmg') and
+         owner['mount']['path'] == str(build_root()), 'exact current enclosure namespace')
+    # A sanity cap only, not a future physical allocation/conservation bound.
+    need(owner['image']['maxBytes'] <= CAPS['newRootBytes'] // 2, 'image sanity cap')
+    er.image_state(owner)
+    er.tool_state(owner)
+    er.mounted_state(owner)
+    er.association(info, owner)
+    need(_bounded_owner_file(enclosure_root() / 'owner.json')[1] == owner_file and
+         _bounded_owner_file(enclosure_root() / 'ownership-info.plist')[1] == info_file,
+         'ownership files changed')
+    return dict(owner=owner, ownerFile=owner_file, infoFile=info_file)
+
+
+def source_roots(tools, sdk):
+    # Lifecycle tools are individual system files, never CMake -D selections.
+    return primitives.source_roots(tools, sdk) + list(LIFECYCLE_TOOLS.values())
 
 
 def identity(path):
@@ -140,7 +214,8 @@ def file_state(path):
 
 def check_budget(root=None):
     need(allocation.CAPS == CAPS, 'fixed allocation caps')
-    return allocation.enforce(ROOT, root or build_root())
+    need(root is None or Path(root) == allocation_root(), 'whole allocation root required')
+    return allocation.enforce(ROOT, allocation_root())
 
 
 def check_binaries():
@@ -170,22 +245,38 @@ def check_binaries():
     return {str(p): identity(p) for p in expected}
 
 
+def _metadata_tree(path, mutable=False):
+    """Even generated OS state is readable, physical, and never native input."""
+    no_symlink_parents(path)
+    info = path.lstat()
+    need(not stat.S_ISLNK(info.st_mode), 'metadata alias forbidden')
+    if stat.S_ISDIR(info.st_mode):
+        result = {}
+        # scandir propagates unreadable-tree errors, unlike default os.walk.
+        with os.scandir(path) as entries:
+            for entry in entries:
+                result.update(_metadata_tree(Path(entry.path), mutable))
+        return result
+    need(stat.S_ISREG(info.st_mode) and info.st_nlink == 1, 'metadata regular single-link file')
+    need(path.suffix not in ('.o', '.a', '.dylib') and path.name != 'starbound',
+         'product in initial metadata root')
+    with path.open('rb') as stream:
+        need(stream.read(4) not in (b'\xcf\xfa\xed\xfe', b'\xce\xfa\xed\xfe',
+             b'\xfe\xed\xfa\xcf', b'\xfe\xed\xfa\xce', b'\xca\xfe\xba\xbe',
+             b'\xbe\xba\xfe\xca', b'\xca\xfe\xba\xbf', b'\xbf\xba\xfe\xca',
+             b'\x7fELF', b'!<ar', b'!<th'), 'native input in metadata root')
+    return {} if mutable else {str(path): identity(path)}
+
+
 def metadata_inventory(root):
-    """Inventory existing metadata only, without executing or copying any input."""
+    """Only named root OS metadata is mutable; it is NOT source or budget-exempt."""
     no_symlink_parents(root)
     need(root.is_dir(), 'existing metadata root required')
     need(not any(os.path.lexists(root / r) for r in profiles()), 'fresh role product directories required')
     result = {}
-    for base, dirs, files in os.walk(root, followlinks=False):
-        for name in dirs + files:
-            path = Path(base) / name
-            need(not path.is_symlink(), 'metadata alias forbidden')
-        for name in files:
-            path = Path(base) / name
-            need(path.suffix not in ('.o', '.a', '.dylib') and name != 'starbound', 'product in initial metadata root')
-            with path.open('rb') as stream:
-                need(stream.read(4) not in (b'\xcf\xfa\xed\xfe', b'\x7fELF', b'!<ar'), 'native input in metadata root')
-            result[str(path)] = identity(path)
+    with os.scandir(root) as entries:
+        for entry in entries:
+            result.update(_metadata_tree(Path(entry.path), entry.name in FILESYSTEM_METADATA))
     return result
 
 
@@ -227,18 +318,31 @@ def current_inputs(plan):
     config.validate_source()
     tools, sdk = primitives.selected_paths(plan['toolPlan'], plan['toolPlanSha256'])
     need(plan['tools'] == tools and plan['sdk'] == sdk and plan['sdkPhysical'] == physical(sdk), 'current tool/SDK drift')
-    roots = primitives.source_roots(tools, sdk)
+    roots = source_roots(tools, sdk)
     need(plan['sourceRoots'] == roots, 'source/tool scope drift')
     members = tree_members(roots)
     need(members == plan['treeMembers'], 'current source/tool/SDK membership drift')
     primitives.check_member_scope(members)
     need(all(resolved in plan['witness']['files'] for name, resolved in members.items() if Path(name).is_file()), 'unhashed member')
+    for path in LIFECYCLE_TOOLS.values():
+        primitives._require_pin(plan['witness'], path, 'lifecycle tool')
     unchanged(plan['witness'])
     need(plan['retention'] == identity(plan['retention']['path']) and
          json.loads(Path(plan['retention']['path']).read_text()) == plan['retentionForecast'], 'parent retention proof drift')
     need(plan['python'] in plan['witness']['aliases'] and
          plan['witness']['files'].get(physical(plan['python'])) == sha(plan['python']), 'actual admitted Python')
+    need(plan['lifecycleTools'] == LIFECYCLE_TOOLS and
+         plan['filesystemMetadataClassification'] ==
+         {name: FILESYSTEM_METADATA_CLASS for name in sorted(FILESYSTEM_METADATA)},
+         'lifecycle tools/filesystem metadata contract')
+    for name in FILESYSTEM_METADATA:
+        path = build_root() / name
+        if os.path.lexists(path):
+            _metadata_tree(path, mutable=True)
     for path, record in plan['initialMetadata'].items():
+        need(Path(path).is_relative_to(build_root()) and
+             Path(path).relative_to(build_root()).parts[0] not in FILESYSTEM_METADATA,
+             'generated filesystem metadata is not immutable source')
         need(identity(path) == record, 'initial metadata changed')
     need(plan['predecessors'] == check_binaries(), 'needed live predecessors changed')
 
@@ -250,6 +354,10 @@ def static_plan(plan):
     need(plan['deadlines'] == DEADLINES, 'fixed clock')
     need(plan['toolPlan'] == str(ROOT / TOOL_PLAN) and plan['toolPlanSha256'] == TOOL_PLAN_SHA and
          plan['toolPlanRole'] == 'PATH_SELECTION_ONLY; historical admission NOT reused', 'path-selector plan pin')
+    # Python equality conflates bool/int/float; physical owner pins do not.
+    need(json.dumps(plan['enclosure'], sort_keys=True, allow_nan=False) ==
+         json.dumps(enclosure_state(), sort_keys=True, allow_nan=False),
+         'mounted enclosure ownership drift')
     need(plan['commands'] == {r: commands(plan, r) for r in profiles()}, 'actual future argv drift')
     current_inputs(plan)
 
@@ -302,19 +410,20 @@ def prepare(output, checkpoint, initial_metadata, retention, retention_sha, *, c
     need(output == root / 'current30-admission' and not os.path.lexists(output),
          'one canonical fresh current30 admission required')
     need(checkpoint == CHECKPOINT, 'current base checkpoint required')
+    enclosure = enclosure_state()
     config.validate_source()
     need(metadata_inventory(root) == initial_metadata, 'explicit exact metadata-only initial inventory')
-    budget = check_budget(root)
+    budget = check_budget()
     retention = Path(retention).absolute()
-    need(retention.is_relative_to(root) and sha(retention) == retention_sha, 'parent retention forecast pin inside G')
+    need(retention.is_relative_to(root) and sha(retention) == retention_sha, 'parent retention forecast pin inside products')
     forecast = json.loads(retention.read_text())
     check_retention(forecast, checkpoint, budget)
     tools, sdk = primitives.selected_paths(ROOT / TOOL_PLAN, TOOL_PLAN_SHA)
-    roots = primitives.source_roots(tools, sdk)
+    roots = source_roots(tools, sdk)
     members = tree_members(roots)
     primitives.check_member_scope(members)
     witness = primitives.closure([Path(r) for r in roots if Path(r).is_dir()])
-    paths = list(tools.values()) + list(map(str, primitives.auxiliary_tools())) + [str(ROOT / TOOL_PLAN), sys.executable]
+    paths = list(tools.values()) + list(LIFECYCLE_TOOLS.values()) + list(map(str, primitives.auxiliary_tools())) + [str(ROOT / TOOL_PLAN), sys.executable]
     paths += [r for r in roots if Path(r).is_file()]
     primitives._pin(witness, paths)
     plan = dict(stage=STAGE, scope=SCOPE, caps=CAPS, deadlines=DEADLINES,
@@ -323,6 +432,8 @@ def prepare(output, checkpoint, initial_metadata, retention, retention_sha, *, c
         profiles=profiles(), tools=tools, sdk=sdk, sdkPhysical=physical(sdk), toolPlan=str(ROOT / TOOL_PLAN),
         toolPlanSha256=TOOL_PLAN_SHA, toolPlanRole='PATH_SELECTION_ONLY; historical admission NOT reused',
         sourceRoots=roots, treeMembers=members, witness=witness,
+        enclosure=enclosure, lifecycleTools=dict(LIFECYCLE_TOOLS),
+        filesystemMetadataClassification={name: FILESYSTEM_METADATA_CLASS for name in sorted(FILESYSTEM_METADATA)},
         initialMetadata=initial_metadata, predecessors=check_binaries(), budgetBefore=budget,
         retention=identity(retention), retentionForecast=forecast, python=str(Path(sys.executable).absolute()))
     plan['commands'] = {r: commands(plan, r) for r in profiles()}

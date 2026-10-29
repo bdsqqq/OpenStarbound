@@ -14,7 +14,7 @@ from types import SimpleNamespace
 spec = importlib.util.spec_from_file_location('_sv_builder_test', Path(__file__).with_name('build-static-vector-behavior-lab.py'))
 builder = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(builder)
-G = builder.ad.build_root()
+G = builder.ad.allocation_root()
 TOOL = str(Path(sys.executable).resolve())
 TOOLS = {'CMAKE_C_COMPILER': TOOL, 'CMAKE_CXX_COMPILER': TOOL}
 fixture = builder.load('_physical_builder_fixture', builder.ROOT / 'source/lab/static-vector-game/test_physical_link_map.py')
