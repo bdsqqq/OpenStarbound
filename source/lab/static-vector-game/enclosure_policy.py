@@ -10,7 +10,7 @@ import re
 import unicodedata
 
 TOOL = '/usr/bin/sandbox-exec'
-VERSION = 1
+VERSION = 2
 SCOPE = 'native-writes-only-owned-products'
 
 
@@ -39,7 +39,10 @@ def profile(mount):
     # SBPL quoted strings use backslash escapes. Keep UTF-8 literal (not JSON
     # unicode escapes); reject controls rather than relying on parser handling.
     literal = '"' + path.replace('\\', '\\\\').replace('"', '\\"') + '"'
-    return '(version 1)(allow default)(deny file-write*)(allow file-write* (subpath ' + literal + '))'
+    # Mount operations are separate from file-write*. Helper-mediated device
+    # creation is a further boundary, not proved closed by these two denials.
+    return ('(version 1)(allow default)(deny file-mount file-unmount)'
+            '(deny file-write*)(allow file-write* (subpath ' + literal + '))')
 
 
 def binding(owner, tool_identity):

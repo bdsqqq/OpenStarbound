@@ -323,6 +323,43 @@ class NamespaceTests(unittest.TestCase):
         self.assertFalse(any('hdiutil' in value or 'sandbox-exec' in value for value in argv[3:]))
 
 
+class SingleDeviceTopologyTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(dir=G)
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.products = self.root / 'products'
+        self.products.mkdir()
+        self.device = self.products.stat().st_dev
+
+    def test_same_device_descendants_include_links_without_following(self):
+        (self.products / 'sub').mkdir()
+        (self.products / 'sub/file').write_bytes(b'owned')
+        outside = self.root / 'outside'
+        outside.mkdir()
+        (self.products / 'link').symlink_to(outside, target_is_directory=True)
+        scan = os.scandir
+        def guarded(path):
+            self.assertNotEqual(Path(path), outside, 'topology followed link target')
+            return scan(path)
+        with patch.object(ad.os, 'scandir', side_effect=guarded):
+            ad._require_single_device(self.products, self.device)
+
+    def test_unreadable_walk_cannot_attest_topology(self):
+        with patch.object(ad.os, 'scandir', side_effect=PermissionError('unreadable guest')):
+            with self.assertRaises(PermissionError):
+                ad._require_single_device(self.products, self.device)
+
+    def test_root_device_type_and_alias_fail_closed(self):
+        for device in (True, float(self.device), 0, self.device + 1):
+            with self.subTest(device=device), self.assertRaises(ValueError):
+                ad._require_single_device(self.products, device)
+        alias = self.root / 'alias'
+        alias.symlink_to(self.products, target_is_directory=True)
+        with self.assertRaises(ValueError):
+            ad._require_single_device(alias, self.device)
+
+
 class EnclosureAdmissionTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(dir=G)
@@ -405,6 +442,13 @@ class EnclosureAdmissionTests(unittest.TestCase):
             finally:
                 path.unlink()
 
+    def test_descendant_device_must_not_borrow_outer_mount_ownership(self):
+        # The root's mocked guest device differs from this child directory's
+        # actual host device. Root ownership must not authorize another mount.
+        (self.p / 'foreign-device').mkdir()
+        with self.assertRaisesRegex(ValueError, 'descendant device'):
+            ad.enclosure_state()
+
     def test_unmounted_or_mutated_physical_owner_fails(self):
         self.mounted = False
         with self.assertRaises(ad.er.ReleaseError):
@@ -473,7 +517,10 @@ class EnclosureAdmissionTests(unittest.TestCase):
                         path.unlink()
                     path.write_bytes(raw)
 
-    def test_prepare_integrates_owner_products_budget_and_lifecycle_pins(self):
+    # These metadata/admission fixtures fake only the mount root's device;
+    # real descendant traversal is exercised separately above, not waived in code.
+    @patch.object(ad, '_require_single_device')
+    def test_prepare_integrates_owner_products_budget_and_lifecycle_pins(self, topology):
         forecast = dict(schema='static-vector-product-retention-forecast-v1',
             sourceCheckpoint=ad.CHECKPOINT, complete=True,
             products={key: 1 for key in ad.RETENTION_PRODUCTS})
@@ -518,8 +565,10 @@ class EnclosureAdmissionTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'ownership drift'):
                 ad.validate(plan)
             inputs.assert_not_called()
+        topology.assert_any_call(self.p, self.volume)
 
-    def test_current_inputs_allows_os_state_change_but_not_hidden_native_or_frozen_state(self):
+    @patch.object(ad, '_require_single_device')
+    def test_current_inputs_allows_os_state_change_but_not_hidden_native_or_frozen_state(self, topology):
         generated = self.p / '.fseventsd'
         generated.mkdir()
         log = generated / 'uuid'
@@ -562,6 +611,7 @@ class EnclosureAdmissionTests(unittest.TestCase):
             retention.write_text('{"changed": true}')
             with self.assertRaisesRegex(ValueError, 'retention proof drift'):
                 ad.current_inputs(plan)
+        topology.assert_any_call(self.p, self.volume)
 
     def test_unmounted_prepare_fails_before_input_probes_or_writes(self):
         self.mounted = False

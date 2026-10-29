@@ -168,6 +168,28 @@ def _owner_json(raw):
     return json.loads(raw, object_pairs_hook=unique, parse_constant=invalid)
 
 
+def _require_single_device(root, device):
+    """Reject unsupported descendant mounts; this is NOT allocation accounting.
+
+    The whole-G observer still charges every device. This quiescent topology
+    check neither replaces it nor proves that a later mount cannot be created.
+    """
+    need(type(device) is int and device > 0, 'exact guest device required')
+    root = er.physical(str(root))
+    before = root.stat()
+    need(stat.S_ISDIR(before.st_mode) and before.st_dev == device, 'owned guest root device')
+    pending = [root]
+    while pending:
+        with os.scandir(pending.pop()) as entries:
+            for entry in entries:
+                state = entry.stat(follow_symlinks=False)
+                need(state.st_dev == device, 'unsupported descendant device')
+                if stat.S_ISDIR(state.st_mode):
+                    pending.append(Path(entry.path))
+    after = root.stat()
+    need((after.st_dev, after.st_ino) == (before.st_dev, before.st_ino), 'guest root changed')
+
+
 def enclosure_state():
     """Recorded setup association plus CURRENT physical pins, not live attestation.
 
@@ -191,6 +213,7 @@ def enclosure_state():
     er.image_state(owner)
     er.tool_state(owner)
     er.mounted_state(owner)
+    _require_single_device(build_root(), owner['mount']['st_dev'])
     er.association(info, owner)
     need(_bounded_owner_file(enclosure_root() / 'owner.json')[1] == owner_file and
          _bounded_owner_file(enclosure_root() / 'ownership-info.plist')[1] == info_file,

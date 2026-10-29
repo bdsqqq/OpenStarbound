@@ -34,7 +34,7 @@ class PolicyTests(unittest.TestCase):
         quoted.mkdir()
         text = policy.profile(str(quoted))
         literal = str(quoted).replace('\\', '\\\\').replace('"', '\\"')
-        self.assertEqual(text, '(version 1)(allow default)(deny file-write*)(allow file-write* (subpath "' + literal + '"))')
+        self.assertEqual(text, '(version 1)(allow default)(deny file-mount file-unmount)(deny file-write*)(allow file-write* (subpath "' + literal + '"))')
         text.encode('utf-8')
 
     def test_noncanonical_controls_alias_and_missing_paths(self):
@@ -63,7 +63,7 @@ class PolicyTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 policy.binding(owner, self.tool)
         self.assertFalse(policy.same(bound, dict(bound, version=True)))
-        self.assertFalse(policy.same(bound, dict(bound, version=1.0)))
+        self.assertFalse(policy.same(bound, dict(bound, version=float(policy.VERSION))))
 
     def test_single_wrapper_and_invalid_commands(self):
         mount = str(self.mount)
