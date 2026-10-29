@@ -45,6 +45,9 @@ def unique_object(pairs):
 
 
 def read(path):
+    path = Path(path)
+    if path in ad.controller_outputs():
+        need(path.stat().st_size <= ad.controller_limit(path), 'controller JSON exceeds byte limit')
     identity(path)
     value = json.loads(Path(path).read_text(), object_pairs_hook=unique_object)
     need(type(value) is dict, 'JSON object required')
@@ -258,7 +261,8 @@ def validate_game_origin(executable: Path, proof: dict) -> dict:
         proofs[role] = read(bp.sidecar(root / role / 'bin/starbound'))
     admission = records[side.name]['admission']
     bound(admission, Path(admission['path']))
-    need(Path(admission['path']).is_relative_to(root) and admission['sha256'] == completion['admissionSha256'] and
+    need(Path(admission['path']) == root / 'current30-admission/plan.json' and
+         admission['sha256'] == completion['admissionSha256'] and
          all(record['admission'] == admission for record in records.values()), 'common admission pin inside G')
     plan = read(admission['path'])
     ad.static_plan(plan)  # No current-age gate: only original receipt clock matters.

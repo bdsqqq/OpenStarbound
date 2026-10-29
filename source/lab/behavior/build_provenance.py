@@ -250,11 +250,13 @@ def _check_sources(recorded: dict, root: Path) -> None:
         raise ProvenanceError(f"build inputs differ: added={added}, deleted={deleted}, changed={changed}")
 
 
-def seal(binary: Path, snapshot: dict, source_root: Path | None = None) -> dict:
+def seal(binary: Path, snapshot: dict, source_root: Path | None = None, *, write=None) -> dict:
     """Seal only AFTER a successful build; seal itself does not run the builder.
 
     build_dir=None supports isolated fake-client tests and is labeled in the
     receipt. Production builder always supplies its actual CMake directory.
+    `write` lets bounded callers control publication without replacing the shared
+    writer globally; None preserves legacy callers and their exact output bytes.
     """
     binary = Path(binary).resolve()
     root = Path(source_root or SOURCE_ROOT).resolve()
@@ -272,7 +274,7 @@ def seal(binary: Path, snapshot: dict, source_root: Path | None = None) -> dict:
             _check_configured(snapshot, build_dir, _build_identity(build_dir))
         proof = {**snapshot, "binary": str(binary), "binary_sha256": binary_hash,
                  "build_identity": identity, "limitations": LIMITATIONS}
-        _write(sidecar(binary), proof)
+        (_write if write is None else write)(sidecar(binary), proof)
         return proof
     except (OSError, KeyError, TypeError) as exc:
         raise ProvenanceError(f"cannot seal build: {exc}") from exc

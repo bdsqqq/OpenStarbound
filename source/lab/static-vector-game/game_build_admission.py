@@ -66,7 +66,7 @@ def controller_outputs(root=None):
                 continue
             for suffix in ('.command.json', '.receipt.json'):
                 result[side / (phase + suffix)] = 256 * 1024
-        for name in ('inputs-before.json', 'complete-tool-admission.json',
+        for name in ('build-inputs.json', 'inputs-before.json', 'complete-tool-admission.json',
                      'dependencies.json', 'static-vector-build.json'):
             result[side / name] = 64 * mib
         if role == 'candidate':
@@ -90,6 +90,19 @@ def controller_output_bound():
 
 def dump(path, value):
     return bounded.write_json(path, value, controller_limit(path))
+
+
+def write_common(path, value, expected=None):
+    """Opt-in common-provenance publication at the two known role paths."""
+    path = Path(path)
+    need(path in {build_root() / role / name for role in profiles()
+                  for name in ('build-inputs.json', 'bin/starbound.behavior-build.json')},
+         'exact common provenance output required')
+    limit = controller_limit(path)
+    if expected is not None:
+        need(type(expected['size']) is int and 0 <= expected['size'] <= limit,
+             'existing common proof exceeds contract')
+    return bounded.write_json(path, value, limit, replace_expected=expected)
 
 
 def supplement_sidecar(path, value, expected):

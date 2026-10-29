@@ -61,7 +61,7 @@ def phase_command(plan, role, phase):
     if phase in ('configure', 'cargo', 'compile'):
         return ad.commands(plan, role)[{'configure': 'configure', 'cargo': 'cargo', 'compile': 'build'}[phase]]
     action = phase.removeprefix('provenance-')
-    argv = [plan['python'], str(ROOT / 'source/lab/behavior/build_provenance.py'), action, '--source-root', str(ROOT)]
+    argv = [plan['python'], str(ROOT / 'source/lab/static-vector-game/provenance.py'), action, '--source-root', str(ROOT)]
     if action == 'begin':
         argv += ['--build-dir', str(side / 'cmake')]
     if action != 'verify':

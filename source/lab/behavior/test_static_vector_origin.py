@@ -15,6 +15,16 @@ G = origin.ad.build_root()
 
 
 class ReaderTests(unittest.TestCase):
+    def test_controller_json_size_rejected_before_hashing(self):
+        with tempfile.TemporaryDirectory(dir=G) as temp:
+            root = Path(temp)
+            path = root / 'completion.json'
+            path.write_bytes(b' ' * (64 * 1024 + 1))
+            with patch.object(origin.ad, 'build_root', return_value=root), \
+                 patch.object(origin, 'identity', side_effect=AssertionError('must not hash oversize input')):
+                with self.assertRaisesRegex(ValueError, 'JSON exceeds byte limit'):
+                    origin.read(path)
+
     def fixture(self, root, role='candidate'):
         start = dt.datetime(2026, 10, 29, 10, 27, tzinfo=dt.timezone.utc)
         python = str(Path(sys.executable).resolve(strict=True))

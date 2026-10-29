@@ -25258,6 +25258,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector-game/provenance.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/static-vector-game/test_bounded_outputs.py",
       "rule": "laboratories"
     },
@@ -25299,6 +25309,16 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/static-vector-game/test_physical_link_map.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector-game/test_provenance.py",
       "rule": "laboratories"
     },
     {
@@ -31608,7 +31628,7 @@
     },
     {
       "path": "scripts/test_build_static_vector_behavior_lab.py",
-      "sha256": "684fcfe19daa619aba18993819de1a0575bf23bfb8d311be23fb81f89de73d9e"
+      "sha256": "46f9af2442285a85b349ddb3746e25db745783b2563816595418441bb3db32cb"
     },
     {
       "path": "scripts/test_cleanup_migration_artifacts.py",
@@ -36052,7 +36072,7 @@
     },
     {
       "path": "source/lab/behavior/build_provenance.py",
-      "sha256": "c400ea1a47aa9a5d2b6ee2512996056beb26046da2c391dd2b030df82ed21924"
+      "sha256": "b5d4f79fab43b03113da9bb8ab0226fb35e3883f54a83e333e5a1566c25f3013"
     },
     {
       "path": "source/lab/behavior/byte_array_proof.py",
@@ -36160,7 +36180,7 @@
     },
     {
       "path": "source/lab/behavior/static_vector_origin.py",
-      "sha256": "f71679971040525093042ee677a56c15ee449bf0e61124060eb7ecd58ba9d028"
+      "sha256": "92e325284e88e9298f3c6b26641cf8dafc56be93e56f40914d3935f9f7147ea4"
     },
     {
       "path": "source/lab/behavior/static_vector_proof.py",
@@ -36200,7 +36220,7 @@
     },
     {
       "path": "source/lab/behavior/test_build_provenance.py",
-      "sha256": "d2dd6be2f4d06909cd9ce64e917d50a572964599e34808e5f15fc10e9e1ab09e"
+      "sha256": "a4ca500b54c9cabc223375e23f73631bdfdc51301bfd82bfb672ecb5bf2dbe61"
     },
     {
       "path": "source/lab/behavior/test_byte_array_proof.py",
@@ -36292,7 +36312,7 @@
     },
     {
       "path": "source/lab/behavior/test_static_vector_origin.py",
-      "sha256": "9cdabd38d0471d6dac7c2ee4bcfccea5ab10474730b1b6148afc8d6f64ca0108"
+      "sha256": "16406baa9ab8486bf81bdb5911ee9575b5742e8abcece2f76cb9e04279071438"
     },
     {
       "path": "source/lab/behavior/test_static_vector_proof.py",
@@ -37904,7 +37924,7 @@
     },
     {
       "path": "source/lab/static-vector-game/game_build_admission.py",
-      "sha256": "c9006b6c32ea0aa2bddde4c304b230601291daf49b30a62032ac0acda47793cb"
+      "sha256": "f4123a05f2e9bd0cfb0317488c3d06e0fabd6163b28243e2f6d282dd4c1b68d5"
     },
     {
       "path": "source/lab/static-vector-game/game_origin.py",
@@ -37913,6 +37933,10 @@
     {
       "path": "source/lab/static-vector-game/physical_link_map.py",
       "sha256": "316e113aa0ac3c7adbee55d56ca38525a2ef6fdbfeb9be64821f93793322603e"
+    },
+    {
+      "path": "source/lab/static-vector-game/provenance.py",
+      "sha256": "3ce7fced8a498a9a4bbac48bb5837188ca36f2227366aaca2abdd530fa53f669"
     },
     {
       "path": "source/lab/static-vector-game/test_bounded_outputs.py",
@@ -37924,7 +37948,7 @@
     },
     {
       "path": "source/lab/static-vector-game/test_game_build_admission.py",
-      "sha256": "4087afaa1eeafc425c6c88640edad0cdadcb8b78e72ec3b29f118a32aa223f6d"
+      "sha256": "c6b07d305d13785b63d9662c314693c3229b2849de7e8cc0fa4d5851f14c5479"
     },
     {
       "path": "source/lab/static-vector-game/test_game_origin.py",
@@ -37933,6 +37957,10 @@
     {
       "path": "source/lab/static-vector-game/test_physical_link_map.py",
       "sha256": "1b167a0549fe5d82cd2ae33dc062ec4395cb790cea7307ece0d7070fe0897c06"
+    },
+    {
+      "path": "source/lab/static-vector-game/test_provenance.py",
+      "sha256": "b69ed2c4162092b1529627f01780ab0ed3a540638b2054c89dab66ec3392301e"
     },
     {
       "path": "source/lab/static-vector-game/test_source.py",
@@ -39789,7 +39817,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 678,
+      "oracle/harness": 680,
       "retain-tooling": 35,
       "retained-third-party": 296,
       "rust-candidate": 30,
@@ -39830,14 +39858,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 50,
-      "validation.oracles-harness": 707,
+      "validation.oracles-harness": 709,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2177,
+    "files": 2179,
     "modules": 39,
-    "no_direct_target": 1071
+    "no_direct_target": 1073
   }
 }

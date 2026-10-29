@@ -1,8 +1,10 @@
 """Isolated stale-build negative controls; no native game build or launch."""
+import contextlib
+import io
 import json
 from pathlib import Path
 import subprocess
-import sys
+from types import SimpleNamespace
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -38,6 +40,20 @@ class BuildProvenanceTests(unittest.TestCase):
         self.assertEqual(proof, self.verify())
         self.assertEqual(proof, json.loads(provenance.sidecar(self.binary).read_text()))
         self.assertIn("not a reproducible-build proof", proof["limitations"])
+
+    def test_default_seal_retains_exact_legacy_bytes(self):
+        proof = self.seal()
+        expected = (json.dumps(proof, indent=2, sort_keys=True) + '\n').encode()
+        self.assertEqual(provenance.sidecar(self.binary).read_bytes(), expected)
+
+    def test_injected_seal_writer_never_calls_legacy_writer(self):
+        snapshot = provenance.begin(self.root)
+        calls = []
+        with patch.object(provenance, '_write', side_effect=AssertionError('legacy writer bypass')):
+            proof = provenance.seal(self.binary, snapshot, self.root,
+                                    write=lambda path, value: calls.append((path, value)))
+        self.assertEqual(calls, [(provenance.sidecar(self.binary.resolve()), proof)])
+        self.assertFalse(provenance.sidecar(self.binary).exists())
 
     def test_missing_proof_fails(self):
         with self.assertRaises(provenance.ProvenanceError):
@@ -99,16 +115,20 @@ class BuildProvenanceTests(unittest.TestCase):
         cache = self.put("build/cmake/CMakeCache.txt", f"CMAKE_CXX_COMPILER:FILEPATH={compiler}\nSTAR_USE_RUST_LIGHTING:BOOL=ON\n")
         self.put("build/cmake/compile_commands.json", json.dumps([
             {"file": str(self.cpp), "directory": str(cache.parent)}]))
-        proof = self.seal(cache.parent)
-        self.assertEqual(proof["build_identity"]["tools"]["CMAKE_CXX_COMPILER"]["version"], "fixture-compiler-1")
-        compiler.write_text("#!/bin/sh\necho fixture-compiler-2\n")
-        with self.assertRaisesRegex(provenance.ProvenanceError, "identity differs"):
+        # tool execution belongs to host integration, not these source fixtures.
+        with patch.object(provenance.subprocess, 'run', return_value=subprocess.CompletedProcess(
+                [str(compiler), '--version'], 0, 'fixture-compiler-1\n', '')) as probe:
+            proof = self.seal(cache.parent)
+            self.assertEqual(proof["build_identity"]["tools"]["CMAKE_CXX_COMPILER"]["version"], "fixture-compiler-1")
+            self.assertEqual(probe.call_args.args[0], [str(compiler), '--version'])
+            compiler.write_text("#!/bin/sh\necho fixture-compiler-2\n")
+            with self.assertRaisesRegex(provenance.ProvenanceError, "identity differs"):
+                self.verify()
+            compiler.write_text("#!/bin/sh\necho fixture-compiler-1\n")
             self.verify()
-        compiler.write_text("#!/bin/sh\necho fixture-compiler-1\n")
-        self.verify()
-        cache.write_text(cache.read_text() + "CMAKE_CXX_FLAGS:STRING=-ffast-math\n")
-        with self.assertRaisesRegex(provenance.ProvenanceError, "identity differs"):
-            self.verify()
+            cache.write_text(cache.read_text() + "CMAKE_CXX_FLAGS:STRING=-ffast-math\n")
+            with self.assertRaisesRegex(provenance.ProvenanceError, "identity differs"):
+                self.verify()
 
     def test_added_symlink_directory_fails_closed(self):
         self.seal()
@@ -189,31 +209,39 @@ class BuildProvenanceTests(unittest.TestCase):
         with self.assertRaises(provenance.ProvenanceError):
             self.verify()
 
+    def cli(self, args, *, check=True):
+        out, err = io.StringIO(), io.StringIO()
+        code = 0
+        with patch('sys.argv', ['build_provenance.py', *args]), contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            try:
+                provenance.main()
+            except SystemExit as exc:
+                code = exc.code
+        if check:
+            self.assertEqual(code, 0, err.getvalue())
+        return SimpleNamespace(returncode=code, stdout=out.getvalue(), stderr=err.getvalue())
+
     def test_cli_configured_phase_binds_generated_sources(self):
         build, generated = self.cmake_inputs()
-        script = Path(provenance.__file__).resolve()
         snapshot = self.root / "build/inputs.json"
-        base = [sys.executable, str(script)]
         common = ["--source-root", str(self.root)]
-        subprocess.run(base + ["begin", "--build-dir", str(build), "--snapshot", str(snapshot)] + common, check=True, capture_output=True)
-        subprocess.run(base + ["configured", "--snapshot", str(snapshot)] + common, check=True, capture_output=True)
-        subprocess.run(base + ["seal", "--snapshot", str(snapshot), "--binary", str(self.binary)] + common, check=True, capture_output=True)
-        subprocess.run(base + ["verify", "--binary", str(self.binary)] + common, check=True, capture_output=True)
+        self.cli(["begin", "--build-dir", str(build), "--snapshot", str(snapshot)] + common)
+        self.cli(["configured", "--snapshot", str(snapshot)] + common)
+        self.cli(["seal", "--snapshot", str(snapshot), "--binary", str(self.binary)] + common)
+        self.cli(["verify", "--binary", str(self.binary)] + common)
         generated.write_text("changed after seal")
-        failed = subprocess.run(base + ["verify", "--binary", str(self.binary)] + common, capture_output=True, text=True)
+        failed = self.cli(["verify", "--binary", str(self.binary)] + common, check=False)
         self.assertNotEqual(failed.returncode, 0)
         self.assertIn("compilation source inputs differ", failed.stderr)
 
     def test_cli_phases_and_failure_status(self):
-        script = Path(provenance.__file__).resolve()
         snapshot = self.root / "build/inputs.json"
-        base = [sys.executable, str(script)]
         common = ["--source-root", str(self.root)]
-        subprocess.run(base + ["begin", "--snapshot", str(snapshot)] + common, check=True, capture_output=True)
-        subprocess.run(base + ["seal", "--snapshot", str(snapshot), "--binary", str(self.binary)] + common, check=True, capture_output=True)
-        subprocess.run(base + ["verify", "--binary", str(self.binary)] + common, check=True, capture_output=True)
+        self.cli(["begin", "--snapshot", str(snapshot)] + common)
+        self.cli(["seal", "--snapshot", str(snapshot), "--binary", str(self.binary)] + common)
+        self.cli(["verify", "--binary", str(self.binary)] + common)
         self.cpp.write_text("stale")
-        failed = subprocess.run(base + ["verify", "--binary", str(self.binary)] + common, capture_output=True, text=True)
+        failed = self.cli(["verify", "--binary", str(self.binary)] + common, check=False)
         self.assertNotEqual(failed.returncode, 0)
         self.assertIn("build inputs differ", failed.stderr)
 

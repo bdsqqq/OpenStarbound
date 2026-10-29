@@ -148,6 +148,16 @@ def capture_fixture(stdout=(b'',), stderr=(b'',), returncode=0):
 
 
 class CaptureTests(unittest.TestCase):
+    def test_all_common_provenance_commands_use_bounded_wrapper(self):
+        plan = dict(buildRoot=str(G), python=TOOL, sdk='/SDK', tools={'CMAKE_EXECUTABLE': '/cmake'})
+        for role in ('reference', 'candidate'):
+            for phase in builder.phases(role):
+                if phase.startswith('provenance-'):
+                    with self.subTest(role=role, phase=phase):
+                        command = builder.phase_command(plan, role, phase)
+                        self.assertEqual(command[:3], [TOOL, str(builder.ROOT / 'source/lab/static-vector-game/provenance.py'), phase.removeprefix('provenance-')])
+                        self.assertNotIn(str(builder.ROOT / 'source/lab/behavior/build_provenance.py'), command)
+
     def test_undeclared_output_rejected_before_files_or_launch(self):
         with tempfile.TemporaryDirectory(dir=G) as temp:
             output = Path(temp) / 'compile'

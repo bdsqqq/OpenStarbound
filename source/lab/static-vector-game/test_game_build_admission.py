@@ -18,11 +18,11 @@ G = ad.build_root()
 class AdmissionTests(unittest.TestCase):
     def test_finite_controller_destinations_and_logical_bound(self):
         outputs = ad.controller_outputs()
-        self.assertEqual(len(outputs), 41)
+        self.assertEqual(len(outputs), 43)
         self.assertTrue(all(type(v) is int and v > 0 for v in outputs.values()))
         self.assertEqual(ad.controller_output_bound(), 2 * sum(outputs.values()))
         self.assertNotIn(G / 'reference/cargo.command.json', outputs)
-        for path in (G / 'unknown.json', G / 'reference/build-inputs.json',
+        for path in (G / 'unknown.json', G / 'reference/build-inputs-unbounded.json',
                      G / 'another-attempt/plan.json', G / 'candidate/configure-extra.receipt.json'):
             with self.subTest(path=path), self.assertRaises(ValueError):
                 ad.controller_limit(path)
