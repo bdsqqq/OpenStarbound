@@ -383,6 +383,18 @@ class EnclosureAdmissionTests(unittest.TestCase):
         replacement.replace(owner_file)
         self.assertNotEqual(ad.enclosure_state()['ownerFile'], before)
 
+    def test_uncommitted_failed_or_releasing_setup_cannot_admit(self):
+        # A valid owner file can survive a later setup/release failure. Physical
+        # ownership alone must not turn that partial attempt into a new lease.
+        for name in ('.setup-in-progress', 'setup-failure.json', 'release-evidence'):
+            path = self.e / name
+            path.write_bytes(b'bounded failed/in-progress evidence')
+            try:
+                with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'setup.*terminal|setup.*committed'):
+                    ad.enclosure_state()
+            finally:
+                path.unlink()
+
     def test_unmounted_or_mutated_physical_owner_fails(self):
         self.mounted = False
         with self.assertRaises(ad.er.ReleaseError):

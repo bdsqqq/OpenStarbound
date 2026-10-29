@@ -173,6 +173,11 @@ def enclosure_state():
     No mutable backing bytes are hashed. Recorded device info cannot detect a
     reverted intervening mount; future native checks still recheck all pins.
     """
+    def committed():
+        need(not any(os.path.lexists(enclosure_root() / name) for name in
+                     ('.setup-in-progress', 'setup-failure.json', 'release-evidence')),
+             'setup must be committed and nonterminal')
+    committed()
     raw, owner_file = _bounded_owner_file(enclosure_root() / 'owner.json')
     info, info_file = _bounded_owner_file(enclosure_root() / 'ownership-info.plist')
     owner = _owner_json(raw)
@@ -189,6 +194,7 @@ def enclosure_state():
     need(_bounded_owner_file(enclosure_root() / 'owner.json')[1] == owner_file and
          _bounded_owner_file(enclosure_root() / 'ownership-info.plist')[1] == info_file,
          'ownership files changed')
+    committed()
     return dict(owner=owner, ownerFile=owner_file, infoFile=info_file)
 
 
