@@ -21,6 +21,7 @@ def load(name, path):
 
 
 base = load('_sv_code_primitives', LAB / 'id-map-production/game_origin.py')
+tls = load('_sv_tls_data_origin', Path(__file__).with_name('tls_data_origin.py'))
 generic = base._generic
 MachO = generic.MachO
 archive_identity = generic._archive
@@ -41,15 +42,21 @@ def strict_compare(obj, image, name):
     """Retain exact generic code checks AND bind direct page data destinations.
 
     The generic primitive normalizes PAGE immediates. That alone does not prove
-    data origin. TLVP descriptor pointer/fixup origin is deliberately UNAVAILABLE
-    until a dedicated physical dyld-binding reader exists; never waive it here.
+    data origin. TLVP needs the independent descriptor/template/fixup witness;
+    unsupported forms (including weak/coalesced providers) still fail closed.
     """
     result = base.strict_compare(obj, image, name)
     original, linked = obj.function(name), image.function(name)
+    tls_origins = []
     for reloc in obj.relocations(original):
         typ = reloc['type']
         if typ in (8, 9):
-            raise ValueError('UNAVAILABLE_TLVP_DATA_ORIGIN: descriptor pointer/fixup binding is not implemented; generic instruction normalization is insufficient')
+            try:
+                proof = tls.attest_tlvp(obj, image, original, linked, reloc)
+            except ValueError as exc:
+                raise ValueError('UNAVAILABLE_TLVP_DATA_ORIGIN: ' + str(exc)) from exc
+            tls_origins.append(dict(instruction_offset=reloc['offset'], relocation_type=typ, proof=proof))
+            continue
         if typ not in (3, 4):
             continue
         need(reloc['external'] == 1, 'direct page data target required')
@@ -73,6 +80,7 @@ def strict_compare(obj, image, name):
                 need(word & 0x04000000 == 0, 'vector page load requires a separate exact encoding contract')
                 actual = immediate << ((word >> 30) & 3)
             need(actual == target & 0xfff, 'linked PAGEOFF12 actual data target differs')
+    result['tls_data_origins'] = tls_origins
     return result
 
 

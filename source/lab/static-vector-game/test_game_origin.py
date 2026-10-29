@@ -47,9 +47,23 @@ class CodeTests(unittest.TestCase):
                 return dict(start=0, code=struct.pack('<I', 0x90000000))
             def relocations(self, function):
                 return [dict(type=8, offset=0)]
-        with patch.object(code.base, 'strict_compare', return_value={'normalized': 'matches'}):
+        with patch.object(code.base, 'strict_compare', return_value={'normalized': 'matches'}), \
+             patch.object(code.tls, 'attest_tlvp', side_effect=ValueError('unsupported physical origin')):
             with self.assertRaisesRegex(ValueError, 'UNAVAILABLE_TLVP_DATA_ORIGIN'):
                 code.strict_compare(Object(), Object(), b'_function')
+
+    def test_real_byte_tls_bridge_and_modified_data_rejected(self):
+        from test_tls_data_origin import fixture, DATA
+        obj = code.MachO(bytes(fixture()))
+        image = code.MachO(bytes(fixture(True)))
+        result = code.strict_compare(obj, image, b'_entry')
+        self.assertEqual(len(result['tls_data_origins']), 2)
+        self.assertEqual({p['relocation_type'] for p in result['tls_data_origins']}, {8, 9})
+        self.assertEqual(result['tls_data_origins'][0]['proof']['bootstrap_fixup']['ordinal'], 1)
+        changed = fixture(True)
+        changed[DATA] ^= 1
+        with self.assertRaisesRegex(ValueError, 'UNAVAILABLE_TLVP_DATA_ORIGIN.*initial bytes'):
+            code.strict_compare(obj, code.MachO(bytes(changed)), b'_entry')
 
     def test_page_target_origin_not_just_masked_instruction(self):
         class Object:

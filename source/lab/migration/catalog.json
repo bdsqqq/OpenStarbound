@@ -25248,6 +25248,46 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector-game/test_tls_chained_fixups.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector-game/test_tls_data_origin.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector-game/tls_chained_fixups.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector-game/tls_data_origin.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/static-vector-production/test_source.py",
       "rule": "laboratories"
     },
@@ -37782,7 +37822,7 @@
     },
     {
       "path": "source/lab/static-vector-game/game_origin.py",
-      "sha256": "64147810ea0577114628ed2f6a2e0f984c2918c87c06724950071f8ff510919e"
+      "sha256": "8c89b2486801fac464d5fa500f7b4e59ddf5ff8deadc3f38a79cae7b817362d6"
     },
     {
       "path": "source/lab/static-vector-game/test_configuration.py",
@@ -37794,11 +37834,27 @@
     },
     {
       "path": "source/lab/static-vector-game/test_game_origin.py",
-      "sha256": "a2501a2d9c8cc1f6cff54d7167ef7914b31324a2bea2ef09856606f0dae8ba27"
+      "sha256": "f4640e65f7b75932b77a31c4a16af6a744c8f123b7bc965800b1a61e5ed141c4"
     },
     {
       "path": "source/lab/static-vector-game/test_source.py",
       "sha256": "a907c50dc96088302d084cb4658bbe62e305277864dbb37609b0c78691579a57"
+    },
+    {
+      "path": "source/lab/static-vector-game/test_tls_chained_fixups.py",
+      "sha256": "4f0d734c1c26255092ea99c1ac9b8ffddeffac0e259ff38e5aa22ef306fc1a1c"
+    },
+    {
+      "path": "source/lab/static-vector-game/test_tls_data_origin.py",
+      "sha256": "c4048e58e138fc79805b8e6e65bf2da3e4dd03cfcf116b0545929aa2cf6c954b"
+    },
+    {
+      "path": "source/lab/static-vector-game/tls_chained_fixups.py",
+      "sha256": "45d95123b3ec5574768f16216136d557deadad96c608b98680f654d72def69c3"
+    },
+    {
+      "path": "source/lab/static-vector-game/tls_data_origin.py",
+      "sha256": "67206774ca2fd5005006522bb7518b8a84412a10038f738bfd4f21f771bd4966"
     },
     {
       "path": "source/lab/static-vector-production/test_source.py",
@@ -39635,7 +39691,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 670,
+      "oracle/harness": 674,
       "retain-tooling": 32,
       "retained-third-party": 296,
       "rust-candidate": 30,
@@ -39676,14 +39732,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 47,
-      "validation.oracles-harness": 699,
+      "validation.oracles-harness": 703,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2166,
+    "files": 2170,
     "modules": 39,
-    "no_direct_target": 1060
+    "no_direct_target": 1064
   }
 }

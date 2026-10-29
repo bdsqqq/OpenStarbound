@@ -19,12 +19,15 @@ objects/libraries, Cargo products and admission/capture evidence (including
 archive overhead). a four-binary-only forecast is rejected. coverage checks are
 not evidence that future costs have been measured.
 
-the current emitted-code reader **fails closed on TLS descriptor pointer/fixup
-provenance**, even when generic normalized instructions match. duplicate-named
-link-map archive members also block qualification. no complete positive
-whole-origin fixture or actual current game pair has passed. these are pending
-proof mechanisms, not waived origins or permission to build with inadequate
-retention capacity.
+the emitted-code reader now requires a separate descriptor/template/loader-fixup
+witness for TLS, in addition to normalized instruction identity. narrow classic
+bindings and fully enumerated format6 chained fixups have physical byte tests;
+weak/coalesced TLS data providers and duplicate-named physical archive link-map
+members still fail closed. a historical IdMap member/image byte relation passed
+this lower-level reader; it does not renew historical source/tool/SDK admission.
+no complete positive whole-origin fixture or actual current game pair has passed.
+these are pending proof mechanisms, not waived origins or permission to build
+with inadequate retention capacity.
 
 ## why this seam
 
