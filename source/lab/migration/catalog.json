@@ -25008,6 +25008,36 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector-frames/StaticVector.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector-frames/frame.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector-frames/guards.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/static-vector/StarStaticVector.original.hpp",
       "rule": "laboratories"
     },
@@ -37455,6 +37485,18 @@
       "sha256": "8274488d9f61578b1cf0e75029af6523a39c11b302703b8a0666bf59e44af890"
     },
     {
+      "path": "source/lab/static-vector-frames/StaticVector.hpp",
+      "sha256": "0711532172a000447340ba6f1afe8b954eca7d10aa0bf42e17d6a6378ba1024d"
+    },
+    {
+      "path": "source/lab/static-vector-frames/frame.hpp",
+      "sha256": "44ab391179b113f5aa3223fcdf21573eab11c8a93142f27c2d4ee4a7a1eebbbc"
+    },
+    {
+      "path": "source/lab/static-vector-frames/guards.cpp",
+      "sha256": "3375dd148b76cc45ae58f36c573e9b668b059e559ad916f5fd449aee26582fbd"
+    },
+    {
       "path": "source/lab/static-vector/StarStaticVector.original.hpp",
       "sha256": "dafbafd5bc45329bab5da1fc02a360bc7c3e8e62323e77e61b496f4a2d0f5832"
     },
@@ -39285,7 +39327,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 648,
+      "oracle/harness": 651,
       "retain-tooling": 31,
       "retained-third-party": 296,
       "rust-candidate": 30,
@@ -39326,14 +39368,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 46,
-      "validation.oracles-harness": 677,
+      "validation.oracles-harness": 680,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2141,
+    "files": 2144,
     "modules": 39,
-    "no_direct_target": 1035
+    "no_direct_target": 1038
   }
 }
