@@ -54,6 +54,7 @@
     {"id":"rust-id-map-abi","module":"foundation.collections","disposition":"ffi-adapter","pattern":"source/core/StarRustIdMap\\.h"},
     {"id":"rust-static-vector-abi","module":"foundation.collections","disposition":"ffi-adapter","pattern":"source/core/StarRustStaticVector\\.h"},
     {"id":"rust-static-vector-host","module":"foundation.collections","disposition":"ffi-adapter","pattern":"source/core/StarStaticVectorHost\\.hpp"},
+    {"id":"static-vector-tile-observer","module":"foundation.collections","disposition":"ffi-adapter","pattern":"source/core/StarTileSectorArrayObserver\\.hpp"},
     {"id":"rust-static-vector","module":"foundation.collections","disposition":"rust-candidate","pattern":"source/rust/ffi/src/static_vector\\.rs"},
     {"id":"rust-id-map","module":"foundation.collections","disposition":"rust-candidate","pattern":"source/rust/ffi/src/id_map\\.rs"},
     {"id":"rust-lru-cache-abi","module":"foundation.storage","disposition":"ffi-adapter","pattern":"source/core/StarRustLruCache\\.h"},

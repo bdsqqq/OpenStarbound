@@ -1,0 +1,301 @@
+#!/usr/bin/env python3
+"""source contracts only; before bytes are DATA, never compiler inputs."""
+import hashlib
+from pathlib import Path
+import re
+import unittest
+
+ROOT = Path(__file__).resolve().parents[3]
+BEFORE = ROOT / 'build/static-vector-game-source-r1/before'
+CLIENT = 'source/client/StarClientApplication.cpp'
+WORLD = 'source/game/StarWorldClient.cpp'
+TILE = 'source/game/StarTileSectorArray.hpp'
+LAB = 'source/application/StarBehaviorLab.hpp'
+OBSERVER = 'source/core/StarTileSectorArrayObserver.hpp'
+SCENE = 'source/lab/behavior/static_vector_scene.hpp'
+BEFORE_HASHES = {
+    CLIENT: 'ba3d8d1e23e0376d8d6022ea9ab665415e12ca3648991d7a96d8e9e729913029',
+    WORLD: 'b8785564b6caa5536243902c775bda4c11e099fdb89509975fad3b45394696df',
+    TILE: '91b9ac00b0791da5e20f481dfd2fcc467c5537eeec6ea14495dbae90fb56acf6',
+    LAB: 'fcb8d23877c5e64fb2d1d02b6168df9a610bfcd94ce675f2c70ce650ca41c0d3',
+}
+PROTECTED = {
+    'source/client/StarClientApplication.hpp': '388ed37e6450b0208f709fcec823ce04054f39e4898e6d23ae3ed6836dc75784',
+    'source/CMakeLists.txt': 'c90560247c829ba19183cdd26ca88eb3d2f067daade3d2c1d17dfb7411ef42d0',
+    'source/core/StarStaticVector.hpp': '21539d9cebc66e22ba78b501235da25ee26c8bd44dcedd619a362c01c78b36f7',
+    'source/core/StarStaticVectorHost.hpp': '44ab391179b113f5aa3223fcdf21573eab11c8a93142f27c2d4ee4a7a1eebbbc',
+    'source/core/StarRustStaticVector.h': 'e6ed5a1ed2986ec908879cebcb6c190c581a483074c65e3c3fbf4b4b461b41f4',
+    'source/rust/ffi/src/static_vector.rs': '80f15789cb41f398c5da7d6de66421ce1a7203a2ca352824cfeaebb39c92cc4d',
+    'source/lab/behavior/behavior_lab.py': 'f59670736610be310b6b591b78cc7e4ade2e3c9bfb20b9ba5b6b53eabc05fe32',
+    'source/lab/behavior/test_native_scenario_contract.py': '67c8df97ee69a4d6f79c8b8afa934f83192fb5e25f9b09270447397d40653391',
+}
+
+def replace(text, old, new='', count=1):
+    assert text.count(old) == count, ('unexpected source multiplicity', old)
+    return text.replace(old, new)
+
+
+def project_client(text):
+    """remove the named seam, projecting all old branches back to before DATA."""
+    for include in ['#include <functional>\n', '#include <thread>\n', '#include "StarTileSectorArrayObserver.hpp"\n',
+                    '#include "../lab/behavior/static_vector_scene.hpp"\n']:
+        text = replace(text, include)
+    cleanup = ('  if (BehaviorLab::staticVectorScene())\n'
+               '    BehaviorLab::restoreStaticVectorScene(m_universeServer.get(), m_universeClient ? m_universeClient->worldClient().get() : nullptr, false);\n')
+    for operation in ('update', 'render'):
+        guarded = ('catch (...) {\n  try {\n' + ''.join('  ' + line + '\n' for line in cleanup.splitlines())
+                   + '  } catch (...) {\n    // Diagnostic cleanup must not replace the original ' + operation + ' failure.\n'
+                   + '  }\n  throw;\n}\n\n')
+        text = replace(text, guarded)
+    text = replace(text, cleanup)
+    text = replace(text, '    ' + cleanup.replace('\n    ', '\n        '))
+    text = replace(text, 'void ClientApplication::update() try {', 'void ClientApplication::update() {')
+    text = replace(text, 'void ClientApplication::render() try {', 'void ClientApplication::render() {')
+    text = replace(text, '''      {
+        TileSectorArrayObserver::Frame frame(BehaviorLab::staticVectorScene(),
+            m_behaviorReady && !BehaviorLab::hasPendingFrame());
+        worldClient->render(m_renderData, TilePainter::BorderTileSize);
+      }
+      if (BehaviorLab::staticVectorScene() && m_behaviorReady
+          && !BehaviorLab::hasPendingFrame() && !m_renderData.isFullbright)
+        BehaviorLab::prepareStaticVectorFrame(m_renderData, m_behaviorStage, worldClient.get(), m_behaviorMaterial);''',
+        '      worldClient->render(m_renderData, TilePainter::BorderTileSize);')
+    text = replace(text, '      if (BehaviorLab::staticVectorScene()) BehaviorLab::staticVectorPainterSubmitted();\n')
+    text = replace(text, ' && scenario != "static-vector-room"')
+    text = replace(text, '''  bool const staticVector = BehaviorLab::staticVectorScene();
+  auto fixtureX = [staticVector](int x) { return staticVector ? pmod(x - 64, 128) : x; };
+''')
+    text = replace(text, 'staticVector ? "behavior-static-vector-room" : ')
+    text = replace(text, '''      if (staticVector) {
+        server->generateRegion(RectI(0, 0, 40, 66));
+        server->generateRegion(RectI(96, 0, 128, 66));
+      } else {
+        server->generateRegion(RectI(6, 0, 90, 66));
+      }''', '      server->generateRegion(RectI(6, 0, 90, 66));')
+    text = replace(text, 'fixtureX(x)', 'x', 3)
+    text = replace(text, 'fixtureX(52)', '52')
+    text = replace(text, 'fixtureX(40)', '40')
+    text = replace(text, 'fixtureX(64)', '64')
+    text = replace(text, '      if (staticVector) BehaviorLab::restoreStaticVectorScene(m_universeServer.get(), world.get(), true);\n')
+    text = replace(text, 'staticVector ? "static-vector-room" : ')
+    text = replace(text, '    if (staticVector) staticVectorSceneState().owned = true;\n')
+    text = replace(text, ' && !staticVector', '', 2)
+    text = replace(text, '        int column = staticVector ? (x == 62 ? 126 : 2) : x;\n')
+    text = replace(text, '      int column = staticVector ? (x == 62 ? 126 : 2) : x;\n')
+    text = replace(text, 'Vec2I(column, y)', 'Vec2I(x, y)', 2)
+    text = replace(text, '''        && (!staticVector || (world->material(Vec2I(24, 48), TileLayer::Foreground) == m_behaviorMaterial
+            && world->material(Vec2I(116, 48), TileLayer::Background) == m_behaviorMaterial))
+''')
+    text = replace(text, '''  if (BehaviorLab::staticVectorScene() && !BehaviorLab::staticVectorFramePrepared(m_behaviorStage))
+    return;
+''')
+    text = replace(text, '''  if (BehaviorLab::staticVectorScene() && lamp->position() != Vec2F(116, 33))
+    throw StarException("BehaviorLab: StaticVector lamp replicated at unexpected position");
+''')
+    text = replace(text, '''  if (BehaviorLab::staticVectorScene()) {
+    metadata = metadata.set("staticVectorProof", BehaviorLab::staticVectorProof());
+    metadata = metadata.set("scenario", "static-vector-room");
+    metadata = metadata.set("changedTileMin", JsonArray{2, 33}).set("changedTileMax", JsonArray{126, 59});
+    metadata = metadata.set("changedColumns", JsonArray{126, 2});
+    auto observed = world->material(Vec2I(126, 48), TileLayer::Foreground);
+    metadata = metadata.set("observedOccluderMaterial", observed);
+    metadata = metadata.set("worldState", metadata.get("worldState").set("observedOccluderMaterial", observed));
+    BehaviorLab::staticVectorQueued(m_behaviorCapture);
+  }
+''')
+    text = replace(text, '''m_worldPainter->setCameraPosition(m_universeClient->worldClient()->geometry(),
+        BehaviorLab::staticVectorScene() ? Vec2F(0, 48) : Vec2F(64, 48));''',
+        'm_worldPainter->setCameraPosition(m_universeClient->worldClient()->geometry(), Vec2F(64, 48));')
+    return text
+
+
+def off_projection(text):
+    """only the observer's single-feature #ifdef grammar, not a C++ parser."""
+    stack = []
+    result = []
+    for line in text.splitlines():
+        if line == '#ifdef STAR_USE_RUST_STATIC_VECTOR':
+            stack.append(False)
+        elif line == '#else':
+            assert stack
+            stack[-1] = not stack[-1]
+        elif line == '#endif':
+            assert stack
+            stack.pop()
+        elif all(stack):
+            result.append(line)
+    assert not stack
+    return '\n'.join(result)
+
+
+def validate(files, before):
+    tile = replace(files[TILE], '#include "StarTileSectorArrayObserver.hpp"\n')
+    tile = replace(tile, '    TileSectorArrayObserver::observe(this, split.rect, split.xOffset);\n')
+    tile = replace(tile, '  TileSectorArrayObserver::Split splitProbe(this);\n')
+    assert tile == before[TILE], 'original TileSectorArray changed (including collection layout/returns)'
+    world = replace(files[WORLD], '#include "StarTileSectorArrayObserver.hpp"\n')
+    world = replace(world, '  {\n  TileSectorArrayObserver::Callsite tileProbe(m_tileArray.get(), m_geometry.size(), window, tileRange, bufferTiles);\n')
+    world = replace(world, '      renderTile.liquidLevel = floatToByte(clientTile.liquid.level);\n    });\n  }',
+                    '      renderTile.liquidLevel = floatToByte(clientTile.liquid.level);\n    });')
+    assert world == before[WORLD], 'original WorldClient statements changed'
+    assert project_client(files[CLIENT]) == before[CLIENT], 'old scene source projection differs'
+    lab = replace(files[LAB], 'class WorldClient;\nclass UniverseServer;\n')
+    lab = replace(lab, '''
+  static bool staticVectorScene();
+  static bool staticVectorFramePrepared(unsigned stage);
+  static void prepareStaticVectorFrame(WorldRenderData& renderData, unsigned stage, WorldClient* world, unsigned material);
+  static void staticVectorPainterSubmitted();
+  static Json staticVectorProof();
+  static void staticVectorQueued(String const& name);
+  static void restoreStaticVectorScene(UniverseServer* server, WorldClient* world, bool complete);
+''', '\n')
+    assert lab == before[LAB], 'existing lab declarations changed'
+    observer = files[OBSERVER]
+    off = off_projection(observer)
+    assert 'sb_static_vector_count' not in off and 'StarRustStaticVector.h' not in off
+    assert 'out[mode][stage] = 0;' in off
+    assert 'inline thread_local State* armed = nullptr;' in observer
+    assert '~Frame() noexcept { if (observing) disarm(); }' in observer
+    assert 'inline void disarm() noexcept { armed = nullptr; state.callsiteActive = false; }' in observer
+    assert 'armed->callsiteActive && armed->array == array' in observer
+    assert 'std::array<std::array<uint64_t, 2>, 26>' in observer
+    assert 'std::is_trivial<State>::value && std::is_standard_layout<State>::value' in observer
+    assert 'snapshot(probe->before)' in observer and 'snapshot(probe->after)' in observer
+    for guard in ('Frame', 'Callsite', 'Split'):
+        assert guard + '(' + guard + ' const&) = delete;' in observer
+        assert guard + '& operator=(' + guard + ' const&) = delete;' in observer
+    assert not re.search(r'\b(StaticList|StaticVector|Json|String|vector|malloc|new|Logger)\b', observer)
+    scene = files[SCENE]
+    for field in ['frameSequence', 'scopeId', 'identityNotParity', 'thread', 'route', 'worldSize', 'clientWindow',
+                  'tileRange', 'bufferTiles', 'callsiteCalls', 'splitCalls', 'returnedRects', 'splits', 'xOffset', 'stage',
+                  'countersBefore', 'countersAfter', 'samples', 'worldForeground', 'worldBackground',
+                  'renderedForeground', 'renderedBackground', 'painterSubmitted', 'configuration', 'backend', 'selector']:
+        assert '"' + field + '"' in scene, field
+    for contract in ['scene.preparedSequence == TileSectorArrayObserver::state.frameSequence',
+                     'scene.queuedSequence == scene.preparedSequence', 'frameCaptured(scene.queuedName)',
+                     'TileSectorArrayObserver::disarm();', 'scene.stage == 2',
+                     'bool const wasDisarmed = !TileSectorArrayObserver::armed;',
+                     'lruRequire(wasDisarmed && world',
+                     'if (!complete)\n            writer.setForegroundMaterial',
+                     'scene.painterSubmitted = false;', 'scene.painterSubmitted = true;',
+                     '&& scene.painterSubmitted && !scene.proof.isNull()',
+                     'scene.stage = int(stage);', 'int(stage) == scene.stage + 1',
+                     'observed.callsiteCalls == 1', 'observed.splitCalls == 1', 'observed.returnedRects == 2',
+                     'pmod(range[0], 128) + width > 128', 'width > 0 && width < 128',
+                     'for (auto mode : {0u, 13u, 19u})', '(mode == 0 ? 1u : 2u)',
+                     'observed.after[mode][1] == observed.before[mode][1]',
+                     'strf("{:016x}", value)', 'data.geometry.pdiff(x, data.tileMinPosition[0])',
+                     'data.tiles(index[0], index[1])', 'index[0] < int(data.tiles.size(0))',
+                     'for (int x : {126, 2})', 'DungeonGeneratorWorld writer(authority, false)',
+                     'authority->material(Vec2I(x, y), TileLayer::Foreground) == EmptyMaterialId',
+                     'world->material(Vec2I(x, y), TileLayer::Foreground) == EmptyMaterialId',
+                     '"static-vector-restoration.json"', '{"complete", true}']:
+        assert contract in scene, contract
+    assert scene.count('for (int x : {126, 2})') == 3
+    assert not re.search(r'\b(StaticList|StaticVector)\s*<', scene), 'no proxy collection'
+    assert 'if (!staticVectorFramePrepared' not in scene, 'must refresh every latest ready render'
+    assert files[CLIENT].index('m_worldPainter->render(m_renderData') < files[CLIENT].index('BehaviorLab::staticVectorPainterSubmitted();')
+
+
+class SourceContract(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.files = {p: (ROOT / p).read_text() for p in [CLIENT, WORLD, TILE, LAB, OBSERVER, SCENE]}
+        cls.before = {}
+        for path, digest in BEFORE_HASHES.items():
+            raw = (BEFORE / (Path(path).name + '.data')).read_bytes()
+            assert hashlib.sha256(raw).hexdigest() == digest, 'before DATA identity'
+            cls.before[path] = raw.decode()
+
+    def test_source_contract(self):
+        validate(self.files, self.before)
+
+    def test_before_manifest_identity(self):
+        self.assertEqual(hashlib.sha256((BEFORE.parent / 'before.json').read_bytes()).hexdigest(),
+                         '31f3321d144eab0aa467b1accacac99173508378e89f5b1ec95cf9ac3b47f9ae')
+
+    def test_protected_bytes(self):
+        for path, digest in PROTECTED.items():
+            self.assertEqual(hashlib.sha256((ROOT / path).read_bytes()).hexdigest(), digest, path)
+
+    def test_all_rust_inputs_unchanged(self):
+        paths = sorted(p for p in (ROOT / 'source/rust').rglob('*') if p.is_file()
+                       and (p.suffix == '.rs' or p.name in ('Cargo.toml', 'Cargo.lock'))
+                       and 'target' not in p.parts)
+        digest = hashlib.sha256()
+        for path in paths:
+            digest.update(path.relative_to(ROOT).as_posix().encode() + b'\0' + hashlib.sha256(path.read_bytes()).digest())
+        self.assertEqual(len(paths), 36)
+        self.assertEqual(digest.hexdigest(), '22420f69b5e77de166075262c415b51a949d1021e244d61f3a0640c61c8d2dd3')
+
+    def rejects(self, path, old, new):
+        validate(self.files, self.before)
+        mutated = dict(self.files)
+        self.assertIn(old, mutated[path])
+        mutated[path] = mutated[path].replace(old, new, 1)
+        with self.assertRaises(AssertionError):
+            validate(mutated, self.before)
+
+    def test_bad_original_return(self):
+        self.rejects(TILE, 'return {SplitRect{rect, xOffset}};', 'return {SplitRect{rect, 0}};')
+
+    def test_bad_collection_field(self):
+        self.rejects(TILE, 'class TileSectorArray {', 'class TileSectorArray {\n  int observerField;')
+
+    def test_bad_world_statement(self):
+        self.rejects(WORLD, 'renderTile.foreground = clientTile.foreground;', 'renderTile.foreground = 0;')
+
+    def test_bad_old_camera(self):
+        self.rejects(CLIENT, 'Vec2F(0, 48) : Vec2F(64, 48)', 'Vec2F(0, 48) : Vec2F(63, 48)')
+
+    def test_bad_unguarded_count(self):
+        self.rejects(OBSERVER, 'out[mode][stage] = 0;', 'out[mode][stage] = sb_static_vector_count(mode, stage);')
+
+    def test_bad_wrong_array_scope(self):
+        self.rejects(OBSERVER, 'armed->callsiteActive && armed->array == array', 'armed->callsiteActive')
+
+    def test_bad_missing_owned_cleanup(self):
+        self.rejects(CLIENT, '    if (staticVector) staticVectorSceneState().owned = true;\n', '')
+
+    def test_bad_missing_authoritative_absence_check(self):
+        self.rejects(SCENE, 'authority->material(Vec2I(x, y), TileLayer::Foreground) == EmptyMaterialId', 'true')
+
+    def test_bad_missing_frame_disarm(self):
+        self.rejects(OBSERVER, '~Frame() noexcept { if (observing) disarm(); }', '~Frame() noexcept {}')
+
+    def test_bad_missing_shutdown_cleanup(self):
+        self.rejects(CLIENT, 'void ClientApplication::shutdown() {\n  if (BehaviorLab::staticVectorScene())',
+                     'void ClientApplication::shutdown() {\n  if (false)')
+
+    def test_bad_missing_restoration_disarm(self):
+        self.rejects(SCENE, '  TileSectorArrayObserver::disarm();', '')
+
+    def test_bad_stale_frame(self):
+        self.rejects(SCENE, 'scene.preparedSequence == TileSectorArrayObserver::state.frameSequence', 'true')
+
+    def test_bad_fake_tiles(self):
+        self.rejects(SCENE, 'data.tiles(index[0], index[1])', 'fakeTiles(index[0], index[1])')
+
+    def test_bad_completion_repairs_instead_of_verifying(self):
+        self.rejects(SCENE, 'if (!complete)\n            writer.setForegroundMaterial',
+                     'if (true)\n            writer.setForegroundMaterial')
+
+    def test_bad_missing_ack(self):
+        self.rejects(SCENE, 'frameCaptured(scene.queuedName)', 'true')
+
+    def test_bad_range_copy_threshold(self):
+        self.rejects(SCENE, 'for (auto mode : {0u, 13u, 19u})', 'for (auto mode : {0u, 3u, 19u})')
+
+    def test_bad_cleanup_can_mask_original_failure(self):
+        self.rejects(CLIENT, '    // Diagnostic cleanup must not replace the original update failure.\n  }',
+                     '    // Diagnostic cleanup must not replace the original update failure.\n    throw;\n  }')
+
+    def test_bad_copyable_scope(self):
+        self.rejects(OBSERVER, '  Split(Split const&) = delete;\n', '')
+
+    def test_bad_missing_post_painter_association(self):
+        self.rejects(CLIENT, '      if (BehaviorLab::staticVectorScene()) BehaviorLab::staticVectorPainterSubmitted();\n', '')
+
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)

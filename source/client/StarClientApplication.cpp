@@ -4,7 +4,10 @@
 #include "StarRustShell.h"
 #endif
 #include <cmath>
+#include <functional>
+#include <thread>
 #include "StarBehaviorLab.hpp"
+#include "StarTileSectorArrayObserver.hpp"
 #include "StarTextProcessLab.hpp"
 #include "StarStringViewLab.hpp"
 #include "StarAssetPath.hpp"
@@ -261,6 +264,8 @@ void ClientApplication::startup(StringList const& cmdLineArgs) {
 }
 
 void ClientApplication::shutdown() {
+  if (BehaviorLab::staticVectorScene())
+    BehaviorLab::restoreStaticVectorScene(m_universeServer.get(), m_universeClient ? m_universeClient->worldClient().get() : nullptr, false);
   if (BehaviorLab::idMapScene()) BehaviorLab::restoreIdMapStatus();
   // Clear HTTP trust request callback
   LuaBindings::clearHttpTrustRequestCallback();
@@ -470,13 +475,15 @@ void ClientApplication::processInput(InputEvent const& event) {
   m_input->handleInput(event, processed);
 }
 
-void ClientApplication::update() {
+void ClientApplication::update() try {
   float dt = GlobalTimestep * GlobalTimescale;
   auto& app = appController();
   if (BehaviorLab::enabled()) {
     auto maxFrames = BehaviorLab::configuration().getUInt("maxFrames", 1800);
     if (++m_behaviorFrames > maxFrames) {
       Logger::error("BehaviorLab: scenario timed out at phase {} stage {}", m_behaviorPhase, m_behaviorStage);
+      if (BehaviorLab::staticVectorScene())
+        BehaviorLab::restoreStaticVectorScene(m_universeServer.get(), m_universeClient ? m_universeClient->worldClient().get() : nullptr, false);
       app->quit();
       return;
     }
@@ -536,7 +543,17 @@ void ClientApplication::update() {
   ++m_framesSkipped;
 }
 
-void ClientApplication::render() {
+catch (...) {
+  try {
+    if (BehaviorLab::staticVectorScene())
+      BehaviorLab::restoreStaticVectorScene(m_universeServer.get(), m_universeClient ? m_universeClient->worldClient().get() : nullptr, false);
+  } catch (...) {
+    // Diagnostic cleanup must not replace the original update failure.
+  }
+  throw;
+}
+
+void ClientApplication::render() try {
   m_framesSkipped = 0;
   auto config = m_root->configuration();
   auto assets = m_root->assets();
@@ -566,7 +583,14 @@ void ClientApplication::render() {
       auto totalStart = Time::monotonicMicroseconds();
       renderer->switchEffectConfig("world");
       auto clientStart = totalStart;
-      worldClient->render(m_renderData, TilePainter::BorderTileSize);
+      {
+        TileSectorArrayObserver::Frame frame(BehaviorLab::staticVectorScene(),
+            m_behaviorReady && !BehaviorLab::hasPendingFrame());
+        worldClient->render(m_renderData, TilePainter::BorderTileSize);
+      }
+      if (BehaviorLab::staticVectorScene() && m_behaviorReady
+          && !BehaviorLab::hasPendingFrame() && !m_renderData.isFullbright)
+        BehaviorLab::prepareStaticVectorFrame(m_renderData, m_behaviorStage, worldClient.get(), m_behaviorMaterial);
       LogMap::set("client_render_world_client", strf(u8"{:05d}\u00b5s", Time::monotonicMicroseconds() - clientStart));
 
       if (BehaviorLab::enabled() && m_behaviorRaycastRoom)
@@ -634,6 +658,7 @@ void ClientApplication::render() {
         m_behaviorLightingCompleted = worldClient->waitForLighting(&m_renderData);
         return m_behaviorLightingCompleted;
       });
+      if (BehaviorLab::staticVectorScene()) BehaviorLab::staticVectorPainterSubmitted();
       LogMap::set("client_render_world_painter", strf(u8"{:05d}\u00b5s", Time::monotonicMicroseconds() - paintStart));
       LogMap::set("client_render_world_total", strf(u8"{:05d}\u00b5s", Time::monotonicMicroseconds() - totalStart));
       
@@ -719,6 +744,16 @@ void ClientApplication::render() {
 
   if (!m_errorScreen->accepted())
     m_errorScreen->render();
+}
+
+catch (...) {
+  try {
+    if (BehaviorLab::staticVectorScene())
+      BehaviorLab::restoreStaticVectorScene(m_universeServer.get(), m_universeClient ? m_universeClient->worldClient().get() : nullptr, false);
+  } catch (...) {
+    // Diagnostic cleanup must not replace the original render failure.
+  }
+  throw;
 }
 
 void ClientApplication::getAudioData(int16_t* sampleData, size_t frameCount) {
@@ -1838,6 +1873,7 @@ Json BehaviorLab::weightedPoolProof() {
 }
 
 #include "../lab/behavior/id_map_scene.hpp"
+#include "../lab/behavior/static_vector_scene.hpp"
 
 void ClientApplication::validateBehaviorStorage() {
   auto const& config = BehaviorLab::configuration();
@@ -1847,7 +1883,7 @@ void ClientApplication::validateBehaviorStorage() {
       && scenario != "unicode-room" && scenario != "shell-room" && scenario != "jsonpath-room" && scenario != "assetpath-room"
       && scenario != "random-room" && scenario != "jsonpatch-room" && scenario != "text-room"
       && scenario != "compression-room" && scenario != "zstd-room" && scenario != "option-parser-room"
-      && scenario != "host-address-room" && scenario != "datastream-room" && scenario != "buffer-room" && scenario != "stringview-room" && scenario != "path-embed-room" && scenario != "lru-room" && scenario != "ttl-room" && scenario != "weighted-pool-room" && scenario != "id-map-room")
+      && scenario != "host-address-room" && scenario != "datastream-room" && scenario != "buffer-room" && scenario != "stringview-room" && scenario != "path-embed-room" && scenario != "lru-room" && scenario != "ttl-room" && scenario != "weighted-pool-room" && scenario != "id-map-room" && scenario != "static-vector-room")
     throw StarException("BehaviorLab: unsupported scenario");
   m_behaviorRaycastRoom = scenario == "raycast-room";
   m_behaviorEncodingRoom = scenario == "encoding-room";
@@ -1894,7 +1930,9 @@ void ClientApplication::updateBehaviorScenario() {
     return;
   world->setAsyncLighting(false);
   world->setFullBright(false);
-  CustomWorldId fixtureId(m_behaviorRaycastRoom ? "behavior-raycast-room" : "behavior-lighting-room");
+  bool const staticVector = BehaviorLab::staticVectorScene();
+  auto fixtureX = [staticVector](int x) { return staticVector ? pmod(x - 64, 128) : x; };
+  CustomWorldId fixtureId(staticVector ? "behavior-static-vector-room" : m_behaviorRaycastRoom ? "behavior-raycast-room" : "behavior-lighting-room");
   if (m_behaviorPhase == 0) {
     // The blank-world constructor normally chooses a random seed. Round-trip
     // its ordinary persisted template to freeze that input.
@@ -1929,16 +1967,21 @@ void ClientApplication::updateBehaviorScenario() {
     m_universeServer->executeForClient(world->connection(), [&](WorldServer* server, PlayerPtr) {
       if (server->worldId() != printWorldId(fixtureId))
         return;
-      server->generateRegion(RectI(6, 0, 90, 66));
+      if (staticVector) {
+        server->generateRegion(RectI(0, 0, 40, 66));
+        server->generateRegion(RectI(96, 0, 128, 66));
+      } else {
+        server->generateRegion(RectI(6, 0, 90, 66));
+      }
       m_behaviorMaterial = m_root->materialDatabase()->materialId("smoothmetal");
       // Use the same authoritative tile writer as dungeon generation. Normal
       // player placement requires adjacent terrain and cannot seed an empty world.
       DungeonGeneratorWorld writer(server, false);
       for (int x = 40; x <= 88; ++x) {
         for (int y = 32; y <= 64; ++y) {
-          writer.setBackgroundMaterial(Vec2I(x, y), m_behaviorMaterial, 0, DefaultMaterialColorVariant);
+          writer.setBackgroundMaterial(Vec2I(fixtureX(x), y), m_behaviorMaterial, 0, DefaultMaterialColorVariant);
           if (x == 40 || x == 88 || y == 32 || y == 64)
-            writer.setForegroundMaterial(Vec2I(x, y), m_behaviorMaterial, 0, DefaultMaterialColorVariant);
+            writer.setForegroundMaterial(Vec2I(fixtureX(x), y), m_behaviorMaterial, 0, DefaultMaterialColorVariant);
         }
       }
       for (int x = 8; x <= 18; ++x)
@@ -1948,7 +1991,7 @@ void ClientApplication::updateBehaviorScenario() {
         // Both ray columns start empty, including where the platform crosses 70.
         if (m_behaviorRaycastRoom && x == 70)
           continue;
-        writer.setForegroundMaterial(Vec2I(x, 40), m_behaviorMaterial, 0, DefaultMaterialColorVariant);
+        writer.setForegroundMaterial(Vec2I(fixtureX(x), 40), m_behaviorMaterial, 0, DefaultMaterialColorVariant);
       }
       server->setSpawningEnabled(false);
 
@@ -1968,7 +2011,7 @@ void ClientApplication::updateBehaviorScenario() {
         if (orientation->frames != 1 || !orientation->particleEmitters.empty())
           throw StarException("BehaviorLab: constant-light fixture has animation or particles");
       }
-      auto lamp = objects->createForPlacement(server, name, Vec2I(52, 33), Direction::Right);
+      auto lamp = objects->createForPlacement(server, name, Vec2I(fixtureX(52), 33), Direction::Right);
       if (!lamp)
         throw StarException("BehaviorLab: constant-light fixture cannot anchor at (52,33)");
       server->addEntity(lamp);
@@ -1989,14 +2032,16 @@ void ClientApplication::updateBehaviorScenario() {
     if (!BehaviorLab::frameCaptured(m_behaviorCapture))
       return;
     if (m_behaviorStage == 2) {
+      if (staticVector) BehaviorLab::restoreStaticVectorScene(m_universeServer.get(), world.get(), true);
       if (BehaviorLab::idMapScene()) BehaviorLab::restoreIdMapStatus();
       Logger::info("BehaviorLab: {} completed (three acknowledged world frames)",
-          BehaviorLab::idMapScene() ? "id-map-room" : BehaviorLab::weightedPoolScene() ? "weighted-pool-room" : BehaviorLab::ttlScene() ? "ttl-room" : m_behaviorLruRoom ? "lru-room" : m_behaviorPathEmbedRoom ? "path-embed-room" : m_behaviorStringViewRoom ? "stringview-room" : m_behaviorBufferRoom ? "buffer-room" : m_behaviorDataStreamRoom ? "datastream-room" : m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
+          staticVector ? "static-vector-room" : BehaviorLab::idMapScene() ? "id-map-room" : BehaviorLab::weightedPoolScene() ? "weighted-pool-room" : BehaviorLab::ttlScene() ? "ttl-room" : m_behaviorLruRoom ? "lru-room" : m_behaviorPathEmbedRoom ? "path-embed-room" : m_behaviorStringViewRoom ? "stringview-room" : m_behaviorBufferRoom ? "buffer-room" : m_behaviorDataStreamRoom ? "datastream-room" : m_behaviorHostAddressRoom ? "host-address-room" : m_behaviorOptionParserRoom ? "option-parser-room" : m_behaviorZstdRoom ? "zstd-room" : m_behaviorCompressionRoom ? "compression-room" : m_behaviorTextScanRoom ? "text-room" : m_behaviorJsonPatchRoom ? "jsonpatch-room" : m_behaviorRandomMwcRoom ? "random-room" : m_behaviorAssetPathRoom ? "assetpath-room" : m_behaviorJsonPathRoom ? "jsonpath-room" : m_behaviorShellRoom ? "shell-room" : m_behaviorUnicodeRoom ? "unicode-room" : m_behaviorBytesRoom ? "bytes-room" : m_behaviorVlqRoom ? "vlq-room" : m_behaviorSha256Room ? "sha256-room" : m_behaviorEncodingRoom ? "encoding-room" : m_behaviorRaycastRoom ? "raycast-room" : "lighting-room");
       m_behaviorPhase = 5;
       appController()->quit();
       return;
     }
     ++m_behaviorStage;
+    if (staticVector) staticVectorSceneState().owned = true;
     auto material = m_behaviorStage == 1 ? m_behaviorMaterial : EmptyMaterialId;
     bool changed = false;
     m_universeServer->executeForClient(world->connection(), [&](WorldServer* server, PlayerPtr) {
@@ -2004,10 +2049,11 @@ void ClientApplication::updateBehaviorScenario() {
         return;
       DungeonGeneratorWorld writer(server, false);
       for (int x : {62, 70}) {
-        if (x == 70 && !m_behaviorRaycastRoom)
+        if (x == 70 && !m_behaviorRaycastRoom && !staticVector)
           continue;
+        int column = staticVector ? (x == 62 ? 126 : 2) : x;
         for (int y = 33; y <= 59; ++y)
-          writer.setForegroundMaterial(Vec2I(x, y), material, 0, DefaultMaterialColorVariant);
+          writer.setForegroundMaterial(Vec2I(column, y), material, 0, DefaultMaterialColorVariant);
       }
       changed = true;
     });
@@ -2018,15 +2064,18 @@ void ClientApplication::updateBehaviorScenario() {
   }
 
   if (m_behaviorPhase == 2) {
-    bool replicated = world->material(Vec2I(40, 48), TileLayer::Foreground) == m_behaviorMaterial
-        && world->material(Vec2I(64, 48), TileLayer::Background) == m_behaviorMaterial
+    bool replicated = world->material(Vec2I(fixtureX(40), 48), TileLayer::Foreground) == m_behaviorMaterial
+        && world->material(Vec2I(fixtureX(64), 48), TileLayer::Background) == m_behaviorMaterial
+        && (!staticVector || (world->material(Vec2I(24, 48), TileLayer::Foreground) == m_behaviorMaterial
+            && world->material(Vec2I(116, 48), TileLayer::Background) == m_behaviorMaterial))
         && world->entity(m_behaviorLightId);
     auto expected = m_behaviorStage == 1 ? m_behaviorMaterial : EmptyMaterialId;
     for (int x : {62, 70}) {
-      if (x == 70 && !m_behaviorRaycastRoom)
+      if (x == 70 && !m_behaviorRaycastRoom && !staticVector)
         continue;
+      int column = staticVector ? (x == 62 ? 126 : 2) : x;
       for (int y = 33; y <= 59; ++y)
-        replicated = replicated && world->material(Vec2I(x, y), TileLayer::Foreground) == expected;
+        replicated = replicated && world->material(Vec2I(column, y), TileLayer::Foreground) == expected;
     }
     if (!replicated) {
       m_behaviorSettledFrames = 0;
@@ -4331,6 +4380,8 @@ void ClientApplication::renderBehaviorScenario() {
     return;
   // A deadline can cross BETWEEN overlay preparation and framebuffer queuing.
   // A second clock read must not authorize capturing the previous phase's proof.
+  if (BehaviorLab::staticVectorScene() && !BehaviorLab::staticVectorFramePrepared(m_behaviorStage))
+    return;
   if (BehaviorLab::idMapScene() && !BehaviorLab::idMapFramePrepared(m_behaviorStage))
     return;
   if (BehaviorLab::weightedPoolScene() && !BehaviorLab::weightedPoolFramePrepared(m_behaviorStage))
@@ -4343,6 +4394,8 @@ void ClientApplication::renderBehaviorScenario() {
   auto lamp = as<Object>(world->entity(m_behaviorLightId));
   if (!lamp || lamp->lightSources().empty())
     return;
+  if (BehaviorLab::staticVectorScene() && lamp->position() != Vec2F(116, 33))
+    throw StarException("BehaviorLab: StaticVector lamp replicated at unexpected position");
   auto light = lamp->lightSources().first();
   bool playerOutsideView = !m_worldPainter->camera().worldTileRect().padded(4).contains(Vec2I::floor(m_player->position()));
   if (!playerOutsideView)
@@ -4527,6 +4580,16 @@ void ClientApplication::renderBehaviorScenario() {
     metadata = metadata.set("weightedPoolProof", BehaviorLab::weightedPoolProof());
   if (BehaviorLab::idMapScene())
     metadata = metadata.set("idMapProof", BehaviorLab::idMapProof());
+  if (BehaviorLab::staticVectorScene()) {
+    metadata = metadata.set("staticVectorProof", BehaviorLab::staticVectorProof());
+    metadata = metadata.set("scenario", "static-vector-room");
+    metadata = metadata.set("changedTileMin", JsonArray{2, 33}).set("changedTileMax", JsonArray{126, 59});
+    metadata = metadata.set("changedColumns", JsonArray{126, 2});
+    auto observed = world->material(Vec2I(126, 48), TileLayer::Foreground);
+    metadata = metadata.set("observedOccluderMaterial", observed);
+    metadata = metadata.set("worldState", metadata.get("worldState").set("observedOccluderMaterial", observed));
+    BehaviorLab::staticVectorQueued(m_behaviorCapture);
+  }
   BehaviorLab::queueFrame(m_behaviorCapture, std::move(metadata));
   m_behaviorReady = false;
   m_behaviorPhase = 4;
@@ -4540,7 +4603,8 @@ void ClientApplication::updateCamera(float dt) {
   camera.update(dt);
   if (BehaviorLab::enabled() && m_behaviorPhase >= 1) {
     camera.setPixelRatio(2.0f);
-    m_worldPainter->setCameraPosition(m_universeClient->worldClient()->geometry(), Vec2F(64, 48));
+    m_worldPainter->setCameraPosition(m_universeClient->worldClient()->geometry(),
+        BehaviorLab::staticVectorScene() ? Vec2F(0, 48) : Vec2F(64, 48));
     m_universeClient->worldClient()->setClientWindow(camera.worldTileRect());
     return;
   }

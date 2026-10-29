@@ -1,4 +1,5 @@
 #include "StarWorldClient.hpp"
+#include "StarTileSectorArrayObserver.hpp"
 #include "StarAssets.hpp"
 #include "StarIterator.hpp"
 #include "StarLogging.hpp"
@@ -685,6 +686,8 @@ void WorldClient::render(WorldRenderData& renderData, unsigned bufferTiles) {
       return a->entityId() < b->entityId();
     });
 
+  {
+  TileSectorArrayObserver::Callsite tileProbe(m_tileArray.get(), m_geometry.size(), window, tileRange, bufferTiles);
   m_tileArray->tileEachTo(renderData.tiles, tileRange, [&](RenderTile& renderTile, Vec2I const&, ClientTile const& clientTile) {
       renderTile.foreground = clientTile.foreground;
       renderTile.foregroundMod = clientTile.foregroundMod;
@@ -707,6 +710,7 @@ void WorldClient::render(WorldRenderData& renderData, unsigned bufferTiles) {
       renderTile.liquidId = clientTile.liquid.liquid;
       renderTile.liquidLevel = floatToByte(clientTile.liquid.level);
     });
+  }
 
   for (auto& pair : m_predictedTiles) {
     Vec2I tileArrayPos(m_geometry.pdiff(pair.first[0], renderData.tileMinPosition[0]), pair.first[1] - renderData.tileMinPosition[1]);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "StarRect.hpp"
+#include "StarTileSectorArrayObserver.hpp"
 #include "StarSectorArray2D.hpp"
 
 #include "StarWorkerPool.hpp"
@@ -340,6 +341,7 @@ void TileSectorArray<Tile, SectorSize>::tileEachTo(MultiArray& results, RectI co
   results.setSize(Vec2S(region.size()));
 
   for (auto const& split : splitRect(region)) {
+    TileSectorArrayObserver::observe(this, split.rect, split.xOffset);
     auto clampedRect = yClampRect(split.rect);
     if (!clampedRect.isEmpty()) {
       m_tileSectors.evalColumnsParallel(clampedRect.xMin(), clampedRect.yMin(), clampedRect.width(), clampedRect.height(), [&, function](size_t x, size_t y, Tile const* column, size_t columnSize) {
@@ -471,6 +473,7 @@ bool TileSectorArray<Tile, SectorSize>::tileEachAbortable(RectI const& region, F
 
 template <typename Tile, unsigned SectorSize>
 auto TileSectorArray<Tile, SectorSize>::splitRect(RectI rect) const -> StaticList<SplitRect, 2> {
+  TileSectorArrayObserver::Split splitProbe(this);
   // TODO: Offset here does not support rects outside of -m_worldSize[0] to 2 * m_worldSize[0]!
   starAssert(rect.xMin() >= -(int)m_worldSize[0] && rect.xMax() <= 2 * (int)m_worldSize[0]);
 

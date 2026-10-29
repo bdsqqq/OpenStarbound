@@ -7,6 +7,8 @@ namespace Star {
 
 struct WorldRenderData;
 class GuiContext;
+class WorldClient;
+class UniverseServer;
 STAR_CLASS(Player);
 
 // Test-only process opt-in. No filesystem reads/capture/work in ordinary runs.
@@ -43,6 +45,13 @@ public:
   static void renderIdMapLabel(GuiContext& gui);
   static Json idMapProof();
   static void restoreIdMapStatus();
+  static bool staticVectorScene();
+  static bool staticVectorFramePrepared(unsigned stage);
+  static void prepareStaticVectorFrame(WorldRenderData& renderData, unsigned stage, WorldClient* world, unsigned material);
+  static void staticVectorPainterSubmitted();
+  static Json staticVectorProof();
+  static void staticVectorQueued(String const& name);
+  static void restoreStaticVectorScene(UniverseServer* server, WorldClient* world, bool complete);
 };
 
 }
