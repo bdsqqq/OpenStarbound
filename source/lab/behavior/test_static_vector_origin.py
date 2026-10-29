@@ -32,6 +32,17 @@ class ReaderTests(unittest.TestCase):
         plan = dict(buildRoot=str(root), sdk='/SDK', python=python, tools={'CMAKE_EXECUTABLE': '/cmake'},
                     createdUTC=start.isoformat(), witness={'files': {python: origin.ad.sha(python),
                         helper['path']: helper['sha256']}, 'aliases': {python: python}})
+        # Synthetic owner/tool pins; the reader still independently derives the
+        # exact wrapper, without invoking ownership tools or Native processes.
+        owner = dict(root=str(root.parent), mount=dict(path=str(root), st_dev=123),
+                     device='/dev/disk41', volumeDevice='/dev/disk41s1')
+        plan['enclosure'] = dict(owner=owner)
+        plan['nativeSandbox'] = origin.builder.ad.policy.binding(owner,
+            dict(path=origin.builder.ad.policy.TOOL, sha256='a' * 64, size=123))
+        for patcher in (patch.object(origin.builder.ad, 'build_root', return_value=root),
+                        patch.object(origin.builder.ad, 'enclosure_root', return_value=root.parent)):
+            patcher.start()
+            self.addCleanup(patcher.stop)
         side = root / role
         side.mkdir()
         env = origin.builder.environment(plan, role)
@@ -225,6 +236,34 @@ class ReaderTests(unittest.TestCase):
                 with patch.object(origin, 'identity', side_effect=bounded_identity):
                     with self.assertRaises(ValueError):
                         origin.phase_bindings(plan, 'reference', record)
+
+    def test_rebound_raw_or_different_sandbox_receipts_fail_expected_phase_argv(self):
+        for attack in ('raw', 'tool', 'profile', 'double'):
+            with self.subTest(attack=attack), tempfile.TemporaryDirectory(dir=G) as temp:
+                root = Path(temp)
+                plan, record = self.fixture(root, 'reference')
+                side = root / 'reference'
+                path = side / 'configure.command.json'
+                command = json.loads(path.read_text())
+                argv = command['argv']
+                if attack == 'raw':
+                    argv = argv[3:]
+                elif attack == 'tool':
+                    argv[0] = '/other/sandbox-exec'
+                elif attack == 'profile':
+                    argv[2] = '(version 1)(allow default)'
+                else:
+                    argv = argv[:3] + argv
+                command['argv'] = argv
+                split = command['launchArgv'].index('--')
+                command['launchArgv'] = command['launchArgv'][:split + 1] + argv
+                path.write_text(json.dumps(command))
+                receipt_path = side / 'configure.receipt.json'
+                receipt = json.loads(receipt_path.read_text())
+                receipt.update(argv=argv, launchArgv=command['launchArgv'], command=origin.identity(path))
+                receipt_path.write_text(json.dumps(receipt))
+                with self.assertRaisesRegex(ValueError, 'phase command'):
+                    origin.phase_bindings(plan, 'reference', record)
 
     def test_known_unsafe_skip_protocol_mutant_accepts_bad_fixture(self):
         with tempfile.TemporaryDirectory(dir=G) as temp:

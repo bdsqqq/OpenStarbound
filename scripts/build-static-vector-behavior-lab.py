@@ -68,7 +68,7 @@ def phase_command(plan, role, phase):
         argv += ['--snapshot', str(side / 'build-inputs.json')]
     if action in ('seal', 'verify'):
         argv += ['--binary', str(side / 'bin/starbound')]
-    return argv
+    return ad.sandbox_command(plan, argv)
 
 
 def remaining(plan):
@@ -134,6 +134,10 @@ def supervise(argv, cwd, env, output, plan):
     for suffix in ('.command.json', '.receipt.json'):
         ad.controller_limit(output.with_suffix(suffix))
     ad.validate(plan)
+    role = output.parent.name
+    ad.need(role in ad.profiles() and output == ad.build_root() / role / phase, 'exact Native phase output')
+    ad.policy.validate_command(plan['buildRoot'], argv)
+    ad.need(ad.policy.same(argv, phase_command(plan, role, phase)), 'exact Native phase command')
     python = Path(sys.executable).resolve(strict=True)
     ad.need(Path(plan.get('python', str(python))).resolve(strict=True) == python, 'guardian trusted Python mismatch')
     _supervise_command(argv, cwd, env, output, limits=limits,

@@ -20,6 +20,14 @@ TOOLS = {'CMAKE_C_COMPILER': TOOL, 'CMAKE_CXX_COMPILER': TOOL}
 fixture = builder.load('_physical_builder_fixture', builder.ROOT / 'source/lab/static-vector-game/test_physical_link_map.py')
 
 
+def native_plan(root):
+    owner = dict(root=str(root.parent), mount=dict(path=str(root), st_dev=123),
+                 device='/dev/disk41', volumeDevice='/dev/disk41s1')
+    return dict(buildRoot=str(root), enclosure=dict(owner=owner),
+                nativeSandbox=builder.ad.policy.binding(owner, dict(path=builder.ad.policy.TOOL, sha256='a' * 64, size=123)),
+                python=TOOL, sdk='/SDK', tools={'CMAKE_EXECUTABLE': '/cmake'}, witness={})
+
+
 @contextmanager
 def dependency_fixture(role='candidate', extra_tus=0, shared_headers=0):
     """Real tiny inputs and raw .d files; no mocked dependency verifier."""
@@ -98,6 +106,10 @@ def capture_fixture(stdout=(b'',), stderr=(b'',), returncode=0):
     with tempfile.TemporaryDirectory(dir=G) as temp:
         output = Path(temp) / 'reference/compile'
         output.parent.mkdir()
+        plan = native_plan(Path(temp))
+        with patch.object(builder.ad, 'build_root', return_value=Path(temp)), \
+             patch.object(builder.ad, 'enclosure_root', return_value=Path(temp).parent):
+            argv = builder.phase_command(plan, 'reference', 'compile')
         streams = {name: Mock() for name in ('stdout', 'stderr')}
         streams['stdout'].fileno.return_value = 11
         streams['stderr'].fileno.return_value = 12
@@ -126,6 +138,7 @@ def capture_fixture(stdout=(b'',), stderr=(b'',), returncode=0):
         # Readiness/FDs are synthetic here. Exercise real bounded publication in
         # admission/writer tests, not through these process-IO monkeypatches.
         with patch.object(builder.ad, 'build_root', return_value=Path(temp)), \
+             patch.object(builder.ad, 'enclosure_root', return_value=Path(temp).parent), \
              patch.object(builder.ad, 'dump', side_effect=builder.ad.primitives.dump), \
              patch.object(builder.ad, 'validate') as validate, \
              patch.object(builder, 'remaining', return_value=10) as clock, \
@@ -143,19 +156,136 @@ def capture_fixture(stdout=(b'',), stderr=(b'',), returncode=0):
                 status_pipe=status_pipe, record=record, close_fd=close_fd,
                 selector=selector, launch=launch, validate=validate,
                 clock=clock, blocking=blocking, kill=kill, limits=limits, events=events,
-                run=lambda: builder.supervise(['/never-executed'], builder.ROOT / 'source', {}, output, {'witness': {}}),
+                argv=argv, plan=plan,
+                run=lambda: builder.supervise(argv, builder.ROOT / 'source', {}, output, plan),
                 receipt=lambda: json.loads(output.with_suffix('.receipt.json').read_text()))
+
+
+class NativeSandboxTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(dir=G)
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name) / 'current30-enclosure/products'
+        self.root.mkdir(parents=True)
+        self.plan = native_plan(self.root)
+        original_open = Path.open
+        def no_capture(path, mode='r', *args, **kwargs):
+            if 'x' in mode or 'w' in mode or 'a' in mode:
+                raise AssertionError('stdio opened')
+            return original_open(path, mode, *args, **kwargs)
+        self.no_capture = no_capture
+        for patcher in (patch.object(builder.ad, 'build_root', return_value=self.root),
+                        patch.object(builder.ad, 'enclosure_root', return_value=self.root.parent),
+                        patch.object(builder.subprocess, 'Popen', side_effect=AssertionError('NO Native launch'))):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def test_all_thirteen_phases_share_exact_profile_and_inner_selectors(self):
+        commands = []
+        for role in ('reference', 'candidate'):
+            for phase in builder.phases(role):
+                argv = builder.phase_command(self.plan, role, phase)
+                commands.append(argv)
+                builder.ad.policy.validate_command(str(self.root), argv)
+                self.assertEqual(argv[:3], [builder.ad.policy.TOOL, '-p', self.plan['nativeSandbox']['profile']])
+                if phase == 'configure':
+                    inner = argv[3:]
+                    for selector, value in builder.ad.profiles()[role].items():
+                        self.assertIn('-D' + selector + '=' + value, inner)
+                    self.assertEqual(len(builder.ad.SELECTORS), 30)
+                    self.assertIn('-DSTAR_USE_RUST_LINE_QUERY=OFF', inner)
+                    self.assertIn('-DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON', inner)
+                    self.assertNotIn('-Dsandbox-exec=', ' '.join(inner))
+                if phase == 'cargo':
+                    self.assertEqual(argv[3:], ['/cmake', '--build', str(self.root / role / 'cmake'),
+                        '--target', 'star_rust_engine_ffi_build', '--parallel', '6', '--', '-d', 'keepdepfile'])
+                if phase.startswith('provenance-'):
+                    self.assertEqual(argv[3], TOOL)
+        self.assertEqual(len(commands), 13)
+
+    def test_native_prefix_rejected_before_stdio_or_process_even_with_old_admission_guard(self):
+        argv = builder.phase_command(self.plan, 'reference', 'compile')
+        output = self.root / 'reference/compile'
+        bad = [argv[3:], [*argv[:3], *argv], ['/other/sandbox-exec', *argv[1:]],
+               [argv[0], '-f', *argv[2:]], [argv[0], '-p', '(version 1)(allow default)', *argv[3:]],
+               [argv[0], '-p', builder.ad.policy.profile(str(self.root.parent)), *argv[3:]],
+               [*argv[:3], '/python', True], [*argv[:3], '/python', 1.0],
+               [*argv[:3], '/python', '\x00'], [*argv[:3], '/wrong-command']]
+        with patch.object(builder.ad, 'validate'), \
+             patch.object(Path, 'open', new=self.no_capture), \
+             patch.object(builder, '_supervise_command') as core:
+            for command in bad:
+                with self.subTest(command=command), self.assertRaises((ValueError, KeyError)):
+                    builder.supervise(command, builder.ROOT / 'source', {}, output, self.plan)
+            core.assert_not_called()
+            # The same admission/core stubs accept the legitimate wrapped phase.
+            builder.supervise(argv, builder.ROOT / 'source', {}, output, self.plan)
+            core.assert_called_once()
+            self.assertEqual(core.call_args.args[0], argv)
+
+    def test_native_binding_missing_numeric_alias_and_tool_profile_drift_prelaunch(self):
+        argv = builder.phase_command(self.plan, 'reference', 'compile')
+        for field, value in [('version', True), ('version', 1.0), ('profile', '(allow default)'),
+                             ('profileSha256', '0' * 64), ('root', str(G))]:
+            plan = dict(self.plan, nativeSandbox=dict(self.plan['nativeSandbox'], **{field: value}))
+            with self.subTest(field=field, value=value), patch.object(builder.ad, 'validate'), \
+                 patch.object(Path, 'open', new=self.no_capture), \
+                 self.assertRaises(ValueError):
+                builder.supervise(argv, builder.ROOT / 'source', {}, self.root / 'reference/compile', plan)
+        for field in ('nativeSandbox', 'enclosure'):
+            plan = dict(self.plan)
+            del plan[field]
+            with patch.object(builder.ad, 'validate'), \
+                 patch.object(Path, 'open', new=self.no_capture), \
+                 self.assertRaises(KeyError):
+                builder.supervise(argv, builder.ROOT / 'source', {}, self.root / 'reference/compile', plan)
+        for root in (str(G), 'products', str(self.root) + '/../products'):
+            with self.subTest(root=root), self.assertRaises(ValueError):
+                builder.ad.sandbox_command(dict(self.plan, buildRoot=root), ['/a'])
+
+    def test_known_unsafe_raw_public_contract_mutant_is_distinguished(self):
+        wrapped = builder.phase_command(self.plan, 'reference', 'compile')
+        raw = wrapped[3:]
+        output = self.root / 'reference/compile'
+        with patch.object(builder.ad, 'validate'), \
+             patch.object(Path, 'open', new=self.no_capture), \
+             patch.object(builder, '_supervise_command') as core:
+            with self.assertRaisesRegex(ValueError, 'sandbox prefix'):
+                builder.supervise(raw, builder.ROOT / 'source', {}, output, self.plan)
+            core.assert_not_called()
+            # Deliberately restore the old raw public-command contract. The
+            # same unsafe argv now reaches the mock core, NEVER a process.
+            with patch.object(builder.ad.policy, 'validate_command'), \
+                 patch.object(builder, 'phase_command', return_value=raw):
+                builder.supervise(raw, builder.ROOT / 'source', {}, output, self.plan)
+            core.assert_called_once()
+            self.assertEqual(core.call_args.args[0], raw)
+
+    def test_current_inputs_rederives_tool_and_typed_binding_before_other_probes(self):
+        for field, value in [('version', True), ('version', 1.0), ('tool', dict(self.plan['nativeSandbox']['tool'], sha256='b' * 64)),
+                             ('mount', dict(path=str(self.root), st_dev=123.0))]:
+            plan = dict(self.plan, nativeSandbox=dict(self.plan['nativeSandbox'], **{field: value}))
+            with patch.object(builder.ad, 'enclosure_state', return_value=plan['enclosure']), \
+                 patch.object(builder.ad.primitives, '_require_pin') as pin, \
+                 patch.object(builder.ad, 'identity', return_value=self.plan['nativeSandbox']['tool']), \
+                 patch.object(builder.ad.config, 'validate_source', side_effect=AssertionError('later source probe')), \
+                 self.assertRaisesRegex(ValueError, 'sandbox current binding drift'):
+                builder.ad.current_inputs(plan)
+            pin.assert_called_once_with(plan['witness'], builder.ad.policy.TOOL, 'Native sandbox tool')
 
 
 class CaptureTests(unittest.TestCase):
     def test_all_common_provenance_commands_use_bounded_wrapper(self):
-        plan = dict(buildRoot=str(G), python=TOOL, sdk='/SDK', tools={'CMAKE_EXECUTABLE': '/cmake'})
+        physical = patch.object(builder.ad.policy, 'physical_path', side_effect=Path)
+        physical.start()
+        self.addCleanup(physical.stop)
+        plan = native_plan(builder.ad.build_root())
         for role in ('reference', 'candidate'):
             for phase in builder.phases(role):
                 if phase.startswith('provenance-'):
                     with self.subTest(role=role, phase=phase):
                         command = builder.phase_command(plan, role, phase)
-                        self.assertEqual(command[:3], [TOOL, str(builder.ROOT / 'source/lab/static-vector-game/provenance.py'), phase.removeprefix('provenance-')])
+                        self.assertEqual(command[3:6], [TOOL, str(builder.ROOT / 'source/lab/static-vector-game/provenance.py'), phase.removeprefix('provenance-')])
                         self.assertNotIn(str(builder.ROOT / 'source/lab/behavior/build_provenance.py'), command)
 
     def test_undeclared_output_rejected_before_files_or_launch(self):
@@ -454,8 +584,8 @@ class GuardianTests(unittest.TestCase):
             self.assertEqual(row['commandPID'], 4343)
             self.assertTrue(row['commandReaped'])
             command = json.loads(rig.output.with_suffix('.command.json').read_text())
-            self.assertEqual(command['argv'], ['/never-executed'])
-            self.assertEqual(command['launchArgv'][-2:], ['--', '/never-executed'])
+            self.assertEqual(command['argv'], rig.argv)
+            self.assertEqual(command['launchArgv'][-len(rig.argv)-1:], ['--', *rig.argv])
             self.assertEqual(rig.launch.call_args.kwargs['pass_fds'], (14,))
             self.assertEqual(command['launcher']['guardian'], builder.identity(builder.GUARDIAN))
             rig.proc.poll.assert_not_called()

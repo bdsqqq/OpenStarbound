@@ -34,7 +34,7 @@ SELECTORS = config.SELECTORS
 CAPS = dict(allocation.CAPS)
 DEADLINES = dict(primitives.DEADLINES)
 CHECKPOINT = '825c30e46055e3c1c486b572dddf173c9017b889'
-STAGE = 'STATIC_VECTOR_CURRENT30_SOURCE_ADMISSION_V2'
+STAGE = 'STATIC_VECTOR_CURRENT30_SOURCE_ADMISSION_V3'
 SCOPE = 'source/tool admission only; NOT game qualification'
 HEADER = 'source/lab/behavior/static_vector_scene.hpp'
 ARCHIVE = 'rust-engine-ffi/aarch64-apple-darwin/release/libstar_engine_ffi.a'
@@ -48,6 +48,7 @@ physical = primitives.physical
 no_symlink_parents = primitives.no_symlink_parents
 bounded = load('_sv_bounded_outputs', Path(__file__).with_name('bounded_outputs.py'))
 er = load('_sv_enclosure_release', Path(__file__).with_name('enclosure_release.py'))
+policy = load('_sv_enclosure_policy', Path(__file__).with_name('enclosure_policy.py'))
 LIFECYCLE_TOOLS = {'hdiutil': '/usr/bin/hdiutil', 'sandbox-exec': '/usr/bin/sandbox-exec'}
 FILESYSTEM_METADATA = frozenset(('.fseventsd', '.Trashes', '.metadata_never_index'))
 FILESYSTEM_METADATA_CLASS = 'GENERATED_MUTABLE_FILESYSTEM_NOT_SOURCE'
@@ -294,6 +295,24 @@ def check_deadline(plan, now=None):
     need(0 <= age < DEADLINES['maxAgeSeconds'], 'original admission deadline reached')
 
 
+def native_sandbox(plan, enclosure=None):
+    state = enclosure if enclosure is not None else enclosure_state()
+    need(policy.same(plan['enclosure'], state), 'mounted enclosure ownership drift')
+    primitives._require_pin(plan['witness'], policy.TOOL, 'Native sandbox tool')
+    return policy.binding(state['owner'], identity(policy.TOOL))
+
+
+def sandbox_command(plan, argv):
+    # Default Native admission cannot borrow a host-control owner's wider root.
+    need(plan['buildRoot'] == str(build_root()) and
+         plan['enclosure']['owner']['root'] == str(enclosure_root()) and
+         plan['enclosure']['owner']['mount']['path'] == str(build_root()),
+         'exact Native enclosure products required')
+    expected = policy.binding(plan['enclosure']['owner'], plan['nativeSandbox']['tool'])
+    need(policy.same(plan['nativeSandbox'], expected), 'Native sandbox binding drift')
+    return policy.wrap(plan['buildRoot'], argv)
+
+
 def commands(plan, role):
     """Settled phase argv: candidate cargo target MUST finish/seal before build.
 
@@ -315,12 +334,13 @@ def commands(plan, role):
     keys = [a[2:].partition('=')[0] for a in configure if a.startswith('-D')]
     need(len(keys) == len(set(keys)), 'duplicate configure arguments')
     base = [tools['CMAKE_EXECUTABLE'], '--build', str(side / 'cmake'), '--target']
-    return dict(configure=configure,
-                cargo=base + ['star_rust_engine_ffi_build', '--parallel', '6', '--', '-d', 'keepdepfile'] if role == 'candidate' else None,
-                build=base + ['starbound', '--parallel', '6', '--', '-d', 'keepdepfile'])
+    return dict(configure=sandbox_command(plan, configure),
+                cargo=sandbox_command(plan, base + ['star_rust_engine_ffi_build', '--parallel', '6', '--', '-d', 'keepdepfile']) if role == 'candidate' else None,
+                build=sandbox_command(plan, base + ['starbound', '--parallel', '6', '--', '-d', 'keepdepfile']))
 
 
 def current_inputs(plan):
+    need(policy.same(plan['nativeSandbox'], native_sandbox(plan)), 'Native sandbox current binding drift')
     config.validate_source()
     tools, sdk = primitives.selected_paths(plan['toolPlan'], plan['toolPlanSha256'])
     need(plan['tools'] == tools and plan['sdk'] == sdk and plan['sdkPhysical'] == physical(sdk), 'current tool/SDK drift')
@@ -361,9 +381,9 @@ def static_plan(plan):
     need(plan['toolPlan'] == str(ROOT / TOOL_PLAN) and plan['toolPlanSha256'] == TOOL_PLAN_SHA and
          plan['toolPlanRole'] == 'PATH_SELECTION_ONLY; historical admission NOT reused', 'path-selector plan pin')
     # Python equality conflates bool/int/float; physical owner pins do not.
-    need(json.dumps(plan['enclosure'], sort_keys=True, allow_nan=False) ==
-         json.dumps(enclosure_state(), sort_keys=True, allow_nan=False),
-         'mounted enclosure ownership drift')
+    state = enclosure_state()
+    need(policy.same(plan['enclosure'], state), 'mounted enclosure ownership drift')
+    need(policy.same(plan['nativeSandbox'], native_sandbox(plan, state)), 'Native sandbox binding drift')
     need(plan['commands'] == {r: commands(plan, r) for r in profiles()}, 'actual future argv drift')
     current_inputs(plan)
 
@@ -442,6 +462,7 @@ def prepare(output, checkpoint, initial_metadata, retention, retention_sha, *, c
         filesystemMetadataClassification={name: FILESYSTEM_METADATA_CLASS for name in sorted(FILESYSTEM_METADATA)},
         initialMetadata=initial_metadata, predecessors=check_binaries(), budgetBefore=budget,
         retention=identity(retention), retentionForecast=forecast, python=str(Path(sys.executable).absolute()))
+    plan['nativeSandbox'] = native_sandbox(plan, enclosure)
     plan['commands'] = {r: commands(plan, r) for r in profiles()}
     validate(plan)
     output.mkdir()

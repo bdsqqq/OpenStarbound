@@ -25228,6 +25228,16 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector-game/enclosure_policy.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/static-vector-game/enclosure_release.py",
       "rule": "laboratories"
     },
@@ -25309,6 +25319,16 @@
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/static-vector-game/test_configuration.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector-game/test_enclosure_policy.py",
       "rule": "laboratories"
     },
     {
@@ -31688,7 +31708,7 @@
     },
     {
       "path": "scripts/test_build_static_vector_behavior_lab.py",
-      "sha256": "eebec2deb6dc4794784a059539c308d04fd4221398b1c72e76e200b7d13a9eea"
+      "sha256": "c4f19935477e7410822e936e739be5c3cbb22e7b235a621f3fbd3951dabf9718"
     },
     {
       "path": "scripts/test_cleanup_migration_artifacts.py",
@@ -36372,7 +36392,7 @@
     },
     {
       "path": "source/lab/behavior/test_static_vector_origin.py",
-      "sha256": "52767f5f86c306ee3a709fe58254a12200b7d33feb6ee70bab71871cb6a179f5"
+      "sha256": "c024ed6128478a0b90fb8a1b7c30b43b4f088aae995b0bbbd1f58ffd2c3efb87"
     },
     {
       "path": "source/lab/behavior/test_static_vector_proof.py",
@@ -37983,6 +38003,10 @@
       "sha256": "2662ec6fb88e9f001ace7e64c3c0c894f63ff74280926257acda071d08a16a17"
     },
     {
+      "path": "source/lab/static-vector-game/enclosure_policy.py",
+      "sha256": "d4c63acb854bf9087029e44a2cb3304e9b1ca089d3d370d8ff6663aa21b03c81"
+    },
+    {
       "path": "source/lab/static-vector-game/enclosure_release.py",
       "sha256": "626c5a7569f42cd64a709612ed9a7d12c12e31d7d3038b6a29be8faa40287def"
     },
@@ -37996,7 +38020,7 @@
     },
     {
       "path": "source/lab/static-vector-game/game_build_admission.py",
-      "sha256": "f7e2ce7f5b9c0fca51f1dba973794f6c58cebf0142dcac80a22901653e391e68"
+      "sha256": "9b7bbb83d052c788b1bc6c722266a160942d47606a8c9fc7dd735c86715a8c53"
     },
     {
       "path": "source/lab/static-vector-game/game_origin.py",
@@ -38019,6 +38043,10 @@
       "sha256": "1a4f9a6f3209db6e71e3c4c7effecc5b8bc3c73e830aecfadd0b7c9741f0f7a4"
     },
     {
+      "path": "source/lab/static-vector-game/test_enclosure_policy.py",
+      "sha256": "7a05bb605bef3ca9b1c32f4551cb763dd8d6aa7a626302ca9a52dc8b84b4c018"
+    },
+    {
       "path": "source/lab/static-vector-game/test_enclosure_release.py",
       "sha256": "e8726be4f16d5537646a90378306a73ee3d81c8c341e8499bcf19921196462d5"
     },
@@ -38032,7 +38060,7 @@
     },
     {
       "path": "source/lab/static-vector-game/test_game_build_admission.py",
-      "sha256": "f5f7a701556b7570a2d537736d8bb6db94913c9398d04b2201bf1d9d91aa1b1c"
+      "sha256": "db2c145c16b260d2429a5a06420194f1a7050044075be3dff72a4ee8462f87ce"
     },
     {
       "path": "source/lab/static-vector-game/test_game_origin.py",
@@ -39901,7 +39929,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 686,
+      "oracle/harness": 688,
       "retain-tooling": 35,
       "retained-third-party": 296,
       "rust-candidate": 30,
@@ -39942,14 +39970,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 50,
-      "validation.oracles-harness": 715,
+      "validation.oracles-harness": 717,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2185,
+    "files": 2187,
     "modules": 39,
-    "no_direct_target": 1079
+    "no_direct_target": 1081
   }
 }

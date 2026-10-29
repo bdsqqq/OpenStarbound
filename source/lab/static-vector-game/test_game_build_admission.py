@@ -21,6 +21,14 @@ G = ad.allocation_root()
 P = ad.build_root()
 
 
+def bind_plan(plan):
+    owner = dict(root=str(ad.enclosure_root()), mount=dict(path=plan['buildRoot'], st_dev=123),
+                 device='/dev/disk41', volumeDevice='/dev/disk41s1')
+    plan['enclosure'] = dict(owner=owner)
+    plan['nativeSandbox'] = ad.policy.binding(owner, dict(path=ad.policy.TOOL, sha256='a' * 64, size=123))
+    return plan
+
+
 class AdmissionTests(unittest.TestCase):
     def test_finite_controller_destinations_and_logical_bound(self):
         outputs = ad.controller_outputs()
@@ -162,12 +170,13 @@ class AdmissionTests(unittest.TestCase):
                     ad.primitives.selected_paths(path, ad.sha(path))
 
     def test_configure_candidate_has_separate_cargo(self):
-        plan = dict(buildRoot=str(G), sdk='/SDK', tools={'CMAKE_EXECUTABLE': '/cmake'})
-        commands = ad.commands(plan, 'candidate')
+        with patch.object(ad.policy, 'physical_path', side_effect=Path):
+            plan = bind_plan(dict(buildRoot=str(P), sdk='/SDK', tools={'CMAKE_EXECUTABLE': '/cmake'}))
+            commands = ad.commands(plan, 'candidate')
+            self.assertIsNone(ad.commands(plan, 'reference')['cargo'])
         self.assertIn('star_rust_engine_ffi_build', commands['cargo'])
         self.assertNotIn('starbound', commands['cargo'])
         self.assertIn('starbound', commands['build'])
-        self.assertIsNone(ad.commands(plan, 'reference')['cargo'])
 
     def test_retention_covers_whole_generation_not_just_four_binaries(self):
         forecast = dict(schema='static-vector-product-retention-forecast-v1',
@@ -307,10 +316,11 @@ class NamespaceTests(unittest.TestCase):
         with patch.object(ad.primitives, 'source_roots', return_value=['/source', '/rust']):
             roots = ad.source_roots({}, '/sdk')
         self.assertEqual(roots, ['/source', '/rust', '/usr/bin/hdiutil', '/usr/bin/sandbox-exec'])
-        plan = dict(buildRoot=str(P), sdk='/SDK', tools={'CMAKE_EXECUTABLE': '/cmake'},
-                    lifecycleTools=ad.LIFECYCLE_TOOLS)
-        argv = ad.commands(plan, 'candidate')['configure']
-        self.assertFalse(any('hdiutil' in value or 'sandbox-exec' in value for value in argv))
+        with patch.object(ad.policy, 'physical_path', side_effect=Path):
+            plan = bind_plan(dict(buildRoot=str(P), sdk='/SDK', tools={'CMAKE_EXECUTABLE': '/cmake'},
+                                 lifecycleTools=ad.LIFECYCLE_TOOLS))
+            argv = ad.commands(plan, 'candidate')['configure']
+        self.assertFalse(any('hdiutil' in value or 'sandbox-exec' in value for value in argv[3:]))
 
 
 class EnclosureAdmissionTests(unittest.TestCase):
@@ -470,6 +480,7 @@ class EnclosureAdmissionTests(unittest.TestCase):
         retention = self.p / 'retention.json'
         retention.write_text(json.dumps(forecast))
         metadata = ad.metadata_inventory(self.p)
+        identity = ad.identity
         with patch.object(ad.config, 'validate_source'), \
              patch.object(ad, 'check_budget', return_value={'archiveBytes': 0}) as budget, \
              patch.object(ad.primitives, 'selected_paths', return_value=({'CMAKE_EXECUTABLE': '/cmake'}, '/SDK')), \
@@ -478,6 +489,9 @@ class EnclosureAdmissionTests(unittest.TestCase):
              patch.object(ad, 'tree_members', return_value={}), \
              patch.object(ad.primitives, 'closure', return_value={'files': {}, 'aliases': {}}), \
              patch.object(ad.primitives, '_pin') as pin, \
+             patch.object(ad.primitives, '_require_pin'), \
+             patch.object(ad, 'identity', side_effect=lambda p: dict(path=ad.policy.TOOL, sha256='a' * 64, size=123)
+                          if str(p) == ad.policy.TOOL else identity(p)), \
              patch.object(ad, 'check_binaries', return_value={}), \
              patch.object(ad, 'current_inputs') as inputs:
             plan = ad.prepare(self.p / 'current30-admission', ad.CHECKPOINT,
@@ -512,7 +526,8 @@ class EnclosureAdmissionTests(unittest.TestCase):
         log.write_text('initial OS state')
         retention = self.p / 'retention.json'
         retention.write_text('{}')
-        plan = dict(toolPlan='mock', toolPlanSha256='mock', tools={}, sdk=str(self.e),
+        plan = dict(buildRoot=str(self.p), enclosure=ad.enclosure_state(),
+            toolPlan='mock', toolPlanSha256='mock', tools={}, sdk=str(self.e),
             sdkPhysical=str(self.e), sourceRoots=[], treeMembers={},
             witness={'files': {str(self.tool): ad.sha(self.tool)},
                      'aliases': {str(self.tool): str(self.tool)}},
@@ -521,7 +536,11 @@ class EnclosureAdmissionTests(unittest.TestCase):
             lifecycleTools=ad.LIFECYCLE_TOOLS,
             filesystemMetadataClassification={name: ad.FILESYSTEM_METADATA_CLASS
                                               for name in sorted(ad.FILESYSTEM_METADATA)})
-        with patch.object(ad.config, 'validate_source'), \
+        plan['nativeSandbox'] = ad.policy.binding(self.owner, dict(path=ad.policy.TOOL, sha256='a' * 64, size=123))
+        identity = ad.identity
+        with patch.object(ad, 'identity', side_effect=lambda p: plan['nativeSandbox']['tool']
+                          if str(p) == ad.policy.TOOL else identity(p)), \
+             patch.object(ad.config, 'validate_source'), \
              patch.object(ad.primitives, 'selected_paths', return_value=({}, str(self.e))), \
              patch.object(ad, 'source_roots', return_value=[]), \
              patch.object(ad, 'tree_members', return_value={}), \
