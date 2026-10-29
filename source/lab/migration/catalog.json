@@ -24974,6 +24974,36 @@
     {
       "cmake_membership": [],
       "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector/constraints/move_only_no_default.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector/constraints/no_default_copy_negative.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector/constraints/overaligned.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
       "language": "harness/tool script",
       "line": 1,
       "membership_status": "no-direct-target-found",
@@ -25018,7 +25048,67 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector/test_trace_model.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector/test_trace_verify.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/static-vector/test_verify.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector/trace.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector/trace_model.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector/trace_run.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/static-vector/trace_verify.py",
       "rule": "laboratories"
     },
     {
@@ -37243,6 +37333,18 @@
       "sha256": "dafbafd5bc45329bab5da1fc02a360bc7c3e8e62323e77e61b496f4a2d0f5832"
     },
     {
+      "path": "source/lab/static-vector/constraints/move_only_no_default.cpp",
+      "sha256": "2e4f3074709a42bdb33c65b6423e34beb15634f6d4b3815ce95ad6d118212fdf"
+    },
+    {
+      "path": "source/lab/static-vector/constraints/no_default_copy_negative.cpp",
+      "sha256": "c8937cd9ceb9149f9c5ca8f49a4458f8f2600b8532f2e970245466740f7fb591"
+    },
+    {
+      "path": "source/lab/static-vector/constraints/overaligned.cpp",
+      "sha256": "9d911e844f1421b864285352dfe7349e43ae49bd60c34f1e7c80b661be4a8e36"
+    },
+    {
       "path": "source/lab/static-vector/model.py",
       "sha256": "f4f8197c9e8efdca84bf289e71ede7b3dd88e866eba967760ae733aea9a46968"
     },
@@ -37259,8 +37361,32 @@
       "sha256": "ddb2f7b7af748328a8029f8e552e6d2f6c809970110251a552bb916db9c701c8"
     },
     {
+      "path": "source/lab/static-vector/test_trace_model.py",
+      "sha256": "c225344bc1f068e8550d842a2ebc4dd8581188cd217e16034a1e5c8d9b5bbcb7"
+    },
+    {
+      "path": "source/lab/static-vector/test_trace_verify.py",
+      "sha256": "4112927b4bd00e0d543a2aece8dda6bfe2d4e2cc04e16ff34817b3814c8448ef"
+    },
+    {
       "path": "source/lab/static-vector/test_verify.py",
       "sha256": "9f1eb4bce5e239d529e1549ce94b8885aafebd5f34a598e3b53310367a162ea0"
+    },
+    {
+      "path": "source/lab/static-vector/trace.cpp",
+      "sha256": "583d5b7fc4ea58e0d83606810a6eec9403bb92da30833d75c87a5515bcee4150"
+    },
+    {
+      "path": "source/lab/static-vector/trace_model.py",
+      "sha256": "8c1c3603f43b3b0998b13c5d80c7bf85e1d7aee84663b6cf6dcedbf4bc0886de"
+    },
+    {
+      "path": "source/lab/static-vector/trace_run.py",
+      "sha256": "5b357c494aecf1b7f36f45d2cd238b0e403d3cd8072141c2090f7009459d7ee4"
+    },
+    {
+      "path": "source/lab/static-vector/trace_verify.py",
+      "sha256": "79a08a90a4ac896b943bbb75aad5ab05cf1367bf2283c21f8e515681f70cae9b"
     },
     {
       "path": "source/lab/static-vector/verify.py",
@@ -39005,7 +39131,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 630,
+      "oracle/harness": 639,
       "retain-tooling": 31,
       "retained-third-party": 296,
       "rust-candidate": 29,
@@ -39046,14 +39172,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 46,
-      "validation.oracles-harness": 659,
+      "validation.oracles-harness": 668,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2121,
+    "files": 2130,
     "modules": 39,
-    "no_direct_target": 1015
+    "no_direct_target": 1024
   }
 }
