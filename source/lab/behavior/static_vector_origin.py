@@ -27,6 +27,8 @@ ad = load('_sv_origin_admission', ROOT / 'source/lab/static-vector-game/game_bui
 builder = load('_sv_origin_builder', ROOT / 'scripts/build-static-vector-behavior-lab.py')
 code = load('_sv_origin_emitted', ROOT / 'source/lab/static-vector-game/game_origin.py')
 bp = load('_sv_origin_common', ROOT / 'source/lab/behavior/build_provenance.py')
+json_contract = load('_sv_origin_json_types', ROOT / 'source/lab/behavior/static_vector_proof.py')
+same_json = json_contract.same_json
 need = ad.need
 identity = ad.identity
 
@@ -39,7 +41,7 @@ def read(path):
 
 
 def bound(record, path):
-    need(record == identity(path), 'changed physical output binding: ' + str(path))
+    need(same_json(record, identity(path)), 'changed physical output binding: ' + str(path))
     return record
 
 
@@ -128,7 +130,7 @@ def common_proof(plan, role, proof):
 
 def role_binding(plan, role, record, proof):
     side = Path(plan['buildRoot']) / role
-    need(record['schema'] == SCHEMA and record['role'] == role and proof['gameOrigin'] == record, 'opaque record/role/schema mismatch')
+    need(record['schema'] == SCHEMA and record['role'] == role and same_json(proof['gameOrigin'], record), 'opaque record/role/schema mismatch')
     bound(record['binary'], side / 'bin/starbound')
     bound(record['builder'], ROOT / 'scripts/build-static-vector-behavior-lab.py')
     bound(record['configured'], side / 'complete-tool-admission.json')
@@ -138,11 +140,12 @@ def role_binding(plan, role, record, proof):
     need(configured == ad.check_configured(plan, side / 'cmake'), 'current configured consumer inputs')
     common = common_proof(plan, role, proof)
     deps = builder.dependency_witness(plan, configured, proof)
-    need(deps == read(side / 'dependencies.json'), 'actual compiler/SDK dependencies drift')
+    # Numeric dependency IDs must not accept JSON booleans/floats via Python ==.
+    need(same_json(deps, read(side / 'dependencies.json')), 'actual compiler/SDK dependencies drift')
     commands = phase_bindings(plan, role, record)
     seal = record['archive']
     link = builder.link_closure(plan, role, deps, seal)
-    need(record['link'] == link, 'actual complete link closure drift')
+    need(same_json(record['link'], link), 'actual complete link closure drift')
     binary = side / 'bin/starbound'
     need(binary.stat().st_size <= code.MAX_INPUT_BYTES, 'bounded native game')
     if role == 'candidate':

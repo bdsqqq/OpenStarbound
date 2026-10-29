@@ -146,13 +146,34 @@ def dependency_witness(plan, configured, snapshot):
 
     SDK includes must be admitted physical members; neither basename matching nor
     a blanket SDK exemption is allowed. The runtime callsite relation is separate.
+    Content is captured once per physical path in THIS invocation, with physical
+    fingerprints bracketing the hash and checked again at the return barrier.
+    Like any before/after witness, this cannot detect restored intervening edits.
     """
+    captured = {}
+
+    def fingerprint(path):
+        ad.no_symlink_parents(path)
+        info = path.stat()
+        return tuple(getattr(info, key) for key in
+                     ('st_dev', 'st_ino', 'st_mode', 'st_size', 'st_mtime_ns', 'st_ctime_ns', 'st_nlink'))
+
+    def capture(path):
+        if path not in captured:
+            before = fingerprint(path)
+            record = identity(path)
+            ad.need(before == fingerprint(path), 'compile input changed during capture: ' + str(path))
+            captured[path] = (record, before)
+        return captured[path][0]
+
     role = configured['role']
     build = Path(plan['buildRoot']) / role / 'cmake'
     expected = dict(plan['witness']['files'])
     expected.update(snapshot['compile_source_files'])
-    rows = json.loads((build / 'compile_commands.json').read_text())
-    result = {}
+    database = build / 'compile_commands.json'
+    capture(database)
+    rows = json.loads(database.read_text())
+    result, closures, dependencies = {}, {}, set()
     for row in rows:
         argv = row.get('arguments') or shlex.split(row['command'])
         ad.need(argv.count('-o') == 1, 'one compile object')
@@ -173,22 +194,27 @@ def dependency_witness(plan, configured, snapshot):
         source = (source if source.is_absolute() else directory / source).resolve(strict=True)
         declared = Path(row['file'])
         declared = (declared if declared.is_absolute() else directory / declared).resolve(strict=True)
-        ad.need(source == declared and expected.get(str(source)) == ad.sha(source), 'admitted actual compile source')
+        ad.need(source == declared and expected.get(str(source)) == capture(source)['sha256'], 'admitted actual compile source')
         dep = Path(str(obj) + '.d')
+        dep_identity = capture(dep)
         target, paths = make_rule(dep.read_text())
         target = Path(target) if Path(target).is_absolute() else directory / target
         ad.need(target.resolve(strict=True) == obj, 'actual depfile object mismatch')
-        bindings = {}
+        object_identity = capture(obj)
+        bindings = set()
         for name in paths:
             path = Path(name) if Path(name).is_absolute() else directory / name
             resolved = path.resolve(strict=True)
-            ad.need(expected.get(str(resolved)) == ad.sha(resolved), 'unadmitted dependency: ' + str(path))
-            ad.need(obj.stat().st_mtime_ns >= resolved.stat().st_mtime_ns, 'dependency newer than object')
-            bindings[str(resolved)] = identity(resolved)
+            record = capture(resolved)
+            ad.need(expected.get(str(resolved)) == record['sha256'], 'unadmitted dependency: ' + str(path))
+            ad.need(captured[obj][1][4] >= captured[resolved][1][4], 'dependency newer than object')
+            bindings.add(record['path'])  # Share the cached canonical spelling across TU closures.
         ad.need(str(obj) not in result, 'duplicate compiled object')
         ad.need(str(source) in bindings, 'actual compile source missing from dependency rule')
-        result[str(obj)] = dict(object=identity(obj), depfile=identity(dep), dependencies=bindings,
-                               compileArgv=argv, cwd=str(directory), compiler=identity(Path(argv[0]).resolve(strict=True)))
+        closures[str(obj)] = bindings
+        dependencies.update(bindings)
+        result[str(obj)] = dict(object=object_identity, depfile=dep_identity,
+                               compileArgv=argv, cwd=str(directory), compiler=capture(Path(argv[0]).resolve(strict=True)))
     required = {
         'client': ['source/client/StarClientApplication.cpp', ad.HEADER],
         'world': ['source/game/StarWorldClient.cpp', 'source/game/StarTileSectorArray.hpp',
@@ -196,15 +222,24 @@ def dependency_witness(plan, configured, snapshot):
     for label, headers in required.items():
         obj = configured['objects'][label]['object']
         ad.need(obj in result, 'missing required compiled consumer')
-        deps = result[obj]['dependencies']
+        deps = closures[obj]
         for header in headers:
             ad.need(str(ROOT / header) in deps, 'missing actual dependency: ' + header)
         abi = str(ROOT / 'source/core/StarRustStaticVector.h')
         host = str(ROOT / 'source/core/StarStaticVectorHost.hpp')
         if label == 'world':
             ad.need((abi in deps) == (role == 'candidate') and (host in deps) == (role == 'candidate'), 'ON-only StaticVector host/ABI closure')
-    ad.need(any(Path(path).is_relative_to(Path(plan['sdk']).resolve()) for row in result.values() for path in row['dependencies']), 'actual consumed SDK includes required')
-    return dict(schema='static-vector-compile-dependencies-v1', objects=result)
+    ad.need(any(Path(path).is_relative_to(Path(plan['sdk']).resolve()) for path in dependencies), 'actual consumed SDK includes required')
+    paths = sorted(dependencies)
+    indices = {path: index for index, path in enumerate(paths)}
+    for obj, bindings in closures.items():
+        result[obj]['dependency_ids'] = sorted(indices[path] for path in bindings)
+    files = [captured[Path(path)][0] for path in paths]
+    # Revisit even inputs last seen in an early TU: cache hits alone are not a
+    # stability witness for edits made while later objects are being processed.
+    for path, (_, before) in captured.items():
+        ad.need(before == fingerprint(path), 'compile input changed before return: ' + str(path))
+    return dict(schema='static-vector-compile-dependencies-v2', files=files, objects=result)
 
 
 def compiled_library(path, dependencies):

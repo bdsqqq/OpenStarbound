@@ -74,6 +74,27 @@ class ReaderTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 origin.phase_bindings(plan, 'candidate', record)
 
+    def test_numeric_dependency_ids_are_type_exact_not_bool_or_float(self):
+        expected = dict(schema='static-vector-compile-dependencies-v2',
+                        files=[dict(path='/header', sha256='0' * 64, size=1)],
+                        objects={'/object': dict(dependency_ids=[0])})
+        self.assertTrue(origin.same_json(json.loads(json.dumps(expected)), expected))
+        for value in (False, 0.0):
+            actual = json.loads(json.dumps(expected))
+            actual['objects']['/object']['dependency_ids'][0] = value
+            self.assertEqual(actual, expected)  # Demonstrate Python's coercing equality.
+            self.assertFalse(origin.same_json(actual, expected))
+
+    def test_physical_binding_size_cannot_be_a_boolean(self):
+        with tempfile.TemporaryDirectory(dir=G) as temp:
+            path = Path(temp) / 'one'
+            path.write_bytes(b'x')
+            record = origin.identity(path)
+            self.assertEqual(origin.bound(record, path), record)
+            record['size'] = True
+            with self.assertRaises(ValueError):
+                origin.bound(record, path)
+
     def test_wrong_path_and_alias_fail_before_any_native_work(self):
         with tempfile.TemporaryDirectory(dir=G) as temp:
             root = Path(temp)

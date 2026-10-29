@@ -31554,7 +31554,7 @@
     },
     {
       "path": "scripts/test_build_static_vector_behavior_lab.py",
-      "sha256": "29f0f3423320a57859463b0cebbf7285afb198726bf9a34db14b3aea4269c71a"
+      "sha256": "6db40653e6973b26bbdbe806448014e0360218774a3ad52450fc00b970fd1db8"
     },
     {
       "path": "scripts/test_cleanup_migration_artifacts.py",
@@ -36098,7 +36098,7 @@
     },
     {
       "path": "source/lab/behavior/static_vector_origin.py",
-      "sha256": "603c449989d486f81ed0babdf35de1a0f64c25eae575553740a0e0b01f2aafbb"
+      "sha256": "d404fd626ea3880131bda5463e89d26dc344337e8c3a61f261142965583c898c"
     },
     {
       "path": "source/lab/behavior/static_vector_proof.py",
@@ -36230,7 +36230,7 @@
     },
     {
       "path": "source/lab/behavior/test_static_vector_origin.py",
-      "sha256": "322463d8199ae62d57a337d6a813630407e35484c7b64f5793656b493d1ce5fe"
+      "sha256": "3900749247db383eebb09dd33f41e387260d3aaf0835614daed9e4c57e47860a"
     },
     {
       "path": "source/lab/behavior/test_static_vector_proof.py",

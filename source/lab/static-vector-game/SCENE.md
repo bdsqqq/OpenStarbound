@@ -19,6 +19,14 @@ objects/libraries, Cargo products and admission/capture evidence (including
 archive overhead). a four-binary-only forecast is rejected. coverage checks are
 not evidence that future costs have been measured.
 
+the complete compiler-dependency witness uses a per-role canonical identity table
+and per-object numeric dependency ids (v2). identities are captured once within
+each derivation, bracketed by physical fingerprints and checked again at return;
+raw depfile/object/compiler/argv bindings and admission/mtime/SDK checks remain.
+the independent origin reader rederives the table and compares types exactly:
+json booleans and floats cannot impersonate integer ids. synthetic scale fixtures
+do not measure actual application metadata size or runtime.
+
 the emitted-code reader now requires a separate descriptor/template/loader-fixup
 witness for TLS, in addition to normalized instruction identity. narrow classic
 bindings and fully enumerated format6 chained fixups have physical byte tests;
