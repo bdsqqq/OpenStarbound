@@ -1,8 +1,9 @@
 # static-vector-room — source-only seam26
 
-status: source implementation and python source controls only. **not c++ parsed,
-compiled, built, or game-tested.** no actual game admission or parity claim.
-parent owns fresh compilation, integration, readers, retention and commits.
+status: source controls and finite current-source **c++ syntax parsing passed**
+at `f29e41d44ae6d9e79261bd112c72cc413a757f25`. **not object-built, linked,
+game-built or runtime-tested.** no actual game admission or parity claim.
+parent owns integration, readers, retention and commits.
 
 ## why this seam
 
@@ -137,10 +138,57 @@ fake tiles, missing acknowledgement/painter association/authority absence and
 range-copy threshold substitution. these checks are NOT a c++ parser or runtime
 proof.
 
-parent pending: fresh current-source native-on/off parsing and builds, selector
-configuration evaluation, actual game seam26 acquisition, independently checked
+parent pending: current-source object/game builds, selector configuration
+evaluation, actual game seam26 acquisition, independently checked
 receipt/frame reader with corruption controls, native repeatability, real light
 change and restored baseline comparison, current provider/origin/code binding,
 old25 regressions, auxiliary behavior, failure/timeout/shutdown cleanup tests,
 validated restoration output, resource/retention accounting and final cleanup.
 no old native or screenshot epoch is renewed by these source checks.
+
+## finite syntax qualification and conserved failures
+
+composition report `99c8a041c093a2c42830fce5ad3577a06630268c752258601c3a8bbe1f8bc7a2`
+records eight successful `-fsyntax-only` leaves: ClientApplication, WorldClient,
+WorldServer and TilePainter, each native-off and supported-production-on. original
+window: 2026-10-29 08:44–09:19 utc. no accepted native leaf was repeated.
+
+this does **not** mean all 30 selectors are enabled. the existing production
+profile in `source/lab/id-map-production/game_build_admission.py:profiles` excludes
+experimental `STAR_USE_RUST_LINE_QUERY`. the extended candidate enables the other
+29 selectors, including StaticVector, and retains its actual configured fast-math
+flags. old reference/candidate databases selected paths/flags only; current source,
+physical sdk, compiler/resources and exact argv were bound before each process.
+no old source epoch, generated game or sdk copy was substituted.
+
+retained acquisition history:
+
+- admission `befe2689a5196f14ab0c68c8c55f5dd2848baac155495d56885af8eb94516976`
+  accepted the four off parses, then its incorrectly synthetic all-30-on profile
+  triggered the existing fast-math rejection in `StarLine.hpp:8`. it remains
+  **FAILED_NOT_RESUMABLE**. neither the guard nor optimization flags were weakened.
+- remaining-only admission
+  `3d5bf27f9c59aca001cd321d47ea3ad4aa8588ffc6af4b196cd04df923041b47`
+  accepted all four on parses using the actual supported role-specific recipes.
+  its producer then failed a lexical dependency-name comparison: clang emitted
+  `source/client/../lab/behavior/static_vector_scene.hpp`. this producer failure
+  also remains failed; all four native receipts were retained, not rerun.
+- the independent composition reader pins raw dependency bytes and checks their
+  admitted physical identities before comparing `resolve(strict=True)` paths.
+  two lexical-alias positives and five negatives pass, including a same-content,
+  same-basename file outside the expected source location. source/helper/abi
+  dependency requirements are not waived. an initial composition-reader metadata
+  view mismatch (cached-29 bool pairs versus source-30 names) is also retained.
+  unchanged pure composition replay passed; this is not a new native acquisition.
+
+large admission/sdk metadata was conserved with reconstruction **before** pruning:
+4 files, 26,075,136 unique allocated bytes; 12,576 protected identities/bytes and
+38,283 outside-selected origins unchanged. parent reconstruction/protection checks
+also passed. conservation completion:
+`ef850db109d1c1b31625d2977baaf3a5ffa2f4796fe60c0665b6827ed1e4b550`.
+manifest: `build/migration-evidence-archive/runs/20261029-static-vector-scene-syntax-metadata-r1/manifest.json`,
+sha256 `85108114663a4a8246952e12e747f78e5db7659db6c9dd24fbdaa43377635964`.
+compact reports, failures, raw stdio/dependencies/receipts and readers remain in
+`build/behavior/static-vector-combined-r1/`. original live-path/inode/ctime/sdk
+admission replay is **UNAVAILABLE_ARCHIVED**; reconstruction is DATA only, never
+an executable/tool/sdk replacement. no game/runtime/restoration claim follows.
