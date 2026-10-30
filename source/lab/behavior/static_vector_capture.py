@@ -6,15 +6,15 @@ import math
 import os
 import sys
 from pathlib import Path
-import signal
 import subprocess
 import time
 import uuid
 
 import static_vector_scenarios as scenarios
+import static_vector_capture_protocol as protocol
 
 r = scenarios.runner
-ENV_KEYS = ('PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR', 'DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY')
+ENV_KEYS = ('PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY')
 
 
 @dataclass(frozen=True)
@@ -59,7 +59,8 @@ def environment(directory):
     home = directory / 'home'
     result = {k: os.environ[k] for k in ENV_KEYS if k in os.environ}
     result.update(STAR_BEHAVIOR_LAB=str(directory / 'scenario.json'), HOME=str(home),
-                  XDG_DATA_HOME=str(home / 'data'), XDG_CONFIG_HOME=str(home / 'config'), XDG_CACHE_HOME=str(home / 'cache'))
+                  XDG_DATA_HOME=str(home / 'data'), XDG_CONFIG_HOME=str(home / 'config'),
+                  XDG_CACHE_HOME=str(home / 'cache'), TMPDIR=str(home / 'tmp'))
     return result
 
 
@@ -83,7 +84,7 @@ def process_identity(pid):
         library.proc_pidinfo.restype = ctypes.c_int
         info = BsdInfo()
         size = ctypes.sizeof(info)
-        result = library.proc_pidinfo(pid, 3, 0, ctypes.byref(info), size)  # PROC_PIDTBSDINFO
+        result = library.proc_pidinfo(pid, 3, 0, ctypes.byref(info), size)
         if result != size or info.pid != pid or info.startSeconds <= 0:
             raise r.LabError('owned child OS start identity unavailable')
         return f'darwin-proc-bsdinfo:{info.startSeconds}:{info.startMicroseconds}', info.pgid
@@ -98,32 +99,7 @@ def process_identity(pid):
 
 
 def validate_launch_protocol(directory, launch, manifest):
-    validate_timeout(launch['timeoutSeconds'])
-    protocol = launch.get('processProtocol')
-    if protocol != dict(cwd=str(directory), stdin='DEVNULL', startNewSession=True, clock='monotonic+wall-v1'):
-        raise r.LabError('owned launch stdin/session/source-clock contract missing')
-    env = launch.get('environment')
-    expected = environment(directory)
-    isolated = set(expected) - set(ENV_KEYS)
-    if (type(env) is not dict or set(env) - set(ENV_KEYS) != isolated
-            or any(env.get(k) != expected[k] for k in isolated)
-            or any(type(v) is not str or '\0' in v for v in env.values())):
-        raise r.LabError('sanitized isolated environment changed')
-    start, end = r.load(directory / 'process-start.json'), r.load(directory / 'process-exit.json')
-    clock = launch.get('sourceClock')
-    if type(clock) is not dict or set(clock) != {'monotonic', 'wall'}:
-        raise r.LabError('pre-Popen source clock required')
-    values = [clock['monotonic'], clock['wall'], start.get('monotonicStarted'), start.get('wallStarted'),
-              end.get('monotonicFinished'), end.get('wallFinished')]
-    if any(type(v) not in (int, float) or not math.isfinite(v) or v < 0 for v in values):
-        raise r.LabError('invalid actual source clock')
-    if not (clock['monotonic'] <= start['monotonicStarted'] <= end['monotonicFinished']
-            and clock['wall'] <= start['wallStarted'] <= end['wallFinished']):
-        raise r.LabError('process/source clock order differs')
-    active, wall = end['monotonicFinished'] - clock['monotonic'], end['wallFinished'] - clock['wall']
-    r.validate_capture_clock(active, wall)
-    if active > launch['timeoutSeconds'] + 6 or manifest.get('elapsedSeconds') != active:
-        raise r.LabError('capture timeout/elapsed receipt differs')
+    return protocol.validate_clock(directory, launch, manifest)
 
 
 def capture(request: CaptureRequest, producer: ProducerIdentity) -> Path:
@@ -136,115 +112,132 @@ def capture(request: CaptureRequest, producer: ProducerIdentity) -> Path:
                                 request.directory, request.timeout, request.scenario)
     if producer.files != frontend._frontend_identity():
         raise r.LabError('actual producer/frontend identities differ')
+    # Validate the exact finite namespace before writes or admission of a command.
+    protocol.capture_root(request.directory, request.scenario)
+    protocol.current()
     binary_id, asset_id = r.identity(request.executable), r.identity(request.assets)
     if not os.access(binary_id['path'], os.X_OK):
         raise r.LabError('capture binary not executable')
     binary = Path(binary_id['path'])
     proof = frontend.verified_build(binary)
+    protocol.capture_root(request.directory, request.scenario, scenarios.backend(proof))
     origin = frontend._check_game_origin(binary, proof)
     overlays = scenarios.overlay_identity(request.scenario)
-    directory = r.create_owned(request.directory)
-    frames, process = directory / 'frames', None
+    directory = protocol.create_owned(request.directory)
+    frames, actual_pid = directory / 'frames', None
     manifest_path = frames / 'manifest.json'
     try:
-        home = r.create_owned(directory / 'home')
-        for name in ('data', 'config', 'cache'):
-            r.create_owned(home / name)
-        frames = r.create_owned(frames)
-        storage = r.create_owned(frames / 'storage')
+        home = protocol.create_owned(directory / 'home')
+        for name in ('data', 'config', 'cache', 'tmp'):
+            protocol.create_owned(home / name)
+        frames = protocol.create_owned(frames)
+        storage = protocol.create_owned(frames / 'storage')
         config_path, boot_path = directory / 'scenario.json', directory / 'sbinit.config'
         config = dict(scenario=request.scenario, outputDirectory=str(frames), storageDirectory=str(storage),
                       maxFrames=1800, platformWrites=False)
         boot = boot_configuration(request.scenario, asset_id['path'], storage)
-        r.dump(config_path, config)
-        r.dump(boot_path, boot)
+        protocol.write_json(config_path, config)
+        protocol.write_json(boot_path, boot)
         boot_id, config_id = r.identity(boot_path), r.identity(config_path)
-        command = [binary_id['path'], '-bootconfig', str(boot_path)]
+        command, sandbox = protocol.sandbox(binary, boot_path)
         env = environment(directory)
         source_clock = dict(monotonic=time.monotonic(), wall=time.time())
         launch = dict(binary=binary_id, assets=asset_id, buildProvenance=proof, gameOrigin=origin,
             overlayFiles=overlays, bootconfig=boot_id, configuration=config_id, command=command,
-            timeoutSeconds=request.timeout, frontend=dict(identities=producer.files, argv=list(request.frontend_argv)),
+            nativeSandbox=sandbox, timeoutSeconds=request.timeout,
+            frontend=dict(identities=producer.files, argv=list(request.frontend_argv)),
             environment=env, sourceClock=source_clock,
-            processProtocol=dict(cwd=str(directory), stdin='DEVNULL', startNewSession=True, clock='monotonic+wall-v1'))
-        r.durable_dump(directory / 'launch.json', launch)
+            processProtocol=dict(cwd=str(directory), stdin='DEVNULL', startNewSession=True,
+                                 clock='monotonic+wall-v1', binding=protocol.VERSION))
+        protocol.write_json(directory / 'launch.json', launch)
         launch_id = r.identity(directory / 'launch.json')
-        with (directory / 'process.log').open('xb') as log:
-            handlers = {s: signal.getsignal(s) for s in (signal.SIGTERM, signal.SIGINT)}
-            interrupted, waiting = None, False
 
-            def interrupt(signum, frame):
-                nonlocal interrupted
-                interrupted = signal.Signals(signum).name
-                if waiting:
-                    raise r.LabError('capture interrupted by ' + interrupted)
+        def check_inputs():
+            for path, before in ((request.executable, binary_id), (request.assets, asset_id),
+                                 (config_path, config_id), (boot_path, boot_id), (directory / 'launch.json', launch_id)):
+                if r.identity(path) != before:
+                    raise r.LabError('capture input changed while client ran: ' + str(path))
+            if (frontend.verified_build(binary) != proof or frontend._check_game_origin(binary, proof) != origin
+                    or frontend._frontend_identity() != producer.files or scenarios.overlay_identity(request.scenario) != overlays):
+                raise r.LabError('source/frontend/origin/overlay changed while client ran')
+            now_command, now_sandbox = protocol.sandbox(binary, boot_path)
+            if now_command != command or now_sandbox != sandbox:
+                raise r.LabError('current enclosure/tool/policy changed while client ran')
+            # Validation itself consumes the original clock; do not launch after
+            # an expensive origin/enclosure recheck has exhausted it.
+            remaining()
 
-            for sig in handlers:
-                signal.signal(sig, interrupt)
-            try:
-                process = subprocess.Popen(command, cwd=directory, env=env, stdin=subprocess.DEVNULL,
-                    stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-                start = None
-                try:
-                    os_start, pgid = process_identity(process.pid)
-                    if pgid != process.pid:
-                        raise r.LabError('native child must own private process group')
-                    start = dict(schema=1, pid=process.pid, pgid=pgid, osStart=os_start, status='started',
-                        binary=binary_id, configuration=config_id, command=command, launch=launch_id,
-                        wallStarted=time.time(), monotonicStarted=time.monotonic())
-                    r.durable_dump(directory / 'process-start.json', start)
-                    waiting = True
-                    if interrupted:
-                        raise r.LabError('capture interrupted by ' + interrupted)
-                    remaining = request.timeout - (time.monotonic() - source_clock['monotonic'])
-                    if remaining <= 0:
-                        raise subprocess.TimeoutExpired(command, request.timeout)
-                    code = process.wait(timeout=remaining)
-                finally:
-                    waiting = False
-                    try:
-                        r.stop_process_group(process)
-                    finally:
-                        if start is not None and process.poll() is not None:
-                            end = dict(schema=1, pid=process.pid, pgid=start['pgid'], osStart=start['osStart'],
-                                status='reaped', exitCode=process.returncode,
-                                startReceipt=r.identity(directory / 'process-start.json'),
-                                wallFinished=time.time(), monotonicFinished=time.monotonic())
-                            r.durable_dump(directory / 'process-exit.json', end)
-                if interrupted:
-                    raise r.LabError('capture interrupted by ' + interrupted)
-            finally:
-                for sig, handler in handlers.items():
-                    signal.signal(sig, handler)
-        if code != 0:
-            raise r.LabError('native client exited ' + str(code) + '; inspect process.log')
-        for path, before in ((request.executable, binary_id), (request.assets, asset_id), (config_path, config_id),
-                             (boot_path, boot_id), (directory / 'launch.json', launch_id)):
-            if r.identity(path) != before:
-                raise r.LabError('capture input changed while client ran: ' + str(path))
-        if (frontend.verified_build(binary) != proof or frontend._check_game_origin(binary, proof) != origin
-                or frontend._frontend_identity() != producer.files or scenarios.overlay_identity(request.scenario) != overlays):
-            raise r.LabError('source/frontend/origin/overlay changed while client ran')
+        def remaining():
+            left = request.timeout - (time.monotonic() - source_clock['monotonic'])
+            if left <= 0:
+                raise r.LabError('original capture deadline expired')
+            return left
+
+        def started(frame):
+            nonlocal actual_pid
+            # FIRST operation: birth can be unavailable even before guardian wait.
+            actual_pid = frame['commandPID']
+            os_start, pgid = process_identity(actual_pid)
+            if type(pgid) is not int or pgid != frame['guardianPGID'] or frame['guardianPID'] != pgid:
+                raise r.LabError('actual command must inherit the owned guardian process group')
+            if type(os_start) is not str or not os_start:
+                raise r.LabError('owned child OS start identity unavailable')
+            start = dict(schema=2, pid=actual_pid, pgid=pgid, guardianPID=frame['guardianPID'],
+                osStart=os_start, status='started', binary=binary_id, configuration=config_id,
+                command=command, launch=launch_id, sourceClock=source_clock,
+                commandSource=r.identity(directory / 'process.command.json'), privateFrame=frame,
+                wallStarted=time.time(), monotonicStarted=time.monotonic())
+            protocol.write_json(directory / 'process-start.json', start)
+            # The core sends ACK only AFTER this durable bounded publication returns.
+
+        receipt = protocol.b._supervise_command(command, directory, env, directory / 'process',
+            limits=dict(protocol.LIMITS), validate=check_inputs, remaining_seconds=remaining,
+            python=Path(sys.executable).resolve(strict=True), witness=protocol.witness(launch),
+            write_record=protocol.write_json, check_output=protocol.destination,
+            scope=protocol.SCOPE, on_command_started=started, stdin=subprocess.DEVNULL)
+        # No end on a raised/failed actor. The reader additionally reparses all wire.
+        if (receipt.get('returncode') != 0 or type(receipt.get('returncode')) is not int
+                or any(receipt.get(k) is not True for k in ('commandReaped', 'guardianReaped', 'reaped',
+                    'startConsumed', 'startAcknowledged', 'callbackCompleted', 'outputComplete', 'guardianStatusEOF'))
+                or type(receipt.get('guardianReturncode')) is not int or receipt['guardianReturncode'] != -9
+                or receipt.get('failure') is not None or receipt.get('cleanupFailure') is not None
+                or receipt.get('reapedScope') != 'DIRECT_GUARDIAN_ONLY'
+                or receipt.get('guardianStatus', {}).get('commandReaped') is not True
+                or type(receipt.get('guardianStatus', {}).get('returncode')) is not int
+                or receipt['guardianStatus']['returncode'] != 0
+                or set(receipt.get('streams', {})) != {'stdout', 'stderr'}
+                or any(row.get('eof') is not True or row.get('overflow') is not None
+                       for row in receipt['streams'].values())):
+            raise r.LabError('owned actor did not report successful complete command')
+        check_inputs()
+        start = protocol.load(directory / 'process-start.json')
+        if receipt.get('commandPID') != start['pid']:
+            raise r.LabError('owned actor actual PID differs')
+        end = dict(schema=2, pid=start['pid'], pgid=start['pgid'], guardianPID=start['guardianPID'],
+            osStart=start['osStart'], status='reaped-by-owned-guardian', exitCode=0,
+            startReceipt=r.identity(directory / 'process-start.json'),
+            actorReceipt=r.identity(directory / 'process.receipt.json'), sourceClock=source_clock,
+            wallFinished=time.time(), monotonicFinished=time.monotonic())
+        protocol.write_json(directory / 'process-exit.json', end)
         active = end['monotonicFinished'] - source_clock['monotonic']
-        manifest = dict(schema=1, captureId=uuid.uuid4().hex, binary=binary_id, assets=asset_id,
-            buildProvenance=proof, overlayFiles=overlays, semanticBootconfig=semantic_boot(boot),
-            semanticConfiguration=semantic_configuration(config), bootconfig=boot_id, configuration=config_id,
-            command=command, exitCode=code, processStart=r.identity(directory / 'process-start.json'),
+        manifest = dict(schema=1, processBinding=protocol.VERSION, captureId=uuid.uuid4().hex,
+            binary=binary_id, assets=asset_id, buildProvenance=proof, overlayFiles=overlays,
+            semanticBootconfig=semantic_boot(boot), semanticConfiguration=semantic_configuration(config),
+            bootconfig=boot_id, configuration=config_id, command=command, exitCode=0,
+            processStart=r.identity(directory / 'process-start.json'),
             processExit=r.identity(directory / 'process-exit.json'), elapsedSeconds=active)
-        # Process binding precedes sequence validation; no synthetic successful exit.
-        r.validate_process_binding(frames, manifest)
-        validate_launch_protocol(directory, launch, manifest)
-        decoded = frontend.captures(frames, config, scenarios.backend(proof), code)
+        protocol.validate_process_binding(frames, manifest)
+        decoded = frontend.captures(frames, config, scenarios.backend(proof), 0)
         scenarios.bind_old(decoded, request.scenario, proof, config)
         manifest['frames'] = r.inventory(decoded)
-        r.dump(manifest_path, manifest)
-        r.dump(directory / frontend.BINDING, frontend._binding(frames, manifest, origin, launch))
+        protocol.write_json(manifest_path, manifest)
+        protocol.write_json(directory / frontend.BINDING, frontend._binding(frames, manifest, origin, launch))
         frontend.validated(frames)
         return frames
     except BaseException as failure:
         if manifest_path.exists():
-            manifest_path.rename(directory / 'rejected-manifest.json')
-        r.durable_dump(directory / 'failure.json', dict(reason=str(failure), exception=type(failure).__name__,
-            timeoutSeconds=request.timeout, pid=process.pid if process is not None else None,
-            log=str(directory / 'process.log')))
+            protocol.reject_manifest(frames)
+        protocol.write_json(directory / 'failure.json', dict(reason=str(failure), exception=type(failure).__name__,
+            timeoutSeconds=request.timeout, pid=actual_pid, stdout=str(directory / 'process.stdout'),
+            stderr=str(directory / 'process.stderr'), scope=protocol.SCOPE))
         raise

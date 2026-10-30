@@ -176,7 +176,7 @@ def supervise(argv, cwd, env, output, plan):
 
 def _supervise_command(argv, cwd, env, output, *, limits, validate,
                        remaining_seconds, python, witness, write_record,
-                       check_output, scope=None, on_command_started=None):
+                       check_output, scope=None, on_command_started=None, stdin=None):
     """Owned guardian/capture mechanism; callers supply their own admission clock.
 
     A successful return follows cleanup and durable receipt publication. Failure
@@ -185,8 +185,13 @@ def _supervise_command(argv, cwd, env, output, *, limits, validate,
     pipe is live. A private acknowledgment gates the actual command's wait/reap
     until that observer returns; the child may already be a zombie, not running.
     Observer failures cancel the owned group; frames alone do not prove OS birth.
+    Omitted stdin preserves existing inheritance. Explicit DEVNULL is inherited
+    by the guardian's command and recorded only for callers opting in.
     """
     ad.need(on_command_started is None or callable(on_command_started), 'command start observer must be callable or None')
+    ad.need(stdin is None or (type(stdin) is int and stdin == subprocess.DEVNULL),
+            'stdin must be absent or explicit DEVNULL')
+    stdin_record = {} if stdin is None else {'stdin': 'DEVNULL'}
     observing = on_command_started is not None
     command_start, start_frame = None, None
     status_wire = bytearray() if observing else None
@@ -242,12 +247,13 @@ def _supervise_command(argv, cwd, env, output, *, limits, validate,
         write_record(output.with_suffix('.command.json'), dict(argv=argv, launchArgv=launch_argv,
             launcher=launcher, guardianSchema=GUARDIAN_SCHEMA, statusBytes=STATUS_BYTES,
             cwd=str(cwd), environment=env, phase=phase, outputLimits=limits, startedUTC=started,
-            inputsSha256=code.sha(json.dumps(witness, sort_keys=True).encode()), **extra, **observer_record))
+            inputsSha256=code.sha(json.dumps(witness, sort_keys=True).encode()), **extra, **observer_record, **stdin_record))
         command_record = identity(output.with_suffix('.command.json'))
         ad.need(launcher == dict(python=identity(python), guardian=identity(GUARDIAN)), 'guardian launcher drift')
         proc = subprocess.Popen(launch_argv, cwd=cwd, env=env, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, start_new_session=True,
-                                pass_fds=(status_write, start_ack_read) if observing else (status_write,))
+                                pass_fds=(status_write, start_ack_read) if observing else (status_write,),
+                                **({} if stdin is None else {'stdin': stdin}))
         streams = dict(stdout=proc.stdout, stderr=proc.stderr)
         os.close(status_write)
         status_write = None
@@ -404,7 +410,7 @@ def _supervise_command(argv, cwd, env, output, *, limits, validate,
                 pid=proc.pid if proc is not None else None,
                 pgid=proc.pid if proc is not None else None, reaped=reaped,
                 guardianReaped=reaped, reapedScope='DIRECT_GUARDIAN_ONLY',
-                finishedUTC=dt.datetime.now(dt.timezone.utc).isoformat(), **extra, **observer_receipt)
+                finishedUTC=dt.datetime.now(dt.timezone.utc).isoformat(), **extra, **observer_receipt, **stdin_record)
             write_record(output.with_suffix('.receipt.json'), receipt)
             if raise_cleanup:
                 raise cleanup_error

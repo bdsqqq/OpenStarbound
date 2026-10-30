@@ -496,6 +496,40 @@ class CaptureTests(unittest.TestCase):
 
 
 class SharedCoreTests(unittest.TestCase):
+    def test_stdin_is_optin_strict_and_preserves_default_popen_kwargs(self):
+        for stdin in (None, builder.subprocess.DEVNULL):
+            for observing in (False, True):
+                with self.subTest(stdin=stdin, observing=observing), capture_fixture() as rig:
+                    if observing:
+                        start = CommandStartTests.start_row(rig)
+                        rig.chunks[13] = [json.dumps(start).encode() + b'\n' + json.dumps(rig.record).encode(), b'']
+                    receipt = builder._supervise_command(['/never-executed'], builder.ROOT / 'source', {},
+                        rig.output, limits=rig.limits, validate=lambda: None, remaining_seconds=lambda: 10,
+                        python=Path(sys.executable).resolve(), witness={}, write_record=builder.ad.primitives.dump,
+                        check_output=lambda path: None, on_command_started=(lambda frame: None) if observing else None,
+                        stdin=stdin)
+                    kwargs = rig.launch.call_args.kwargs
+                    expected = {'cwd', 'env', 'stdout', 'stderr', 'start_new_session', 'pass_fds'}
+                    if stdin is not None:
+                        expected.add('stdin')
+                        self.assertEqual(kwargs['stdin'], builder.subprocess.DEVNULL)
+                        self.assertEqual(receipt['stdin'], 'DEVNULL')
+                    else:
+                        self.assertNotIn('stdin', receipt)
+                    self.assertEqual(set(kwargs), expected)
+                    self.assertEqual(kwargs['pass_fds'], (14, 15) if observing else (14,))
+                    command = json.loads(rig.output.with_suffix('.command.json').read_text())
+                    self.assertEqual('stdin' in command, stdin is not None)
+        for stdin in (True, False, -3.0, 'DEVNULL', 0, -1, [], {}):
+            with self.subTest(stdin=stdin), capture_fixture() as rig:
+                with self.assertRaisesRegex(ValueError, 'explicit DEVNULL'):
+                    builder._supervise_command([], builder.ROOT, {}, rig.output, limits=rig.limits,
+                        validate=lambda: None, remaining_seconds=lambda: 10, python=Path(sys.executable),
+                        witness={}, write_record=builder.ad.primitives.dump, check_output=lambda path: None,
+                        stdin=stdin)
+                rig.launch.assert_not_called()
+                self.assertEqual(list(rig.output.parent.iterdir()), [])
+
     def test_core_returns_receipt_only_after_cleanup_without_native_clock(self):
         with capture_fixture(stdout=(b'\xff\x00', b''), stderr=(b'\x80', b'')) as rig:
             validate = Mock()

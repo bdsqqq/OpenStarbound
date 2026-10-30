@@ -9,6 +9,7 @@ import sys
 
 import static_vector_scenarios as scenarios
 import static_vector_proof as proof_reader
+import static_vector_capture_protocol as protocol
 
 r = scenarios.runner
 HERE = Path(__file__).resolve().parent
@@ -18,8 +19,8 @@ RESTORATION = 'static-vector-restoration.json'
 BINDING = 'static-vector-binding.json'
 LabError = r.LabError
 # Context-independent primitives only; never old launch/validated/comparator.
-create_owned, canonical, check_owned = r.create_owned, r.canonical, r.check_owned
-image, dump, load, identity = r.image, r.dump, r.load, r.identity
+create_owned, canonical, check_owned = protocol.create_owned, r.canonical, r.check_owned
+image, dump, load, identity = protocol.image, protocol.write_json, protocol.load, r.identity
 Image, ImageChops = r.Image, r.ImageChops
 
 
@@ -29,6 +30,12 @@ def _frontend_identity():
         'tool': Path(__file__), 'producer': HERE / 'static_vector_capture.py',
         'registry': HERE / 'static_vector_scenarios.py', 'proofReader': HERE / 'static_vector_proof.py',
         'originValidator': HERE / 'static_vector_origin.py',
+        'captureProtocol': HERE / 'static_vector_capture_protocol.py',
+        'actor': protocol.b.ROOT / 'scripts/build-static-vector-behavior-lab.py',
+        'guardian': protocol.b.GUARDIAN,
+        'admission': HERE.parent / 'static-vector-game/game_build_admission.py',
+        'policy': HERE.parent / 'static-vector-game/enclosure_policy.py',
+        'boundedWriter': HERE.parent / 'static-vector-game/bounded_outputs.py',
         'configurationReader': HERE.parent / 'static-vector-game/configuration.py',
         'legacy': HERE / 'behavior_lab.py', 'legacyContract': HERE / 'test_native_scenario_contract.py',
         'scene25Decoder': HERE / 'behavior_lab_id_map.py', 'scene25Proof': HERE / 'id_map_proof.py',
@@ -69,6 +76,10 @@ def _capture_arguments(argv, executable, assets, directory, timeout, scenario):
         args = parser.parse_args(argv[2:])
     except (argparse.ArgumentError, SystemExit) as error:
         raise LabError('frontend argv malformed') from error
+    output_spellings = [argv[i + 1] for i, word in enumerate(argv[:-1]) if word == '--output']
+    output_spellings += [word.split('=', 1)[1] for word in argv if word.startswith('--output=')]
+    if (output_spellings != [str(directory)] or str(args.output) != output_spellings[0]):
+        raise LabError('one canonical output spelling required')
     if (any(canonical(a) != canonical(b) for a, b in
             ((args.capture, executable), (args.assets, assets), (args.output, directory)))
             or args.timeout != timeout or args.scenario != scenario):
@@ -78,6 +89,7 @@ def _capture_arguments(argv, executable, assets, directory, timeout, scenario):
 def captures(directory, configuration, backend, process_exit_code):
     directory = check_owned(directory)
     scenario = scenarios.require(configuration['scenario'])
+    protocol.preflight_frames(directory)
     if scenario != SCENARIO:
         return scenarios.decode_old(directory, scenario)
     allowed = {'manifest.json', RESTORATION, *(s + ext for s in proof_reader.STAGES for ext in ('.png', '.json'))}
@@ -141,10 +153,10 @@ def validated(directory):
             or type(manifest.get('exitCode')) is not int or manifest['exitCode'] != 0
             or type(manifest.get('captureId')) is not str or not manifest['captureId']):
         raise LabError('successful typed manifest required')
-    r.validate_process_binding(directory, manifest)
+    protocol.validate_process_binding(directory, manifest)
     for field, path in (('configuration', directory.parent / 'scenario.json'), ('bootconfig', directory.parent / 'sbinit.config'),
                         ('binary', Path(manifest['binary']['path'])), ('assets', Path(manifest['assets']['path']))):
-        if identity(path) != manifest[field]:
+        if not proof_reader.same_json(identity(path), manifest[field]):
             raise LabError('actual identity changed: ' + field)
     config = load(directory.parent / 'scenario.json')
     scenario = scenarios.require(config['scenario'])
@@ -166,6 +178,7 @@ def validated(directory):
     if not proof_reader.same_json(proof, manifest['buildProvenance']):
         raise LabError('current build proof changed')
     backend = scenarios.backend(proof)
+    protocol.capture_root(directory.parent, scenario, backend)
     origin = _check_game_origin(binary, proof)
     launch = load(directory.parent / 'launch.json')
     frontend = launch.get('frontend')
@@ -174,7 +187,9 @@ def validated(directory):
         raise LabError('actual new frontend/producer identity differs')
     _capture_arguments(frontend['argv'], binary, Path(manifest['assets']['path']), directory.parent,
                        launch['timeoutSeconds'], scenario)
-    command = [str(binary), '-bootconfig', str(directory.parent / 'sbinit.config')]
+    command, sandbox = protocol.sandbox(binary, directory.parent / 'sbinit.config')
+    if not proof_reader.same_json(launch.get('nativeSandbox'), sandbox):
+        raise LabError('current capture sandbox binding differs')
     for field in ('binary', 'assets', 'buildProvenance', 'overlayFiles', 'configuration', 'bootconfig', 'command'):
         if not proof_reader.same_json(launch.get(field), manifest[field]):
             raise LabError('launch/manifest mismatch: ' + field)
@@ -201,14 +216,24 @@ def capture(executable, assets, directory, timeout=180, scenario=SCENARIO, *, fr
 # Acquired per-scenario comparator projection; regression tests pin every old branch.
 def pair_compare(reference: Path, candidate: Path, output: Path, same_backend=False) -> dict:
     """Read-only with respect to inputs; output must be a fresh lab directory."""
-    output = create_owned(output)
+    if (type(same_backend) is not bool or protocol.location(protocol.compare_root(output))[3]
+            != (('repeatability',) if same_backend else ('comparison',))):
+        raise LabError('comparison kind must match the finite output role')
+    output = create_owned(protocol.compare_root(output))
+    output_scenario = protocol.location(output)[1]
     report = {"schema": 1, "passed": False, "parityCertified": False, "inspectionRequired": True, "gate": {"maxError": 0, "changedPixels": 0},
               "reference": str(reference), "candidate": str(candidate), "frames": {}, "errors": []}
     try:
         if canonical(reference) == canonical(candidate):
             raise LabError("independent runs required; cannot compare a capture to itself")
+        if (protocol.location(Path(reference).parent)[2] != 'reference'
+                or protocol.location(Path(candidate).parent)[2] != ('repeat' if same_backend else 'candidate')):
+            raise LabError('exact reference/repeat/candidate input roles required')
         expected, ref_manifest = validated(check_owned(reference))
         actual, cand_manifest = validated(check_owned(candidate))
+        if (ref_manifest['semanticConfiguration']['scenario'] != output_scenario
+                or cand_manifest['semanticConfiguration']['scenario'] != output_scenario):
+            raise LabError('compare output/input scenario mismatch')
         if ref_manifest.get("captureId") == cand_manifest.get("captureId"):
             raise LabError("independent capture identities required")
         report["identities"] = {"reference": ref_manifest, "candidate": cand_manifest}
@@ -408,8 +433,8 @@ def pair_compare(reference: Path, candidate: Path, output: Path, same_backend=Fa
                 if ref_meta["lightingBackend"] != "cpp" or cand_meta["lightingBackend"] != wanted:
                     row["errors"].append("expected C++ reference and correct comparison backend")
             a, b = image(ref["png"]), image(cand["png"])
-            a.save(output / f"{name}-expected.png")
-            b.save(output / f"{name}-candidate.png")
+            protocol.write_png(output / f"{name}-expected.png", a)
+            protocol.write_png(output / f"{name}-candidate.png", b)
             if a.size != b.size:
                 row["errors"].append("dimensions differ")
                 row.update(maxError=None, changedPixels=None)
@@ -422,7 +447,7 @@ def pair_compare(reference: Path, candidate: Path, output: Path, same_backend=Fa
                 # deltas are zero; alpha differences are also shown in grayscale.
                 channels = delta.split()
                 visual = ImageChops.lighter(delta.convert("RGB"), Image.merge("RGB", [channels[3]] * 3))
-                visual.save(output / f"{name}-diff.png")
+                protocol.write_png(output / f"{name}-diff.png", visual)
                 if row["changedPixels"]:
                     row["errors"].append("exact framebuffer gate failed")
             row["passed"] = not row["errors"]
@@ -460,7 +485,7 @@ def main(argv=None):
             return 0
         if not args.same_backend and args.repeat is None:
             raise LabError('independent native --repeat required BEFORE candidate comparison')
-        output = create_owned(args.output)
+        output = create_owned(protocol.compare_root(args.output, bundle=True))
         baseline = pair_compare(args.reference, args.candidate if args.same_backend else args.repeat,
                                 output / 'repeatability', same_backend=True)
         comparison = None

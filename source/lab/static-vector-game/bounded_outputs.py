@@ -1,4 +1,4 @@
-"""Bound logical JSON bytes at one declared path; not an allocation/native quota.
+"""Bound logical output bytes at one declared path; not an allocation/native quota.
 
 Callers must prohibit concurrent writers and assign finite paths/budgets. Failed
 partials are deliberately retained: retry requires explicit conservation, not
@@ -85,6 +85,31 @@ def write_json(path, value, limit_bytes, *, indent=2, separators=None,
     """
     _need(type(limit_bytes) is int and limit_bytes > 0, 'positive integer byte limit required')
     _need(type(newline) is bool, 'boolean newline required')
+
+    def chunks():
+        encoder = json.JSONEncoder(indent=indent, separators=separators,
+                                   sort_keys=True, ensure_ascii=True, allow_nan=False)
+        yield from encoder.iterencode(value)
+        if newline:
+            yield '\n'
+
+    return _write_chunks(path, chunks(), limit_bytes, replace_expected=replace_expected)
+
+
+def write_bytes(path, raw: bytes, limit_bytes: int):
+    """Publish exact bytes exclusively; reject oversize before touching any path.
+
+    The input already occupies RAM; this is a logical disk-byte bound, not a
+    bound on producing/encoding the input. Failed partials block fresh retries.
+    """
+    _need(type(raw) is bytes, 'bytes required')
+    _need(type(limit_bytes) is int and limit_bytes > 0, 'positive integer byte limit required')
+    _need(len(raw) <= limit_bytes, 'output byte limit exceeded')
+    return _write_chunks(path, (raw,), limit_bytes)
+
+
+def _write_chunks(path, chunks, limit_bytes, *, replace_expected=None):
+    """Publish text/byte chunks through one descriptor-checked protocol."""
     p = _path(path)
     partial = '.' + p.name + '.partial'
     dfd = os.open(p.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -116,16 +141,13 @@ def write_json(path, value, limit_bytes, *, indent=2, separators=None,
             owner = (os.fstat(fd).st_dev, os.fstat(fd).st_ino)
             size = 0
             digest = hashlib.sha256()
-            encoder = json.JSONEncoder(indent=indent, separators=separators,
-                                       sort_keys=True, ensure_ascii=True, allow_nan=False)
 
-            def emit(text):
-                nonlocal size
+            for chunk in chunks:
                 # Scalar JSON is ASCII. Custom indent/separators can contain
                 # Unicode: character length is still a safe early rejection,
                 # then check exact UTF-8 bytes before any part of this chunk.
-                _need(len(text) <= limit_bytes - size, 'JSON byte limit exceeded')
-                data = text.encode('utf-8')
+                _need(len(chunk) <= limit_bytes - size, 'JSON byte limit exceeded')
+                data = chunk.encode('utf-8') if isinstance(chunk, str) else chunk
                 _need(len(data) <= limit_bytes - size, 'JSON byte limit exceeded')
                 offset = 0
                 while offset < len(data):
@@ -137,10 +159,6 @@ def write_json(path, value, limit_bytes, *, indent=2, separators=None,
                     size += count
                     offset += count
 
-            for chunk in encoder.iterencode(value):
-                emit(chunk)
-            if newline:
-                emit('\n')
             os.fsync(fd)
             written = os.fstat(fd)
             _regular(written)

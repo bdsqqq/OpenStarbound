@@ -59,6 +59,19 @@ class RegistryTests(unittest.TestCase):
         added_end = new.index('            elif ref_meta["scenario"] == "buffer-room":')
         new = new[:added_start] + start + new[added_end + len('            elif ref_meta["scenario"] == "buffer-room":'):]
         new = new.replace('"parityCertified": False, "inspectionRequired": True, ', '')
+        # Enumerate ONLY namespace/publication plumbing; every old semantic
+        # branch and pixel/delta calculation must remain byte-exact below.
+        replacements = {
+            "    if (type(same_backend) is not bool or protocol.location(protocol.compare_root(output))[3]\n            != (('repeatability',) if same_backend else ('comparison',))):\n        raise LabError('comparison kind must match the finite output role')\n    output = create_owned(protocol.compare_root(output))\n    output_scenario = protocol.location(output)[1]": "    output = create_owned(output)",
+            "        if (protocol.location(Path(reference).parent)[2] != 'reference'\n                or protocol.location(Path(candidate).parent)[2] != ('repeat' if same_backend else 'candidate')):\n            raise LabError('exact reference/repeat/candidate input roles required')\n": '',
+            "        if (ref_manifest['semanticConfiguration']['scenario'] != output_scenario\n                or cand_manifest['semanticConfiguration']['scenario'] != output_scenario):\n            raise LabError('compare output/input scenario mismatch')\n": '',
+            'protocol.write_png(output / f"{name}-expected.png", a)': 'a.save(output / f"{name}-expected.png")',
+            'protocol.write_png(output / f"{name}-candidate.png", b)': 'b.save(output / f"{name}-candidate.png")',
+            'protocol.write_png(output / f"{name}-diff.png", visual)': 'visual.save(output / f"{name}-diff.png")',
+        }
+        for actual, projected in replacements.items():
+            self.assertIn(actual, new)
+            new = new.replace(actual, projected)
         self.assertEqual(old, new)
         # This includes Buffer IODevice/File/ByteArray and all exception/pixel paths.
         self.assertIn('ref_io', new)
@@ -104,20 +117,28 @@ class RegistryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             (root / 'build').mkdir()
-            ref, cand = root / 'ref', root / 'candidate'
-            ref.mkdir()
-            cand.mkdir()
+            ref, cand = root / 'ref/frames', root / 'candidate/frames'
+            ref.mkdir(parents=True)
+            cand.mkdir(parents=True)
             png = root / 'frame.png'
             Image.new('RGBA', (2, 2), (10, 20, 30, 255)).save(png)
             manifest = dict(captureId='ref', assets={'sha256': 'fake'}, binary={'sha256': 'fake'},
                             overlayFiles={}, semanticBootconfig={}, semanticConfiguration={})
             for scene in s.SCENARIOS:
                 with self.subTest(scene=scene), mock.patch.object(s.runner, 'BUILD', root / 'build'), \
-                        mock.patch.object(lab, 'check_owned', side_effect=lambda value: value):
+                        mock.patch.object(lab, 'check_owned', side_effect=lambda value: value), \
+                        mock.patch.object(lab, 'create_owned', side_effect=s.runner.create_owned), \
+                        mock.patch.object(lab.protocol, 'compare_root', side_effect=Path), \
+                        mock.patch.object(lab.protocol, 'location', side_effect=lambda value:
+                            (value, scene, 'reference' if value == ref.parent else
+                             'candidate' if value == cand.parent else 'compare', ('comparison',))), \
+                        mock.patch.object(lab.protocol, 'write_png', side_effect=lambda path, image: image.save(path)), \
+                        mock.patch.object(lab, 'dump', side_effect=s.runner.dump):
                     ref_meta, cand_meta = metadata(scene), metadata(scene, True)
                     def decoded(path):
                         return ({'frame': dict(receipt=ref_meta if path == ref else cand_meta, png=png, dimensions=[2, 2])},
-                                dict(manifest, captureId='ref' if path == ref else 'candidate'))
+                                dict(manifest, captureId='ref' if path == ref else 'candidate',
+                                     semanticConfiguration={'scenario': scene}))
                     with mock.patch.object(lab, 'validated', side_effect=decoded):
                         result = lab.pair_compare(ref, cand, root / 'build' / (scene + '-positive'))
                         self.assertTrue(result['passed'], result['errors'])

@@ -484,5 +484,243 @@ class BoundedOutputTests(unittest.TestCase):
         self.assertGreater(self.p.stat().st_size, 4)
 
 
+class BytesOutputTests(unittest.TestCase):
+    setUp = BoundedOutputTests.setUp
+
+    def test_exact_binary_and_utf8_at_cap(self):
+        for index, raw in enumerate([b'', b'\x00\xff\x80\n', 'é🙂'.encode('utf-8')]):
+            with self.subTest(raw=raw):
+                p = self.root / str(index)
+                self.assertEqual(bounded.write_bytes(p, raw, max(1, len(raw))), identity(p))
+                self.assertEqual(p.read_bytes(), raw)
+                self.assertEqual(p.stat().st_nlink, 1)
+                self.assertFalse((self.root / ('.' + p.name + '.partial')).exists())
+
+    def test_invalid_input_and_limits_touch_nothing(self):
+        class BytesSubclass(bytes):
+            pass
+        for raw, cap in ([(b'a', cap) for cap in
+                          [True, False, 0, -1, 1.0, float('inf'), '10', None]] +
+                         [(raw, 10) for raw in
+                          ['a', bytearray(b'a'), memoryview(b'a'), None, 1, BytesSubclass(b'a')]]):
+            with self.subTest(raw=raw, cap=cap), patch.object(bounded, '_path') as path, \
+                    patch.object(bounded.os, 'open') as opened, \
+                    patch.object(bounded.os, 'write') as write:
+                with self.assertRaises(ValueError):
+                    bounded.write_bytes(self.p, raw, cap)
+                path.assert_not_called()
+                opened.assert_not_called()
+                write.assert_not_called()
+        self.assertEqual(list(self.root.iterdir()), [])
+
+    def test_oversize_rejected_before_path_open_or_write(self):
+        with patch.object(bounded, '_path') as path, \
+                patch.object(bounded.os, 'open') as opened, \
+                patch.object(bounded.os, 'write') as write:
+            with self.assertRaisesRegex(ValueError, 'byte limit'):
+                bounded.write_bytes(self.p, b'ab', 1)
+            path.assert_not_called()
+            opened.assert_not_called()
+            write.assert_not_called()
+        self.assertEqual(list(self.root.iterdir()), [])
+
+    def test_short_writes_exact_digest_and_piece_bound(self):
+        real_write = os.write
+        counts = []
+        def short(fd, data):
+            self.assertLessEqual(len(data), bounded.PIECE_BYTES)
+            count = real_write(fd, data[:1003])
+            counts.append(count)
+            return count
+        raw = bytes(range(256)) * 600
+        with patch.object(bounded.os, 'write', side_effect=short):
+            got = bounded.write_bytes(self.p, raw, len(raw))
+        self.assertEqual(got, identity(self.p))
+        self.assertEqual(self.p.read_bytes(), raw)
+        self.assertEqual(sum(counts), len(raw))
+        self.assertGreater(len(counts), 100)
+
+    def test_write_error_retains_prefix_and_blocks_retry(self):
+        real_write = os.write
+        calls = 0
+        def broken(fd, data):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                return real_write(fd, data[:2])
+            raise OSError('injected write')
+        with patch.object(bounded.os, 'write', side_effect=broken):
+            with self.assertRaisesRegex(OSError, 'injected write'):
+                bounded.write_bytes(self.p, b'\x00\xffab', 4)
+        self.assertEqual(self.partial.read_bytes(), b'\x00\xff')
+        self.assertFalse(self.p.exists())
+        with self.assertRaises(FileExistsError):
+            bounded.write_bytes(self.p, b'ab', 4)
+
+    def test_invalid_write_progress(self):
+        for index, count in enumerate([0, -1, 3]):
+            with self.subTest(count=count), patch.object(bounded.os, 'write', return_value=count):
+                p = self.root / str(index)
+                with self.assertRaisesRegex(OSError, 'progress'):
+                    bounded.write_bytes(p, b'ab', 2)
+                self.assertFalse(p.exists())
+                self.assertEqual((self.root / ('.' + p.name + '.partial')).read_bytes(), b'')
+
+    def test_existing_destination_aliases_rejected_before_partial(self):
+        target = self.root / 'target'
+        target.write_bytes(b'foreign')
+        for kind in ['regular', 'hardlink', 'symlink', 'dangling', 'directory']:
+            p = self.root / kind
+            if kind == 'regular':
+                p.write_bytes(b'foreign')
+            elif kind == 'hardlink':
+                os.link(target, p)
+            elif kind in ('symlink', 'dangling'):
+                p.symlink_to(target if kind == 'symlink' else self.root / 'missing')
+            else:
+                p.mkdir()
+            before = p.lstat()
+            with self.subTest(kind=kind), self.assertRaisesRegex(ValueError, 'already exists'):
+                bounded.write_bytes(p, b'ab', 2)
+            self.assertEqual(p.lstat(), before)
+            self.assertFalse((self.root / ('.' + kind + '.partial')).exists())
+        self.assertEqual(target.read_bytes(), b'foreign')
+
+    def test_fixed_partial_aliases_rejected(self):
+        target = self.root / 'target'
+        target.write_bytes(b'foreign')
+        for kind in ['regular', 'hardlink', 'symlink', 'dangling', 'directory']:
+            p = self.root / kind
+            partial = self.root / ('.' + kind + '.partial')
+            if kind == 'regular':
+                partial.write_bytes(b'old')
+            elif kind == 'hardlink':
+                os.link(target, partial)
+            elif kind in ('symlink', 'dangling'):
+                partial.symlink_to(target if kind == 'symlink' else self.root / 'missing')
+            else:
+                partial.mkdir()
+            before = partial.lstat()
+            with self.subTest(kind=kind), self.assertRaises(FileExistsError):
+                bounded.write_bytes(p, b'ab', 2)
+            self.assertEqual(partial.lstat(), before)
+            self.assertFalse(p.exists())
+        self.assertEqual(target.read_bytes(), b'foreign')
+
+    def test_noncanonical_and_symlink_parent_paths(self):
+        physical = self.root / 'physical'
+        physical.mkdir()
+        alias = self.root / 'alias'
+        alias.symlink_to(physical, target_is_directory=True)
+        for p in ['/', 'relative', str(self.root) + '/./out',
+                  str(self.root) + '//out', str(self.root) + '/../out', alias / 'out']:
+            with self.subTest(path=p), self.assertRaises(ValueError):
+                bounded.write_bytes(p, b'ab', 2)
+        self.assertEqual(list(physical.iterdir()), [])
+
+    def test_parent_drift_before_publication(self):
+        directory = self.root / 'directory'
+        directory.mkdir()
+        moved = self.root / 'moved'
+        real_fsync = os.fsync
+        def drift(fd):
+            real_fsync(fd)
+            directory.rename(moved)
+            directory.mkdir()
+        with patch.object(bounded.os, 'fsync', side_effect=drift):
+            with self.assertRaisesRegex(ValueError, 'directory drift'):
+                bounded.write_bytes(directory / 'out', b'ab', 2)
+        self.assertFalse((directory / 'out').exists())
+        self.assertEqual((moved / '.out.partial').read_bytes(), b'ab')
+
+    def test_partial_hardlink_before_publication(self):
+        real_fsync = os.fsync
+        def alias(fd):
+            real_fsync(fd)
+            os.link(self.partial, self.root / 'alias')
+        with patch.object(bounded.os, 'fsync', side_effect=alias):
+            with self.assertRaisesRegex(ValueError, 'unique ordinary'):
+                bounded.write_bytes(self.p, b'ab', 2)
+        self.assertFalse(self.p.exists())
+        self.assertEqual(self.partial.stat().st_nlink, 2)
+
+    def test_partial_path_drift_before_publication(self):
+        real_fsync = os.fsync
+        def drift(fd):
+            real_fsync(fd)
+            self.partial.rename(self.root / 'moved')
+            self.partial.write_bytes(b'foreign')
+        with patch.object(bounded.os, 'fsync', side_effect=drift):
+            with self.assertRaisesRegex(ValueError, 'partial path drift'):
+                bounded.write_bytes(self.p, b'ab', 2)
+        self.assertFalse(self.p.exists())
+        self.assertEqual(self.partial.read_bytes(), b'foreign')
+
+    def test_concurrent_destination_not_overwritten(self):
+        real_link = os.link
+        def race(src, dst, **kwargs):
+            self.p.write_bytes(b'foreign')
+            return real_link(src, dst, **kwargs)
+        with patch.object(bounded.os, 'link', side_effect=race):
+            with self.assertRaises(FileExistsError):
+                bounded.write_bytes(self.p, b'ab', 2)
+        self.assertEqual(self.p.read_bytes(), b'foreign')
+        self.assertEqual(self.partial.read_bytes(), b'ab')
+
+    def test_file_fsync_failure_retains_partial(self):
+        with patch.object(bounded.os, 'fsync', side_effect=OSError('injected fsync')):
+            with self.assertRaisesRegex(OSError, 'fsync'):
+                bounded.write_bytes(self.p, b'ab', 2)
+        self.assertEqual(self.partial.read_bytes(), b'ab')
+        self.assertFalse(self.p.exists())
+        with self.assertRaises(FileExistsError):
+            bounded.write_bytes(self.p, b'ab', 2)
+
+    def test_directory_fsync_failure_retains_links_not_success(self):
+        real_fsync = os.fsync
+        calls = 0
+        def fail(fd):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise OSError('injected directory fsync')
+            real_fsync(fd)
+        with patch.object(bounded.os, 'fsync', side_effect=fail):
+            with self.assertRaisesRegex(OSError, 'directory fsync'):
+                bounded.write_bytes(self.p, b'ab', 2)
+        self.assertEqual(self.p.read_bytes(), b'ab')
+        self.assertEqual(self.partial.read_bytes(), b'ab')
+        self.assertEqual(self.p.stat().st_nlink, 2)
+
+    def test_post_publication_identity_reads_real_bytes(self):
+        real_unlink = os.unlink
+        def corrupt(name, **kwargs):
+            result = real_unlink(name, **kwargs)
+            self.p.write_bytes(b'XX')
+            return result
+        with patch.object(bounded.os, 'unlink', side_effect=corrupt):
+            with self.assertRaisesRegex(ValueError, 'published bytes differ'):
+                bounded.write_bytes(self.p, b'ab', 2)
+        self.assertEqual(self.p.read_bytes(), b'XX')
+
+    def test_known_preflight_cap_bypass_mutant_is_detected(self):
+        source = (HERE / 'bounded_outputs.py').read_text()
+        fact = "    _need(len(raw) <= limit_bytes, 'output byte limit exceeded')"
+        self.assertEqual(source.count(fact), 1)
+        namespace = {'__name__': '_bytes_cap_mutant'}
+        exec(compile(source.replace(fact, '    pass', 1), '<bytes-cap-mutant>', 'exec'), namespace)
+        def forbid_path(_):
+            self.fail('oversize input reached path handling')
+        def verify(writer):
+            with self.assertRaisesRegex(ValueError, 'byte limit'):
+                writer(self.p, b'ab', 1)
+        with patch.object(bounded, '_path', side_effect=forbid_path):
+            verify(bounded.write_bytes)
+        with patch.dict(namespace, {'_path': forbid_path}):
+            with self.assertRaisesRegex(AssertionError, 'reached path handling'):
+                verify(namespace['write_bytes'])
+        self.assertEqual(list(self.root.iterdir()), [])
+
+
 if __name__ == '__main__':
     unittest.main()
