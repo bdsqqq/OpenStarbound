@@ -1,5 +1,5 @@
 //! BiMap scalar policy; native map nodes, iterators and return values stay native.
-//! This increment has no C++ caller yet and is NOT application adoption.
+//! Typed lab callers are separate from production dispatch or application adoption.
 use std::cell::Cell;
 use std::ffi::c_void;
 use std::mem::{align_of, size_of};
@@ -13,7 +13,7 @@ const PANIC: u32 = 3;
 const VOID: u32 = 0;
 const BOOL: u32 = 1;
 const SIZE_VALUE: u32 = 2;
-const MODES: u32 = 17;
+const MODES: u32 = 19;
 const M_SIZE: u32 = 0;
 const M_EMPTY: u32 = 1;
 const M_HAS_LEFT: u32 = 2;
@@ -31,6 +31,8 @@ const M_INSERT_ROUTE: u32 = 13;
 const M_INSERT_LINK: u32 = 14;
 const M_COPY_ENTRIES: u32 = 15;
 const M_EQUAL_ENTRIES: u32 = 16;
+const M_EQUAL_PAIR: u32 = 17;
+const M_EQUAL_SCOPED_ENTRIES: u32 = 18;
 const SIZE: u32 = 1;
 const EMPTY: u32 = 2;
 const HAS_LEFT: u32 = 3;
@@ -62,6 +64,7 @@ const LEFT_INSERTED: u32 = 28;
 const ASSERT_RIGHT_INSERTED: u32 = 29;
 const LINK_LEFT: u32 = 30;
 const LINK_RIGHT: u32 = 31;
+const COMPARE_CURRENT_SCOPED: u32 = 32;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -131,6 +134,10 @@ impl Controller {
         self.effect(CLEAR_LEFT)?;
         self.effect(CLEAR_RIGHT)
     }
+    fn equal_current(&self) -> Result<bool, u32> {
+        // Missing keys are skipped by the native operator, not unequal.
+        Ok(!(self.test(FIND_CURRENT_RIGHT)? && self.test(CURRENT_RIGHT_NOT_EQUAL)?))
+    }
     fn run(&self, mode: u32) -> Result<SbBiMapReply, u32> {
         match mode {
             M_SIZE => return Ok(reply(SIZE_VALUE, self.count(SIZE)?)),
@@ -189,9 +196,19 @@ impl Controller {
                 while self.test(ITERATOR_PRESENT)? {
                     // Native BiMap equality skips a missing key. Returning
                     // false here would silently "fix" observable behavior.
-                    if self.test(FIND_CURRENT_RIGHT)? && self.test(CURRENT_RIGHT_NOT_EQUAL)? {
+                    if !self.equal_current()? {
                         return Ok(reply(BOOL, 0));
                     }
+                    self.effect(ADVANCE_ITERATOR)?;
+                }
+                return Ok(reply(BOOL, 1));
+            }
+            M_EQUAL_PAIR => return Ok(reply(BOOL, u64::from(self.equal_current()?))),
+            M_EQUAL_SCOPED_ENTRIES => {
+                while self.test(ITERATOR_PRESENT)? {
+                    // Native constructs the named reference pair once and keeps
+                    // it alive through a nested EQUAL_PAIR Rust invocation.
+                    if !self.test(COMPARE_CURRENT_SCOPED)? { return Ok(reply(BOOL, 0)); }
                     self.effect(ADVANCE_ITERATOR)?;
                 }
                 return Ok(reply(BOOL, 1));
@@ -288,6 +305,8 @@ mod tests {
             (M_INSERT_LINK, vec![v(ASSERT_RIGHT_INSERTED), v(LINK_LEFT), v(LINK_RIGHT)], reply(VOID, 0)),
             (M_COPY_ENTRIES, vec![b(ITERATOR_PRESENT, false)], reply(VOID, 0)),
             (M_EQUAL_ENTRIES, vec![b(ITERATOR_PRESENT, false)], reply(BOOL, 1)),
+            (M_EQUAL_PAIR, vec![b(FIND_CURRENT_RIGHT, true), b(CURRENT_RIGHT_NOT_EQUAL, false)], reply(BOOL, 1)),
+            (M_EQUAL_SCOPED_ENTRIES, vec![b(ITERATOR_PRESENT, true), b(COMPARE_CURRENT_SCOPED, true), v(ADVANCE_ITERATOR), b(ITERATOR_PRESENT, false)], reply(BOOL, 1)),
         ]
     }
     #[test]
@@ -368,6 +387,12 @@ mod tests {
         positive(M_EQUAL_ENTRIES, vec![b(ITERATOR_PRESENT, true), b(FIND_CURRENT_RIGHT, true),
             b(CURRENT_RIGHT_NOT_EQUAL, false), v(ADVANCE_ITERATOR), b(ITERATOR_PRESENT, true),
             b(FIND_CURRENT_RIGHT, true), b(CURRENT_RIGHT_NOT_EQUAL, true)], reply(BOOL, 0));
+    }
+    #[test]
+    fn scoped_pair_and_loop_short_circuit_without_lifetime_flattening() {
+        positive(M_EQUAL_PAIR, vec![b(FIND_CURRENT_RIGHT, false)], reply(BOOL, 1));
+        positive(M_EQUAL_PAIR, vec![b(FIND_CURRENT_RIGHT, true), b(CURRENT_RIGHT_NOT_EQUAL, true)], reply(BOOL, 0));
+        positive(M_EQUAL_SCOPED_ENTRIES, vec![b(ITERATOR_PRESENT, true), b(COMPARE_CURRENT_SCOPED, false)], reply(BOOL, 0));
     }
     #[test]
     fn assertion_off_right_conflict_still_links_in_native_order() {

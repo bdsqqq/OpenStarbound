@@ -7,7 +7,8 @@ extern "C" {
 
 /* scalar source-policy increment, NOT a complete BiMap port or adoption.
  * native maps, keys, iterators, insertion-result prvalues and exceptions stay
- * in C++. typed lifetime/return adapters are pending; no C++ caller exists yet.
+ * in C++. the lab core adapter requires separate qualification; production
+ * dispatch and the remaining typed wrappers are pending.
  * callbacks catch all native exceptions and rethrow only AFTER Rust returns.
  * stop on non-OK without rollback. result initially contains a valid reply;
  * errors do not write result (callbacks' own mutations are not rolled back).
@@ -33,7 +34,9 @@ enum {
   SB_BIMAP_MODE_INSERT_LINK = 14,
   SB_BIMAP_MODE_COPY_ENTRIES = 15,
   SB_BIMAP_MODE_EQUAL_ENTRIES = 16,
-  SB_BIMAP_MODE_COUNT = 17
+  SB_BIMAP_MODE_EQUAL_PAIR = 17,
+  SB_BIMAP_MODE_EQUAL_SCOPED_ENTRIES = 18,
+  SB_BIMAP_MODE_COUNT = 19
 };
 enum {
   SB_BIMAP_SIZE = 1,
@@ -67,7 +70,8 @@ enum {
   SB_BIMAP_ASSERT_RIGHT_INSERTED = 29,
   SB_BIMAP_LINK_LEFT = 30,
   SB_BIMAP_LINK_RIGHT = 31,
-  SB_BIMAP_OP_COUNT = 31
+  SB_BIMAP_COMPARE_CURRENT_SCOPED = 32,
+  SB_BIMAP_OP_COUNT = 32
 };
 
 /* requests: size32/version1/reserved0/arg0=arg1=0. replies: size24/version1/
@@ -75,14 +79,18 @@ enum {
  * SIZE/OTHER_SIZE return SIZE_VALUE. boolean leaves are EMPTY, HAS_LEFT,
  * HAS_RIGHT, RIGHT_FOR_LEFT_PRESENT, LEFT_FOR_RIGHT_PRESENT, ASSIGN_DISTINCT,
  * ITERATOR_PRESENT, INSERT_CURRENT_CHECKED, SELF_EQUAL, EQUAL_ENTRIES,
- * FIND_CURRENT_RIGHT, CURRENT_RIGHT_NOT_EQUAL, LEFT_INSERTED. others use VOID.
+ * FIND_CURRENT_RIGHT, CURRENT_RIGHT_NOT_EQUAL, LEFT_INSERTED,
+ * COMPARE_CURRENT_SCOPED. others use VOID.
  * THROW_LEFT/THROW_RIGHT/THROW_CURRENT_DUPLICATE cannot acknowledge success.
  *
  * INSERT_ROUTE runs with the original native left insertion result alive.
  * INSERT_LINK runs with BOTH original results alive: assertion, left link,
  * right link. do not copy these objects into optional result/pair slots.
  * COPY_ENTRIES/EQUAL_ENTRIES prepare native begin/end expressions and invoke
- * modes COPY_ENTRIES/EQUAL_ENTRIES inside their native lifetime scope.
+ * modes COPY_ENTRIES/EQUAL_SCOPED_ENTRIES inside their native lifetime scope.
+ * COMPARE_CURRENT_SCOPED keeps the original named reference pair alive through
+ * nested EQUAL_PAIR lookup/comparison callbacks. modes0..16 remain unchanged;
+ * flat EQUAL_ENTRIES requires the host to maintain its own valid pair scope.
  * ASSIGN_DISTINCT evaluates the original `this != &map`; SELF_EQUAL evaluates
  * the original `&map == this`, without replacing overloadable expressions.
  */

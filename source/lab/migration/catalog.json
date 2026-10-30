@@ -21402,7 +21402,47 @@
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
+      "path": "source/lab/bimap/frame.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/bimap/frame_test.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/bimap/generate_core.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
       "path": "source/lab/bimap/native.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/bimap/test_generate_core.py",
       "rule": "laboratories"
     },
     {
@@ -32942,7 +32982,7 @@
     },
     {
       "path": "source/core/StarRustBiMap.h",
-      "sha256": "a5df7ac32a611fb879eabb85d9b864a574789fdc1e9d376201cf2d5f5838d796"
+      "sha256": "a90c807872a73263b7c89f7efbd7a664b196e2290f3863d67bb8a06771df57be"
     },
     {
       "path": "source/core/StarRustBuffer.h",
@@ -36553,8 +36593,24 @@
       "sha256": "ff32626a52918f028329ddc3fba25ad35cd1be0ae4709d3df7d011e49ec58c22"
     },
     {
+      "path": "source/lab/bimap/frame.hpp",
+      "sha256": "7132e007c43483cfcb984aea9e73389ebab9439e86eb32ebaa1d6f39c9b392a5"
+    },
+    {
+      "path": "source/lab/bimap/frame_test.cpp",
+      "sha256": "28aff71ad93ac60911944fd49d1c98d97b3ea2c54dcef873de2c6fd52344e0c8"
+    },
+    {
+      "path": "source/lab/bimap/generate_core.py",
+      "sha256": "dc4da94ada76ab9df3b243520b59c15b7860bda22fa5fcde332469cb704b449a"
+    },
+    {
       "path": "source/lab/bimap/native.cpp",
       "sha256": "e194e36911bdce30ad9585f9cc57ca7ba42c70ff2e5d22c68e6613c313edf065"
+    },
+    {
+      "path": "source/lab/bimap/test_generate_core.py",
+      "sha256": "9c7d2f07cc7b900fdccbd2dcdbb3392130ede6ef040b9ac4d6d4d92fb6bbdf5c"
     },
     {
       "path": "source/lab/buffer/StarBuffer.original.cpp",
@@ -39082,7 +39138,7 @@
     },
     {
       "path": "source/rust/ffi/src/bimap.rs",
-      "sha256": "dc3bea972f2e2598a5032a0d10df2a4988c4571aa5c484a4cc7e470b22616b91"
+      "sha256": "4f70c1cb051f5d33454609243f7b33dcc69754af719996b786323615796cd187"
     },
     {
       "path": "source/rust/ffi/src/blocks_along_line.rs",
@@ -40027,7 +40083,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 693,
+      "oracle/harness": 697,
       "retain-tooling": 35,
       "retained-third-party": 296,
       "rust-candidate": 31,
@@ -40068,14 +40124,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 50,
-      "validation.oracles-harness": 722,
+      "validation.oracles-harness": 726,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2194,
+    "files": 2198,
     "modules": 39,
-    "no_direct_target": 1088
+    "no_direct_target": 1092
   }
 }
