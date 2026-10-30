@@ -496,6 +496,36 @@ class CaptureTests(unittest.TestCase):
 
 
 class SharedCoreTests(unittest.TestCase):
+    def test_credential_environment_rejected_before_logs_or_launch(self):
+        keys = ('T3_MCP_BEARER_TOKEN', 'GITHUB_TOKEN', 'AWS_SECRET_ACCESS_KEY',
+                'password', 'APIKEY', 'PRIVATE_KEY', 'COOKIE', 'AUTHORIZATION')
+        for key in keys:
+            with self.subTest(key=key), capture_fixture() as rig:
+                sentinel = 'private-value-must-not-be-published'
+                with self.assertRaisesRegex(ValueError, 'credential-like environment') as caught:
+                    builder._supervise_command(['/never-executed'], builder.ROOT / 'source',
+                        {key: sentinel}, rig.output, limits=rig.limits,
+                        validate=lambda: None, remaining_seconds=lambda: 10,
+                        python=Path(sys.executable).resolve(), witness={},
+                        write_record=builder.ad.primitives.dump, check_output=lambda path: None)
+                self.assertNotIn(sentinel, str(caught.exception))
+                self.assertNotIn(key, str(caught.exception))
+                rig.launch.assert_not_called()
+                self.assertEqual(list(rig.output.parent.iterdir()), [])
+
+    def test_environment_snapshot_cannot_be_changed_by_validation_callback(self):
+        with capture_fixture() as rig:
+            env = {'EXACT': 'value'}
+            builder._supervise_command(['/never-executed'], builder.ROOT / 'source', env,
+                rig.output, limits=rig.limits,
+                validate=lambda: env.update(TOKEN='private-sentinel'),
+                remaining_seconds=lambda: 10, python=Path(sys.executable).resolve(),
+                witness={}, write_record=builder.ad.primitives.dump, check_output=lambda path: None)
+            command = json.loads(rig.output.with_suffix('.command.json').read_text())
+            self.assertEqual(command['environment'], {'EXACT': 'value'})
+            self.assertEqual(rig.launch.call_args.kwargs['env'], {'EXACT': 'value'})
+            self.assertNotIn('private-sentinel', rig.output.with_suffix('.receipt.json').read_text())
+
     def test_stdin_is_optin_strict_and_preserves_default_popen_kwargs(self):
         for stdin in (None, builder.subprocess.DEVNULL):
             for observing in (False, True):

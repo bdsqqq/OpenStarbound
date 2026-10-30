@@ -188,6 +188,17 @@ def _supervise_command(argv, cwd, env, output, *, limits, validate,
     Omitted stdin preserves existing inheritance. Explicit DEVNULL is inherited
     by the guardian's command and recorded only for callers opting in.
     """
+    # Environment bytes are retained verbatim for provenance. Refuse common
+    # credential-bearing keys before opening logs, rather than redact a launch
+    # after execution and misrepresent what the command actually received.
+    ad.need(type(env) is dict and all(type(k) is str and type(v) is str for k, v in env.items()),
+            'recordable string environment required')
+    env = dict(env)
+    credential_markers = ('TOKEN', 'PASSWORD', 'PASSWD', 'SECRET', 'CREDENTIAL',
+                          'API_KEY', 'APIKEY', 'PRIVATE_KEY', 'ACCESS_KEY',
+                          'AUTHORIZATION', 'COOKIE')
+    ad.need(not any(marker in key.upper() for key in env for marker in credential_markers),
+            'credential-like environment keys forbidden in recorded launches')
     ad.need(on_command_started is None or callable(on_command_started), 'command start observer must be callable or None')
     ad.need(stdin is None or (type(stdin) is int and stdin == subprocess.DEVNULL),
             'stdin must be absent or explicit DEVNULL')

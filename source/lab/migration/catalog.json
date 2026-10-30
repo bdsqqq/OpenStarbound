@@ -31728,7 +31728,7 @@
     },
     {
       "path": "scripts/test_build_static_vector_behavior_lab.py",
-      "sha256": "d424e00de0dedaad8a13c5acd81deff5504dbdd6055fd64438eb1e364ab79dd3"
+      "sha256": "731e6d35c5588f1b4d2c555989c15639d8a4093b40218105ba7e806bfd9a6149"
     },
     {
       "path": "scripts/test_cleanup_migration_artifacts.py",
