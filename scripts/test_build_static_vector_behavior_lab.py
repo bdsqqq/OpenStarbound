@@ -8,7 +8,7 @@ from pathlib import Path
 import tempfile
 import unittest
 import sys
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 from types import SimpleNamespace
 
 spec = importlib.util.spec_from_file_location('_sv_builder_test', Path(__file__).with_name('build-static-vector-behavior-lab.py'))
@@ -145,17 +145,18 @@ def capture_fixture(stdout=(b'',), stderr=(b'',), returncode=0):
              patch.object(builder, 'phase_output_limits', return_value=limits), \
              patch.object(builder.subprocess, 'Popen', return_value=proc) as launch, \
              patch.object(builder.secrets, 'token_hex', return_value='fixture-token'), \
-             patch.object(builder.os, 'pipe', return_value=(13, 14)), \
+             patch.object(builder.os, 'pipe', side_effect=[(13, 14), (15, 16)]), \
              patch.object(builder.os, 'fdopen', return_value=status_pipe), \
              patch.object(builder.os, 'close') as close_fd, \
              patch.object(builder.selectors, 'DefaultSelector', return_value=selector), \
              patch.object(builder.os, 'set_blocking') as blocking, \
              patch.object(builder.os, 'read', side_effect=read), \
+             patch.object(builder.os, 'write', side_effect=lambda fd, data: len(data)) as write_fd, \
              patch.object(builder.os, 'killpg', side_effect=lambda pid, sig: events.append(('kill', sig))) as kill:
             yield SimpleNamespace(output=output, streams=streams, chunks=chunks, proc=proc,
                 status_pipe=status_pipe, record=record, close_fd=close_fd,
                 selector=selector, launch=launch, validate=validate,
-                clock=clock, blocking=blocking, kill=kill, limits=limits, events=events,
+                clock=clock, blocking=blocking, kill=kill, limits=limits, events=events, write_fd=write_fd,
                 argv=argv, plan=plan,
                 run=lambda: builder.supervise(argv, builder.ROOT / 'source', {}, output, plan),
                 receipt=lambda: json.loads(output.with_suffix('.receipt.json').read_text()))
@@ -538,6 +539,201 @@ class SharedCoreTests(unittest.TestCase):
             self.assertNotIn('scope', command)
 
 
+class CommandStartTests(unittest.TestCase):
+    @staticmethod
+    def start_row(rig):
+        return {key: (builder.COMMAND_START_SCHEMA if key == 'schema' else value)
+                for key, value in rig.record.items()
+                if key not in ('returncode', 'commandReaped', 'launchError')}
+
+    @staticmethod
+    def run_core(rig, callback):
+        return builder._supervise_command(['/never-executed'], builder.ROOT / 'source', {},
+            rig.output, limits=rig.limits, validate=lambda: None,
+            remaining_seconds=lambda: 10, python=Path(sys.executable).resolve(), witness={},
+            write_record=builder.ad.primitives.dump, check_output=lambda path: None,
+            on_command_started=callback)
+
+    def test_strict_start_payload_schema_identity_and_types(self):
+        with capture_fixture() as rig:
+            good = self.start_row(rig)
+            raw = json.dumps(good).encode()
+            self.assertEqual(builder.command_start_status(raw, 4242, 'fixture-token', good['sourceSha256']), good)
+            cases = [b'', b'\xff', b'x' * 4096, b'[]', b'null', raw + b'\n', raw + b'{}',
+                     raw[:-1] + b',"commandPID":4343}', raw.replace(b'"schema"', b'"extra"')]
+            for key, value in [('extra', 0), ('schema', builder.GUARDIAN_SCHEMA),
+                    ('token', 'wrong'), ('sourceSha256', 'wrong'), ('guardianPID', True),
+                    ('guardianPID', 4242.0), ('guardianPGID', 4343), ('guardianSID', 1),
+                    ('commandPID', True), ('commandPID', 4343.0), ('commandPID', 4242),
+                    ('commandPID', 0), ('commandPID', -1), ('commandPID', 2**31), ('commandPID', None)]:
+                cases.append(json.dumps(dict(good, **{key: value})).encode())
+            for key in good:
+                cases.append(json.dumps({k: v for k, v in good.items() if k != key}).encode())
+            for data in cases:
+                with self.subTest(data=data[:100]), self.assertRaises((ValueError, UnicodeError)):
+                    builder.command_start_status(data, 4242, 'fixture-token', good['sourceSha256'])
+
+    def test_observer_type_rejected_before_output_or_launch(self):
+        for callback in (False, True, 0, 1, 'callback', [], {}):
+            with self.subTest(callback=callback), capture_fixture() as rig:
+                with self.assertRaisesRegex(ValueError, 'callable or None'):
+                    self.run_core(rig, callback)
+                rig.launch.assert_not_called()
+                self.assertEqual(list(rig.output.parent.iterdir()), [])
+
+    def test_partial_and_coalesced_start_before_wait_and_publication(self):
+        for fragmented in (False, True):
+            with self.subTest(fragmented=fragmented), capture_fixture() as rig:
+                start = self.start_row(rig)
+                frame = json.dumps(start).encode() + b'\n'
+                final = json.dumps(rig.record).encode()
+                wire = frame + final
+                rig.chunks[13] = ([wire[:4], BlockingIOError(), wire[4:len(frame)-1],
+                                   wire[len(frame)-1:]] if fragmented else [wire]) + [b'']
+                def observed(row):
+                    self.assertEqual(row, start)
+                    rig.proc.wait.assert_not_called()
+                    rig.kill.assert_not_called()
+                    self.assertFalse(rig.output.with_suffix('.receipt.json').exists())
+                    rig.events.append(('callback',))
+                    row['commandPID'] = 9999  # consumer cannot mutate authoritative state
+                callback = Mock(side_effect=observed)
+                receipt = self.run_core(rig, callback)
+                callback.assert_called_once()
+                self.assertEqual(rig.events, [('callback',), ('kill', builder.signal.SIGKILL), ('wait',)])
+                self.assertTrue(receipt['startConsumed'])
+                self.assertTrue(receipt['callbackCompleted'])
+                self.assertTrue(receipt['outputComplete'])
+                self.assertEqual(receipt['commandStart'], start)
+                self.assertEqual(bytes.fromhex(receipt['commandStartFrameHex']), frame[:-1])
+                self.assertEqual(bytes.fromhex(receipt['guardianProtocolHex']), wire)
+                self.assertEqual(receipt['guardianStatusBytes'], len(wire))
+                self.assertEqual(receipt['commandPID'], 4343)
+                command = json.loads(rig.output.with_suffix('.command.json').read_text())
+                self.assertEqual(command['observer'], 'on_command_started')
+                self.assertEqual(command['startSchema'], builder.COMMAND_START_SCHEMA)
+                argv = rig.launch.call_args.args[0]
+                self.assertEqual(argv[argv.index('--notify-start'):], ['--notify-start', '--start-ack-fd', '15', '--', '/never-executed'])
+                self.assertTrue(receipt['startAcknowledged'])
+                rig.write_fd.assert_called_once_with(16, b'fixture-token\n')
+                self.assertEqual(rig.launch.call_args.kwargs['pass_fds'], (14, 15))
+                rig.proc.poll.assert_not_called()
+
+    def test_missing_late_duplicate_malformed_and_final_pid_drift_cancel(self):
+        for case in ('missing', 'empty', 'late', 'duplicate', 'duplicate-partial',
+                     'final-empty', 'start-partial', 'newline-final', 'malformed', 'duplicate-key',
+                     'nonce', 'source', 'guardian', 'pid', 'float', 'bool', 'final-pid', 'oversize'):
+            with self.subTest(case=case), capture_fixture() as rig:
+                start = self.start_row(rig)
+                final = json.dumps(rig.record).encode()
+                if case in ('nonce', 'source', 'guardian', 'pid', 'float', 'bool'):
+                    key, value = {'nonce': ('token', 'wrong'), 'source': ('sourceSha256', 'wrong'),
+                        'guardian': ('guardianPGID', 4343), 'pid': ('commandPID', 4242),
+                        'float': ('commandPID', 4343.0), 'bool': ('commandPID', True)}[case]
+                    start[key] = value
+                frame = json.dumps(start).encode() + b'\n'
+                wire = frame + final
+                if case == 'missing':
+                    wire = final
+                elif case == 'empty':
+                    wire = b''
+                elif case == 'late':
+                    wire = final + frame
+                elif case in ('duplicate', 'duplicate-partial'):
+                    wire = frame + frame + final
+                elif case == 'duplicate-key':
+                    wire = frame[:-2] + b',"token":"fixture-token"}\n' + final
+                elif case == 'final-empty':
+                    wire = frame
+                elif case == 'start-partial':
+                    wire = frame[:-1]
+                elif case == 'newline-final':
+                    wire += b'\n'
+                elif case == 'malformed':
+                    wire = b'{bad}\n' + final
+                elif case == 'final-pid':
+                    wire = frame + json.dumps(dict(rig.record, commandPID=4444)).encode()
+                elif case == 'oversize':
+                    # Both pieces alone fit; the aggregate must not reset at start.
+                    wire = frame + b'x' * (4097 - len(frame))
+                rig.chunks[13] = ([frame, frame[:3], frame[3:] + final] if case == 'duplicate-partial' else [wire]) + [b'']
+                callback = Mock()
+                with self.assertRaises(ValueError):
+                    self.run_core(rig, callback)
+                receipt = rig.receipt()
+                self.assertFalse(receipt['outputComplete'])
+                self.assertTrue(receipt['guardianReaped'])
+                self.assertIsNotNone(receipt['failure'])
+                self.assertEqual(bytes.fromhex(receipt['guardianProtocolHex']), wire)
+                self.assertLessEqual(callback.call_count, 1)
+                if case == 'final-pid':
+                    self.assertEqual(receipt['commandStart']['commandPID'], 4343)
+                    self.assertEqual(receipt['guardianStatus']['commandPID'], 4444)
+                    self.assertTrue(receipt['commandReaped'])
+                if case in ('missing', 'empty', 'late', 'malformed', 'duplicate-key', 'start-partial', 'nonce', 'source',
+                            'guardian', 'pid', 'float', 'bool', 'oversize'):
+                    callback.assert_not_called()
+                self.assertEqual(rig.events[-2:], [('kill', builder.signal.SIGKILL), ('wait',)])
+                rig.proc.wait.assert_called_once()
+
+    def test_cumulative_cap_after_frame_removed(self):
+        with capture_fixture() as rig:
+            frame = json.dumps(self.start_row(rig)).encode() + b'\n'
+            rig.chunks[13] = [frame, b'x' * (4097 - len(frame)), b'']
+            callback = Mock()
+            with self.assertRaisesRegex(ValueError, 'status size'):
+                self.run_core(rig, callback)
+            callback.assert_called_once()
+            self.assertEqual(rig.receipt()['guardianStatusBytes'], 4097)
+            self.assertTrue(rig.receipt()['callbackCompleted'])
+
+    def test_callback_error_does_not_invent_reaping_from_coalesced_final(self):
+        with capture_fixture() as rig:
+            frame = json.dumps(self.start_row(rig)).encode() + b'\n'
+            rig.chunks[13] = [frame + json.dumps(rig.record).encode(), b'']
+            callback = Mock(side_effect=RuntimeError('OS birth unavailable'))
+            with self.assertRaisesRegex(RuntimeError, 'OS birth unavailable'):
+                self.run_core(rig, callback)
+            callback.assert_called_once()
+            row = rig.receipt()
+            self.assertTrue(row['startConsumed'])
+            self.assertFalse(row['callbackCompleted'])
+            self.assertFalse(row['startAcknowledged'])
+            rig.write_fd.assert_not_called()
+            self.assertEqual(row['commandStart']['commandPID'], 4343)
+            self.assertFalse(row['commandReaped'])
+            self.assertIsNone(row['returncode'])
+            self.assertIsNone(row['guardianStatus'])
+            self.assertTrue(row['guardianReaped'])
+            self.assertEqual(rig.events, [('kill', builder.signal.SIGKILL), ('wait',)])
+
+    def test_default_mode_has_no_observer_fields_and_rejects_start_wire(self):
+        with capture_fixture() as rig:
+            self.run_core(rig, None)
+            receipt = rig.receipt()
+            command = json.loads(rig.output.with_suffix('.command.json').read_text())
+            for key in ('commandStart', 'startConsumed', 'callbackCompleted', 'startAcknowledged', 'commandStartFrameHex', 'guardianProtocolHex'):
+                self.assertNotIn(key, receipt)
+            for key in ('observer', 'startSchema', 'startAcknowledgment'):
+                self.assertNotIn(key, command)
+            self.assertNotIn('--notify-start', command['launchArgv'])
+        with capture_fixture() as rig:
+            rig.chunks[13] = [json.dumps(self.start_row(rig)).encode() + b'\n' + json.dumps(rig.record).encode(), b'']
+            with self.assertRaises(ValueError):
+                self.run_core(rig, None)
+
+    def test_unsafe_start_identity_bypass_control(self):
+        # Isolated mutant: skipping the start validator admits a wrong nonce.
+        # The matching normal-path rejection is exercised above.
+        with capture_fixture() as rig:
+            wrong = dict(self.start_row(rig), token='wrong')
+            rig.chunks[13] = [json.dumps(wrong).encode() + b'\n' + json.dumps(rig.record).encode(), b'']
+            with patch.object(builder, 'command_start_status', return_value=wrong):
+                receipt = self.run_core(rig, Mock())
+            self.assertTrue(receipt['outputComplete'])
+            self.assertEqual(receipt['commandStart']['token'], 'wrong')
+
+
 class GuardianTests(unittest.TestCase):
     def test_protocol_rejects_unknown_duplicate_trailing_and_typed_identities(self):
         with capture_fixture() as rig:
@@ -631,6 +827,110 @@ class GuardianTests(unittest.TestCase):
         guard.assert_called_once_with(['/native', '--source-sha', 'native-argument'], 14, 'token', 'pin', {'EXACT': 'value'})
         self.assertLessEqual(len(guardian.bounded_error(ValueError('😀' * 1000)).encode('utf-8')), 512)
 
+    def test_ack_reader_requires_exact_nonce_and_eof(self):
+        guardian = builder.load('_guardian_ack_test', builder.GUARDIAN)
+        for chunks in ([b'fixture-token\n', b''], [b'fixture-', b'token\n', b'']):
+            with patch.object(guardian.os, 'read', side_effect=chunks):
+                guardian.await_start_ack(15, 'fixture-token')
+        for chunks in ([b''], [b'wrong\n', b''], [b'fixture-token', b''],
+                       [b'fixture-token\nx'], [OSError('read failed')]):
+            with self.subTest(chunks=chunks), patch.object(guardian.os, 'read', side_effect=chunks):
+                with self.assertRaises((ValueError, OSError)):
+                    guardian.await_start_ack(15, 'fixture-token')
+
+    def test_ack_descriptor_invalid_before_child_launch(self):
+        guardian = builder.load('_guardian_ack_fd_test', builder.GUARDIAN)
+        for fd in (None, True, 2, 14):
+            with self.subTest(fd=fd), \
+                 patch.object(guardian.os, 'getpid', return_value=4242), \
+                 patch.object(guardian.os, 'getpgrp', return_value=4242), \
+                 patch.object(guardian.os, 'getsid', return_value=4242), \
+                 patch.object(guardian.os, 'set_inheritable'), \
+                 patch.object(guardian.os, 'close'), \
+                 patch.object(guardian.os, 'write', side_effect=lambda fd, data: len(data)), \
+                 patch.object(guardian.subprocess, 'Popen') as launch, \
+                 patch.object(guardian.signal, 'pause', side_effect=RuntimeError('mock idle stop')):
+                with self.assertRaisesRegex(RuntimeError, 'mock idle stop'):
+                    guardian.guard(['/never'], 14, 'fixture-token',
+                        builder.identity(builder.GUARDIAN)['sha256'], {},
+                        notify_start=True, start_ack_fd=fd)
+                launch.assert_not_called()
+
+    def test_guardian_main_opt_in_flag_stays_before_native_separator(self):
+        guardian = builder.load('_guardian_main_start_test', builder.GUARDIAN)
+        args = [str(builder.GUARDIAN), '--status-fd', '14', '--token', 'token',
+                '--source-sha', 'pin', '--environment-json', '{}', '--notify-start', '--start-ack-fd', '15',
+                '--', '/never', '--notify-start']
+        with patch.object(sys, 'argv', args), patch.object(guardian, 'guard') as guard:
+            guardian.main()
+        guard.assert_called_once_with(['/never', '--notify-start'], 14, 'token', 'pin', {}, notify_start=True, start_ack_fd=15)
+
+    def test_guardian_start_precedes_wait_and_retains_child_on_write_failure(self):
+        guardian = builder.load('_guardian_notify_test', builder.GUARDIAN)
+        for failure in (None, 'start', 'final', 'both'):
+            with self.subTest(writeFailure=failure):
+                proc = Mock(pid=4343)
+                writes, events, closes = [], [], []
+                def write(fd, data):
+                    kind = 'start' if data.endswith(b'\n') else 'final'
+                    events.append(kind)
+                    if failure in (kind, 'both'):
+                        raise BrokenPipeError('mock private write failed')
+                    writes.append(data)
+                    return len(data)
+                proc.wait.side_effect = lambda: events.append('wait-command') or 7
+                acknowledgment = iter([b'fixture-token\n', b''])
+                def read_ack(fd, size):
+                    self.assertEqual(fd, 15)
+                    data = next(acknowledgment)
+                    self.assertLessEqual(len(data), size)
+                    events.append('ack')
+                    return data
+                def close(fd):
+                    closes.append(fd)
+                    events.append(('close', fd))
+                with patch.object(guardian.os, 'getpid', return_value=4242), \
+                     patch.object(guardian.os, 'getpgrp', return_value=4242), \
+                     patch.object(guardian.os, 'getsid', return_value=4242), \
+                     patch.object(guardian.os, 'set_inheritable') as private, \
+                     patch.object(guardian.os, 'close', side_effect=close), \
+                     patch.object(guardian.os, 'write', side_effect=write), \
+                     patch.object(guardian.os, 'read', side_effect=read_ack), \
+                     patch.object(guardian.subprocess, 'Popen', return_value=proc) as spawn, \
+                     patch.object(guardian.signal, 'pause', side_effect=RuntimeError('mock idle stop')) as pause:
+                    with self.assertRaisesRegex(RuntimeError, 'mock idle stop'):
+                        guardian.guard(['/never'], 14, 'fixture-token', builder.identity(builder.GUARDIAN)['sha256'],
+                                       {'EXACT': 'declared'}, notify_start=True, start_ack_fd=15)
+                if failure in ('start', 'both'):
+                    proc.wait.assert_not_called()
+                else:
+                    proc.wait.assert_called_once()
+                self.assertEqual(private.call_args_list, [call(14, False), call(15, False)])
+                pause.assert_called_once()
+                self.assertEqual(closes, [15, 1, 2, 14])
+                expected = ['start'] + ([] if failure in ('start', 'both') else ['ack', 'ack'])
+                expected += [('close', 15), ('close', 1), ('close', 2)]
+                if failure not in ('start', 'both'):
+                    expected += ['wait-command']
+                self.assertEqual(events, expected + ['final', ('close', 14)])
+                self.assertEqual(spawn.call_args.kwargs, dict(env={'EXACT': 'declared'}, close_fds=True, pass_fds=()))
+                self.assertLessEqual(sum(map(len, writes)), builder.STATUS_BYTES)
+                if failure is None:
+                    frame, final = b''.join(writes).split(b'\n')
+                    start = builder.command_start_status(frame, 4242, 'fixture-token', builder.identity(builder.GUARDIAN)['sha256'])
+                    row = builder.guardian_status(final, 4242, 'fixture-token', builder.identity(builder.GUARDIAN)['sha256'])
+                    self.assertEqual(start['commandPID'], 4343)
+                    self.assertEqual(row['commandPID'], 4343)
+                    self.assertEqual(row['returncode'], 7)
+                    self.assertTrue(row['commandReaped'])
+                elif failure == 'start':
+                    # A failed start write must not reset proc=None and forge
+                    # a launch failure for a successfully spawned command.
+                    row = builder.guardian_status(b''.join(writes), 4242, 'fixture-token', builder.identity(builder.GUARDIAN)['sha256'])
+                    self.assertFalse(row['commandReaped'])
+                    self.assertEqual(row['commandPID'], 4343)
+                    self.assertIn('mock private write failed', row['launchError'])
+
     def test_guardian_rejects_wrong_session_and_source_before_native_launch(self):
         guardian = builder.load('_guardian_identity_test', builder.GUARDIAN)
         for case in ('session', 'source'):
@@ -675,6 +975,12 @@ class GuardianTests(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, 'mock idle stop'):
                         guardian.guard(['/exact', '--flag'], 14, 'fixture-token', builder.identity(builder.GUARDIAN)['sha256'], {'EXACT': 'declared'})
                 row = builder.guardian_status(b''.join(writes), 4242, 'fixture-token', builder.identity(builder.GUARDIAN)['sha256'])
+                expected = dict(schema=guardian.SCHEMA, token='fixture-token',
+                    sourceSha256=builder.identity(builder.GUARDIAN)['sha256'], guardianPID=4242,
+                    guardianPGID=4242, guardianSID=4242, commandPID=None if failure else 4343,
+                    returncode=None if failure else 7, commandReaped=not failure,
+                    launchError=guardian.bounded_error(OSError('x' * 1000)) if failure else None)
+                self.assertEqual(b''.join(writes), json.dumps(expected, sort_keys=True, separators=(',', ':')).encode())
                 self.assertEqual(row['commandReaped'], not failure)
                 self.assertEqual(closes, [1, 2, 14])
                 self.assertLessEqual(len(b''.join(writes)), 4096)

@@ -91,7 +91,34 @@ def pair_phase_output_bound():
 
 GUARDIAN = ROOT / 'scripts/static-vector-phase-guardian.py'
 GUARDIAN_SCHEMA = 'static-vector-phase-guardian-v1'
+COMMAND_START_SCHEMA = 'static-vector-command-start-v1'
 STATUS_BYTES = 4096
+
+
+def command_start_status(data, pid, token, source_sha):
+    """reject ambiguous identity before handing a live child to trusted callers."""
+    ad.need(0 < len(data) < STATUS_BYTES, 'command start size')
+
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            ad.need(key not in result, 'duplicate command start key')
+            result[key] = value
+        return result
+
+    text = data.decode('utf-8')
+    row, end = json.JSONDecoder(object_pairs_hook=unique).raw_decode(text)
+    ad.need(end == len(text), 'trailing command start bytes')
+    keys = {'schema', 'token', 'sourceSha256', 'guardianPID', 'guardianPGID',
+            'guardianSID', 'commandPID'}
+    ad.need(type(row) is dict and set(row) == keys, 'command start schema keys')
+    ad.need(row['schema'] == COMMAND_START_SCHEMA and row['token'] == token
+            and row['sourceSha256'] == source_sha, 'command start identity')
+    ad.need(all(type(row[key]) is int and row[key] == pid
+                for key in ('guardianPID', 'guardianPGID', 'guardianSID')), 'command start session identity')
+    child = row['commandPID']
+    ad.need(type(child) is int and 0 < child < 2**31 and child != pid, 'command start pid')
+    return row
 
 
 def guardian_status(data, pid, token, source_sha):
@@ -149,12 +176,22 @@ def supervise(argv, cwd, env, output, plan):
 
 def _supervise_command(argv, cwd, env, output, *, limits, validate,
                        remaining_seconds, python, witness, write_record,
-                       check_output, scope=None):
+                       check_output, scope=None, on_command_started=None):
     """Owned guardian/capture mechanism; callers supply their own admission clock.
 
     A successful return follows cleanup and durable receipt publication. Failure
     reaps the direct guardian but never invents missing command-reaping evidence.
+    An optional trusted observer receives a copied start frame while the private
+    pipe is live. A private acknowledgment gates the actual command's wait/reap
+    until that observer returns; the child may already be a zombie, not running.
+    Observer failures cancel the owned group; frames alone do not prove OS birth.
     """
+    ad.need(on_command_started is None or callable(on_command_started), 'command start observer must be callable or None')
+    observing = on_command_started is not None
+    command_start, start_frame = None, None
+    status_wire = bytearray() if observing else None
+    start_consumed, callback_completed, start_acknowledged = False, False, False
+    start_ack_read, start_ack_write = None, None
     phase = output.name
     for suffix in ('.command.json', '.receipt.json'):
         check_output(output.with_suffix(suffix))
@@ -192,20 +229,31 @@ def _supervise_command(argv, cwd, env, output, *, limits, validate,
         except BaseException:
             os.close(status_read)
             raise
+        if observing:
+            start_ack_read, start_ack_write = os.pipe()
         launch_argv = [str(python), '-B', str(GUARDIAN), '--status-fd', str(status_write),
                        '--token', token, '--source-sha', launcher['guardian']['sha256'],
-                       '--environment-json', json.dumps(env, sort_keys=True), '--'] + list(argv)
+                       '--environment-json', json.dumps(env, sort_keys=True)]
+        if observing:
+            launch_argv += ['--notify-start', '--start-ack-fd', str(start_ack_read)]
+        launch_argv += ['--'] + list(argv)
+        observer_record = dict(observer='on_command_started', startSchema=COMMAND_START_SCHEMA,
+                               startAcknowledgment='nonce-lf-eof-v1') if observing else {}
         write_record(output.with_suffix('.command.json'), dict(argv=argv, launchArgv=launch_argv,
             launcher=launcher, guardianSchema=GUARDIAN_SCHEMA, statusBytes=STATUS_BYTES,
             cwd=str(cwd), environment=env, phase=phase, outputLimits=limits, startedUTC=started,
-            inputsSha256=code.sha(json.dumps(witness, sort_keys=True).encode()), **extra))
+            inputsSha256=code.sha(json.dumps(witness, sort_keys=True).encode()), **extra, **observer_record))
         command_record = identity(output.with_suffix('.command.json'))
         ad.need(launcher == dict(python=identity(python), guardian=identity(GUARDIAN)), 'guardian launcher drift')
         proc = subprocess.Popen(launch_argv, cwd=cwd, env=env, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, start_new_session=True, pass_fds=(status_write,))
+                                stderr=subprocess.PIPE, start_new_session=True,
+                                pass_fds=(status_write, start_ack_read) if observing else (status_write,))
         streams = dict(stdout=proc.stdout, stderr=proc.stderr)
         os.close(status_write)
         status_write = None
+        if start_ack_read is not None:
+            os.close(start_ack_read)
+            start_ack_read = None
         selector = selectors.DefaultSelector()
         for name, stream in dict(streams, status=status_pipe).items():
             os.set_blocking(stream.fileno(), False)
@@ -229,19 +277,46 @@ def _supervise_command(argv, cwd, env, output, *, limits, validate,
             for key, _ in selector.select(delay):
                 name, stream = key.data, key.fileobj
                 try:
-                    size = STATUS_BYTES + 1 - len(status_data) if name == 'status' else limits['readChunkBytes']
+                    size = STATUS_BYTES + 1 - status_bytes_read if name == 'status' else limits['readChunkBytes']
                     data = os.read(stream.fileno(), size)
                 except BlockingIOError:
                     continue
                 if name == 'status':
                     if data:
                         status_bytes_read += len(data)
+                        if observing:
+                            status_wire.extend(data)
                         ad.need(status_bytes_read <= STATUS_BYTES, 'guardian status size')
                         status_data.extend(data)
+                        if observing:
+                            if not start_consumed and b'\n' in status_data:
+                                frame, _, rest = status_data.partition(b'\n')
+                                start_frame = bytes(frame)
+                                command_start = command_start_status(start_frame, proc.pid, token,
+                                                                     launcher['guardian']['sha256'])
+                                start_consumed = True
+                                status_data = bytearray(rest)
+                                # The callback owns any OS birth lookup and its own
+                                # clocks. Never fabricate identity after command reap.
+                                on_command_started(dict(command_start))
+                                callback_completed = True
+                                acknowledgment = token.encode('ascii') + b'\n'
+                                while acknowledgment:
+                                    written = os.write(start_ack_write, acknowledgment)
+                                    ad.need(0 < written <= len(acknowledgment), 'start acknowledgment progress')
+                                    acknowledgment = acknowledgment[written:]
+                                os.close(start_ack_write)
+                                start_ack_write = None
+                                start_acknowledged = True
+                            ad.need(not start_consumed or b'\n' not in status_data, 'duplicate or late command start frame')
                     else:
                         status_eof = True
                         selector.unregister(stream)
+                        if observing:
+                            ad.need(start_consumed and callback_completed and start_acknowledged, 'missing command start notification')
                         status = guardian_status(bytes(status_data), proc.pid, token, launcher['guardian']['sha256'])
+                        if observing:
+                            ad.need(status['commandPID'] == command_start['commandPID'], 'guardian final command pid drift')
                     continue
                 row = counts[name]
                 if not data:
@@ -294,6 +369,13 @@ def _supervise_command(argv, cwd, env, output, *, limits, validate,
                     os.close(status_write)
                 except BaseException as exc:
                     cleanup_error = exc
+            for fd in (start_ack_read, start_ack_write):
+                if fd is not None:
+                    try:
+                        os.close(fd)
+                    except BaseException as exc:
+                        if cleanup_error is None:
+                            cleanup_error = exc
             for resource in [selector, status_pipe] + list(streams.values()) + list(files.values()):
                 if resource is not None:
                     try:
@@ -305,6 +387,10 @@ def _supervise_command(argv, cwd, env, output, *, limits, validate,
             if cleanup_error is not None:
                 complete = False
                 failure = failure or str(cleanup_error) or type(cleanup_error).__name__
+            observer_receipt = dict(commandStart=command_start, startConsumed=start_consumed,
+                callbackCompleted=callback_completed, startAcknowledged=start_acknowledged,
+                guardianProtocolHex=status_wire.hex(),
+                commandStartFrameHex=start_frame.hex() if start_frame is not None else None) if observing else {}
             receipt = dict(argv=argv, launchArgv=launch_argv,
                 launcher=launcher, command=command_record, phase=phase, guardianStatus=status,
                 guardianStatusBytes=status_bytes_read, guardianStatusEOF=status_eof,
@@ -318,7 +404,7 @@ def _supervise_command(argv, cwd, env, output, *, limits, validate,
                 pid=proc.pid if proc is not None else None,
                 pgid=proc.pid if proc is not None else None, reaped=reaped,
                 guardianReaped=reaped, reapedScope='DIRECT_GUARDIAN_ONLY',
-                finishedUTC=dt.datetime.now(dt.timezone.utc).isoformat(), **extra)
+                finishedUTC=dt.datetime.now(dt.timezone.utc).isoformat(), **extra, **observer_receipt)
             write_record(output.with_suffix('.receipt.json'), receipt)
             if raise_cleanup:
                 raise cleanup_error

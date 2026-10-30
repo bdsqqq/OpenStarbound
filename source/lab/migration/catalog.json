@@ -31700,7 +31700,7 @@
     },
     {
       "path": "scripts/static-vector-phase-guardian.py",
-      "sha256": "90165e90a38ed0fc82be7a10652cd69b76495f00e53bdb32a3c8c3f704915273"
+      "sha256": "cd4bb5a01b11aaa660fd00d474297e39f4398b9ab82ccea67a7122dccdea44c1"
     },
     {
       "path": "scripts/test_build_id_map_behavior_lab.py",
@@ -31708,7 +31708,7 @@
     },
     {
       "path": "scripts/test_build_static_vector_behavior_lab.py",
-      "sha256": "c4f19935477e7410822e936e739be5c3cbb22e7b235a621f3fbd3951dabf9718"
+      "sha256": "3efdde868f2ba81c2348c49ba55475e3a0d0a5a08c5ab2c5ebd0b129cd73c1ce"
     },
     {
       "path": "scripts/test_cleanup_migration_artifacts.py",
