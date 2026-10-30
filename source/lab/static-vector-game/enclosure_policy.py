@@ -1,7 +1,11 @@
-"""Write-only Native confinement; ownership attestation belongs to admission.
+"""Constrain process-requested writes; ownership belongs to admission.
 
 Read access and inherited execution remain unchanged. This profile is not
-permission to launch a process or use the network.
+permission to launch a process or use the network, nor a closure over kernel
+or helper I/O. Historical Darwin resource-fork fallback can create shadows
+outside the mount before later authorization (xnu-12377.1.9,
+bsd/vfs/vfs_xattr.c:getshadowfile). That is a reason to require a separate
+filesystem/accounting contract, not evidence of current-provider behavior.
 """
 import hashlib
 import json
