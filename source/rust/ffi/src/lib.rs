@@ -8,6 +8,8 @@ mod weighted_pool;
 pub use weighted_pool::{sb_wp_count, sb_wp_run, SbWpHost, SbWpReply, SbWpRequest};
 mod id_map;
 pub use id_map::{sb_idmap_count, sb_idmap_run, SbIdMapHost, SbIdMapReply, SbIdMapRequest};
+mod bimap;
+pub use bimap::{sb_bimap_count, sb_bimap_run, SbBiMapHost, SbBiMapReply, SbBiMapRequest};
 mod static_vector;
 pub use static_vector::{
     sb_static_vector_count, sb_static_vector_run, SbStaticVectorHost,

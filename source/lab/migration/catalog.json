@@ -6521,6 +6521,16 @@
       "language": "c/c++",
       "line": 1,
       "membership_status": "no-direct-target-found",
+      "module": "foundation.collections",
+      "path": "source/core/StarRustBiMap.h",
+      "rule": "rust-bimap-abi"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "ffi-adapter",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
       "module": "foundation.serialization",
       "path": "source/core/StarRustBuffer.h",
       "rule": "rust-buffer-abi"
@@ -27853,6 +27863,16 @@
       "language": "rust",
       "line": 1,
       "membership_status": "no-direct-target-found",
+      "module": "foundation.collections",
+      "path": "source/rust/ffi/src/bimap.rs",
+      "rule": "rust-bimap"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "rust-candidate",
+      "language": "rust",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
       "module": "base.geometry",
       "path": "source/rust/ffi/src/blocks_along_line.rs",
       "rule": "rust-traversal"
@@ -32891,6 +32911,10 @@
       "sha256": "b114f8651cfa442e3b1f319271435fbceff96e40620f70cda1a959b51db274f6"
     },
     {
+      "path": "source/core/StarRustBiMap.h",
+      "sha256": "a5df7ac32a611fb879eabb85d9b864a574789fdc1e9d376201cf2d5f5838d796"
+    },
+    {
       "path": "source/core/StarRustBuffer.h",
       "sha256": "03b5fc6ad726b3bb794d61e1f61c3f09704450e6edb0f804b81f5a8bda7ba12b"
     },
@@ -37684,7 +37708,7 @@
     },
     {
       "path": "source/lab/migration/modules.json",
-      "sha256": "36098638d3fb7cb0de12eca1d34c5c4d22553de23e124e84bf220e7ad03ee58c"
+      "sha256": "91dc406eb6f28866a330c013a30fce5f6d3dd2c105bbf048dd5a3fe510a98cfd"
     },
     {
       "path": "source/lab/native_artifacts.py",
@@ -39015,6 +39039,10 @@
       "sha256": "267669175e776b6d101e20500baa54766461398a00351f5df271af9bf8975442"
     },
     {
+      "path": "source/rust/ffi/src/bimap.rs",
+      "sha256": "dc3bea972f2e2598a5032a0d10df2a4988c4571aa5c484a4cc7e470b22616b91"
+    },
+    {
       "path": "source/rust/ffi/src/blocks_along_line.rs",
       "sha256": "eda62a9d160bf6f34383b726811c8174ad49a494428c151c2a116be2434e7277"
     },
@@ -39068,7 +39096,7 @@
     },
     {
       "path": "source/rust/ffi/src/lib.rs",
-      "sha256": "23efc7f67e3a08c8f4c67721eeb67e0c3d4c8fa05a8ec403c5b9f858a271dbd7"
+      "sha256": "ae57c858418dc6ae09c3b083d88017e760dabdde20862ed942e0f2af4d24d8df"
     },
     {
       "path": "source/rust/ffi/src/line_query.rs",
@@ -39952,7 +39980,7 @@
   },
   "summary": {
     "by_disposition": {
-      "ffi-adapter": 47,
+      "ffi-adapter": 48,
       "harness": 29,
       "inactive-review": 21,
       "migrate": 960,
@@ -39960,14 +39988,14 @@
       "oracle/harness": 690,
       "retain-tooling": 35,
       "retained-third-party": 296,
-      "rust-candidate": 30,
+      "rust-candidate": 31,
       "test": 57
     },
     "by_module": {
       "base.animation": 2,
       "base.geometry": 6,
       "base.lighting": 6,
-      "foundation.collections": 35,
+      "foundation.collections": 37,
       "foundation.compression-crypto": 18,
       "foundation.math-geometry": 16,
       "foundation.media": 14,
@@ -40004,8 +40032,8 @@
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2189,
+    "files": 2191,
     "modules": 39,
-    "no_direct_target": 1083
+    "no_direct_target": 1085
   }
 }
