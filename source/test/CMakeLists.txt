@@ -27,6 +27,7 @@ SET (star_core_tests_SOURCES
       net_scalar_test.cpp
       net_group_test.cpp
       net_sync_test.cpp
+      net_dynamic_test.cpp
       color_test.cpp
       container_test.cpp
       encode_test.cpp

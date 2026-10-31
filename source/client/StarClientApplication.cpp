@@ -22,6 +22,9 @@
 #ifdef STAR_USE_RUST_NET_GROUP
 #include "StarRustNetSync.h"
 #endif
+#ifdef STAR_USE_RUST_NET_DYNAMIC
+#include "StarRustNetDynamic.h"
+#endif
 #ifdef STAR_USE_RUST_NET_GROUP
 #include "StarRustNetGroup.h"
 #endif
@@ -4539,6 +4542,24 @@ void ClientApplication::renderBehaviorScenario() {
     syncLeafJson.append(syncLeaves[op]);
   metadata = metadata.set("rustNetSync", JsonObject{
       {"main", syncMainJson}, {"allThreads", syncAllJson}, {"attemptedLeaves", syncLeafJson}});
+#endif
+#ifdef STAR_USE_RUST_NET_DYNAMIC
+  uint64_t dynamicMain[SB_NET_DYNAMIC_COUNT], dynamicAll[SB_NET_DYNAMIC_COUNT], dynamicLeaves[SB_NET_DYNAMIC_OP_COUNT];
+  for (uint32_t mode = 0; mode != SB_NET_DYNAMIC_COUNT; ++mode) {
+    dynamicMain[mode] = sb_net_dynamic_count(0, mode);
+    dynamicAll[mode] = sb_net_dynamic_count(1, mode);
+  }
+  for (uint32_t op = 0; op != SB_NET_DYNAMIC_OP_COUNT; ++op)
+    dynamicLeaves[op] = sb_net_dynamic_count(2, op);
+  JsonArray dynamicMainJson, dynamicAllJson, dynamicLeafJson;
+  for (uint32_t mode = 0; mode != SB_NET_DYNAMIC_COUNT; ++mode) {
+    dynamicMainJson.append(dynamicMain[mode]);
+    dynamicAllJson.append(dynamicAll[mode]);
+  }
+  for (uint32_t op = 0; op != SB_NET_DYNAMIC_OP_COUNT; ++op)
+    dynamicLeafJson.append(dynamicLeaves[op]);
+  metadata = metadata.set("rustNetDynamic", JsonObject{
+      {"main", dynamicMainJson}, {"allThreads", dynamicAllJson}, {"attemptedLeaves", dynamicLeafJson}});
 #endif
 #ifdef STAR_USE_RUST_NET_GROUP
   uint64_t groupMain[SB_NET_GROUP_COUNT], groupAll[SB_NET_GROUP_COUNT], groupLeaves[SB_NET_GROUP_OP_COUNT];

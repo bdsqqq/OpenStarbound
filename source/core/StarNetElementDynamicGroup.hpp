@@ -4,6 +4,9 @@
 #include "StarIdMap.hpp"
 #include "StarStrongTypedef.hpp"
 #include "StarDataStreamExtra.hpp"
+#ifdef STAR_USE_RUST_NET_DYNAMIC
+#include "StarNetDynamicHost.hpp"
+#endif
 
 namespace Star {
 
@@ -87,24 +90,61 @@ private:
 
 template <typename Element>
 auto NetElementDynamicGroup<Element>::addNetElement(ElementPtr element) -> ElementId {
+#ifdef STAR_USE_RUST_NET_DYNAMIC
+  ElementId id = NullElementId;
+  NetDynamicDetail::run(SB_NET_DYNAMIC_ADD, [&](uint32_t leaf, uint64_t, SbNetDynamicReply&) {
+    switch (leaf) {
+    case SB_NET_DYNAMIC_READY_NEW: readyElement(element); break;
+    case SB_NET_DYNAMIC_ADD_NEW: id = m_idMap.add(std::move(element)); break;
+    case SB_NET_DYNAMIC_RECORD_ADD: addChangeData(ElementAddition(id, {})); break;
+    default: throw std::logic_error("Invalid dynamic-group add leaf");
+    }
+  });
+#else
   readyElement(element);
   auto id = m_idMap.add(std::move(element));
 
   addChangeData(ElementAddition(id, {})); // we will write the data stream once we know the rules for the one recieving
+#endif
 
   return id;
 }
 
 template <typename Element>
 void NetElementDynamicGroup<Element>::removeNetElement(ElementId id) {
+#ifdef STAR_USE_RUST_NET_DYNAMIC
+  NetDynamicDetail::run(SB_NET_DYNAMIC_REMOVE, [&](uint32_t leaf, uint64_t, SbNetDynamicReply&) {
+    switch (leaf) {
+    case SB_NET_DYNAMIC_REMOVE_ID: m_idMap.remove(id); break;
+    case SB_NET_DYNAMIC_RECORD_REMOVE: addChangeData(ElementRemoval{id}); break;
+    default: throw std::logic_error("Invalid dynamic-group remove leaf");
+    }
+  });
+#else
   m_idMap.remove(id);
   addChangeData(ElementRemoval{id});
+#endif
 }
 
 template <typename Element>
 void NetElementDynamicGroup<Element>::clearNetElements() {
+#ifdef STAR_USE_RUST_NET_DYNAMIC
+  // Keep the original range-for-owned id snapshot, not live IdMap iterators.
+  auto&& ids = netElementIds();
+  auto begin = ids.begin();
+  auto end = ids.end();
+  NetDynamicDetail::run(SB_NET_DYNAMIC_CLEAR, [&](uint32_t leaf, uint64_t, SbNetDynamicReply& reply) {
+    switch (leaf) {
+    case SB_NET_DYNAMIC_MORE: reply.a = begin != end; break;
+    case SB_NET_DYNAMIC_REMOVE_CURRENT_ID: removeNetElement(*begin); break;
+    case SB_NET_DYNAMIC_ADVANCE: ++begin; break;
+    default: throw std::logic_error("Invalid dynamic-group clear leaf");
+    }
+  });
+#else
   for (auto const& id : netElementIds())
     removeNetElement(id);
+#endif
 }
 
 template <typename Element>
@@ -128,33 +168,69 @@ void NetElementDynamicGroup<Element>::initNetVersion(NetElementVersion const* ve
   m_changeData.clear();
   m_changeDataLastVersion = 0;
 
+#ifdef STAR_USE_RUST_NET_DYNAMIC
+  NetDynamicDetail::withRange(SB_NET_DYNAMIC_INIT, m_idMap,
+      [&](uint32_t leaf, uint64_t, auto& current, SbNetDynamicReply&) {
+    switch (leaf) {
+    case SB_NET_DYNAMIC_RECORD_RESET: addChangeData(ElementReset()); break;
+    case SB_NET_DYNAMIC_INIT_CURRENT: current().second->initNetVersion(m_netVersion); break;
+    case SB_NET_DYNAMIC_RECORD_CURRENT_ADD: addChangeData(ElementAddition(current().first, {})); break;
+    default: throw std::logic_error("Invalid dynamic-group init leaf");
+    }
+  });
+#else
   addChangeData(ElementReset());
   for (auto& pair : m_idMap) {
     pair.second->initNetVersion(m_netVersion);
     addChangeData(ElementAddition(pair.first, {})); // we will write the data stream once we know the rules for the one recieving
   }
+#endif
 }
 
 template <typename Element>
 void NetElementDynamicGroup<Element>::enableNetInterpolation(float extrapolationHint) {
   m_interpolationEnabled = true;
   m_extrapolationHint = extrapolationHint;
+#ifdef STAR_USE_RUST_NET_DYNAMIC
+  NetDynamicDetail::withRange(SB_NET_DYNAMIC_ENABLE, m_idMap,
+      [&](uint32_t leaf, uint64_t, auto& current, SbNetDynamicReply&) {
+    if (leaf != SB_NET_DYNAMIC_ENABLE_CURRENT) throw std::logic_error("Invalid dynamic-group enable leaf");
+    current().second->enableNetInterpolation(extrapolationHint);
+  });
+#else
   for (auto& p : m_idMap)
     p.second->enableNetInterpolation(extrapolationHint);
+#endif
 }
 
 template <typename Element>
 void NetElementDynamicGroup<Element>::disableNetInterpolation() {
   m_interpolationEnabled = false;
   m_extrapolationHint = 0.0f;
+#ifdef STAR_USE_RUST_NET_DYNAMIC
+  NetDynamicDetail::withRange(SB_NET_DYNAMIC_DISABLE, m_idMap,
+      [&](uint32_t leaf, uint64_t, auto& current, SbNetDynamicReply&) {
+    if (leaf != SB_NET_DYNAMIC_DISABLE_CURRENT) throw std::logic_error("Invalid dynamic-group disable leaf");
+    current().second->disableNetInterpolation();
+  });
+#else
   for (auto& p : m_idMap)
     p.second->disableNetInterpolation();
+#endif
 }
 
 template <typename Element>
 void NetElementDynamicGroup<Element>::tickNetInterpolation(float dt) {
+#ifdef STAR_USE_RUST_NET_DYNAMIC
+  NetDynamicDetail::withRange(SB_NET_DYNAMIC_TICK, m_idMap,
+      [&](uint32_t leaf, uint64_t, auto& current, SbNetDynamicReply&) {
+    if (leaf != SB_NET_DYNAMIC_TICK_CURRENT) throw std::logic_error("Invalid dynamic-group tick leaf");
+    current().second->tickNetInterpolation(dt);
+  });
+#else
   for (auto& p : m_idMap)
     p.second->tickNetInterpolation(dt);
+#endif
 }
 
 template <typename Element>
@@ -297,10 +373,21 @@ void NetElementDynamicGroup<Element>::readNetDelta(DataStream& ds, float interpo
 
 template <typename Element>
 void NetElementDynamicGroup<Element>::blankNetDelta(float interpolationTime) {
+#ifdef STAR_USE_RUST_NET_DYNAMIC
+  NetDynamicDetail::withRange(SB_NET_DYNAMIC_BLANK, m_idMap,
+      [&](uint32_t leaf, uint64_t, auto& current, SbNetDynamicReply& reply) {
+    switch (leaf) {
+    case SB_NET_DYNAMIC_GROUP_ENABLED: reply.a = m_interpolationEnabled; break;
+    case SB_NET_DYNAMIC_BLANK_CURRENT: current().second->blankNetDelta(interpolationTime); break;
+    default: throw std::logic_error("Invalid dynamic-group blank leaf");
+    }
+  });
+#else
   if (m_interpolationEnabled) {
     for (auto& p : m_idMap)
       p.second->blankNetDelta(interpolationTime);
   }
+#endif
 }
 
 template <typename Element>
@@ -308,20 +395,49 @@ void NetElementDynamicGroup<Element>::addChangeData(ElementChange change) {
   uint64_t currentVersion = m_netVersion ? m_netVersion->current() : 0;
   starAssert(m_changeData.empty() || m_changeData.last().first <= currentVersion);
 
+#ifdef STAR_USE_RUST_NET_DYNAMIC
+  NetDynamicDetail::run(SB_NET_DYNAMIC_CHANGE, [&](uint32_t leaf, uint64_t, SbNetDynamicReply& reply) {
+    switch (leaf) {
+    case SB_NET_DYNAMIC_APPEND_CHANGE: m_changeData.append({currentVersion, std::move(change)}); break;
+    // Preserve the native signed cast/subtraction domain, not a repaired Rust floor.
+    case SB_NET_DYNAMIC_SET_HISTORY_FLOOR: m_changeDataLastVersion = max<int64_t>((int64_t)currentVersion - MaxChangeDataVersions, 0); break;
+    case SB_NET_DYNAMIC_HISTORY_EMPTY: reply.a = m_changeData.empty(); break;
+    case SB_NET_DYNAMIC_HISTORY_BOUNDS:
+      reply.a = m_changeData.first().first;
+      reply.b = m_changeDataLastVersion;
+      break;
+    case SB_NET_DYNAMIC_POP_HISTORY: m_changeData.removeFirst(); break;
+    default: throw std::logic_error("Invalid dynamic-group history leaf");
+    }
+  });
+#else
   m_changeData.append({currentVersion, std::move(change)});
 
   m_changeDataLastVersion = max<int64_t>((int64_t)currentVersion - MaxChangeDataVersions, 0);
   while (!m_changeData.empty() && m_changeData.first().first < m_changeDataLastVersion)
     m_changeData.removeFirst();
+#endif
 }
 
 template <typename Element>
 void NetElementDynamicGroup<Element>::readyElement(ElementPtr const& element) {
+#ifdef STAR_USE_RUST_NET_DYNAMIC
+  NetDynamicDetail::run(SB_NET_DYNAMIC_READY, [&](uint32_t leaf, uint64_t, SbNetDynamicReply& reply) {
+    switch (leaf) {
+    case SB_NET_DYNAMIC_INIT_READY: element->initNetVersion(m_netVersion); break;
+    case SB_NET_DYNAMIC_GROUP_ENABLED: reply.a = m_interpolationEnabled; break;
+    case SB_NET_DYNAMIC_ENABLE_READY: element->enableNetInterpolation(m_extrapolationHint); break;
+    case SB_NET_DYNAMIC_DISABLE_READY: element->disableNetInterpolation(); break;
+    default: throw std::logic_error("Invalid dynamic-group ready leaf");
+    }
+  });
+#else
   element->initNetVersion(m_netVersion);
   if (m_interpolationEnabled)
     element->enableNetInterpolation(m_extrapolationHint);
   else
     element->disableNetInterpolation();
+#endif
 }
 
 }

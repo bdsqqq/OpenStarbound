@@ -38,7 +38,8 @@ bool run(uint32_t mode, uint64_t fromVersion, Function&& function,
 // Iterator scope follows the native range-for, including early successful exits.
 // Error cleanup belongs to this C++ owner, not a compensating Rust callback.
 template <typename Container, typename Function>
-bool withRange(uint32_t mode, uint64_t argument, Container& elements, Function&& function) {
+bool withRange(uint32_t mode, uint64_t argument, Container& elements, Function&& function,
+    uint32_t (*entry)(uint32_t, void*, SbNetGroupHost, uint64_t, uint32_t*) = sb_net_group_run) {
   using Iterator = decltype(elements.begin());
   std::optional<std::pair<Iterator, Iterator>> range;
   auto current = [&]() -> decltype(auto) { return *range->first; };
@@ -55,6 +56,6 @@ bool withRange(uint32_t mode, uint64_t argument, Container& elements, Function&&
     case SB_NET_GROUP_LEAVE_RANGE: range.reset(); break;
     default: function(leaf, value, current, reply); break;
     }
-  });
+  }, entry);
 }
 } }
