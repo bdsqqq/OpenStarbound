@@ -13,6 +13,9 @@
 #ifdef STAR_USE_RUST_ORDERED_SET
 #include "StarRustOrderedSet.h"
 #endif
+#ifdef STAR_USE_RUST_SET
+#include "StarRustSet.h"
+#endif
 #ifdef STAR_USE_RUST_BIMAP
 #include "StarRustBiMap.h"
 #endif
@@ -4474,6 +4477,19 @@ void ClientApplication::renderBehaviorScenario() {
   };
 #ifdef STAR_USE_RUST_UUID
   metadata = metadata.set("rustUuidCalls", JsonArray{sb_uuid_count(0), sb_uuid_count(1), sb_uuid_count(2)});
+#endif
+#ifdef STAR_USE_RUST_SET
+  JsonArray setLoops, setSelections, allSetLoops, allSetSelections;
+  for (uint32_t mode = 0; mode != SB_SET_COUNT; ++mode) {
+    setLoops.append(sb_set_count(mode));
+    allSetLoops.append(sb_set_global_count(0, mode));
+  }
+  for (uint32_t mode = 0; mode != SB_SET_SELECT_COUNT; ++mode) {
+    setSelections.append(sb_set_select_count(mode));
+    allSetSelections.append(sb_set_global_count(1, mode));
+  }
+  metadata = metadata.set("rustSetMain", JsonObject{{"loops", setLoops}, {"selections", setSelections}});
+  metadata = metadata.set("rustSetAllThreads", JsonObject{{"loops", allSetLoops}, {"selections", allSetSelections}});
 #endif
 #ifdef STAR_USE_RUST_ORDERED_SET
   JsonArray orderedSetCalls;

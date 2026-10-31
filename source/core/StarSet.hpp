@@ -6,6 +6,10 @@
 #include "StarFlatHashSet.hpp"
 #include "StarList.hpp"
 
+#ifdef STAR_USE_RUST_SET
+#include "StarSetHost.hpp"
+#endif
+
 namespace Star {
 
 STAR_EXCEPTION(SetException, StarException);
@@ -146,28 +150,61 @@ bool SetMixin<BaseSet>::remove(value_type const& v) {
 template <typename BaseSet>
 template <typename Container>
 void SetMixin<BaseSet>::removeAll(Container const& s) {
+#ifdef STAR_USE_RUST_SET
+  SetDetail::withRange(s, [&](auto& it, auto& end) {
+    SetDetail::run(SB_SET_REMOVE_RANGE, [&](uint32_t operation) -> uint32_t {
+      switch (operation) {
+        case SB_SET_MORE: return it != end ? 1u : 0u;
+        case SB_SET_ADVANCE: ++it; return 0;
+        case SB_SET_REMOVE: {
+          auto const& v = *it;
+          remove(v);
+          return 0;
+        }
+        default: SetDetail::invalidOperation();
+      }
+    });
+  });
+#else
   for (auto const& v : s)
     remove(v);
+#endif
 }
 
 template <typename BaseSet>
 auto SetMixin<BaseSet>::first() -> value_type {
+#ifdef STAR_USE_RUST_SET
+  SetDetail::requireNonEmpty(Base::empty(), [] { throw SetException("first called on empty set"); });
+#else
   if (Base::empty())
     throw SetException("first called on empty set");
+#endif
   return *Base::begin();
 }
 
 template <typename BaseSet>
 auto SetMixin<BaseSet>::maybeFirst() -> Maybe<value_type> {
+#ifdef STAR_USE_RUST_SET
+  switch (SetDetail::selectAction(SB_SET_SELECT_OPTIONAL, Base::empty())) {
+    case SB_SET_ACTION_EMPTY: return {};
+    case SB_SET_ACTION_VALUE: break;
+    default: SetDetail::invalidOperation();
+  }
+#else
   if (Base::empty())
     return {};
+#endif
   return *Base::begin();
 }
 
 template <typename BaseSet>
 auto SetMixin<BaseSet>::takeFirst() -> value_type {
+#ifdef STAR_USE_RUST_SET
+  SetDetail::requireNonEmpty(Base::empty(), [] { throw SetException("takeFirst called on empty set"); });
+#else
   if (Base::empty())
     throw SetException("takeFirst called on empty set");
+#endif
   auto i = Base::begin();
   value_type v = std::move(*i);
   Base::erase(i);
@@ -176,8 +213,16 @@ auto SetMixin<BaseSet>::takeFirst() -> value_type {
 
 template <typename BaseSet>
 auto SetMixin<BaseSet>::maybeTakeFirst() -> Maybe<value_type> {
+#ifdef STAR_USE_RUST_SET
+  switch (SetDetail::selectAction(SB_SET_SELECT_OPTIONAL, Base::empty())) {
+    case SB_SET_ACTION_EMPTY: return {};
+    case SB_SET_ACTION_VALUE: break;
+    default: SetDetail::invalidOperation();
+  }
+#else
   if (Base::empty())
     return {};
+#endif
   auto i = Base::begin();
   value_type v = std::move(*i);
   Base::erase(i);
@@ -186,22 +231,38 @@ auto SetMixin<BaseSet>::maybeTakeFirst() -> Maybe<value_type> {
 
 template <typename BaseSet>
 auto SetMixin<BaseSet>::last() -> value_type {
+#ifdef STAR_USE_RUST_SET
+  SetDetail::requireNonEmpty(Base::empty(), [] { throw SetException("last called on empty set"); });
+#else
   if (Base::empty())
     throw SetException("last called on empty set");
+#endif
   return *prev(Base::end());
 }
 
 template <typename BaseSet>
 auto SetMixin<BaseSet>::maybeLast() -> Maybe<value_type> {
+#ifdef STAR_USE_RUST_SET
+  switch (SetDetail::selectAction(SB_SET_SELECT_OPTIONAL, Base::empty())) {
+    case SB_SET_ACTION_EMPTY: return {};
+    case SB_SET_ACTION_VALUE: break;
+    default: SetDetail::invalidOperation();
+  }
+#else
   if (Base::empty())
     return {};
+#endif
   return *prev(Base::end());
 }
 
 template <typename BaseSet>
 auto SetMixin<BaseSet>::takeLast() -> value_type {
+#ifdef STAR_USE_RUST_SET
+  SetDetail::requireNonEmpty(Base::empty(), [] { throw SetException("takeLast called on empty set"); });
+#else
   if (Base::empty())
     throw SetException("takeLast called on empty set");
+#endif
   auto i = prev(Base::end());
   value_type v = std::move(*i);
   Base::erase(i);
@@ -210,8 +271,16 @@ auto SetMixin<BaseSet>::takeLast() -> value_type {
 
 template <typename BaseSet>
 auto SetMixin<BaseSet>::maybeTakeLast() -> Maybe<value_type> {
+#ifdef STAR_USE_RUST_SET
+  switch (SetDetail::selectAction(SB_SET_SELECT_OPTIONAL, Base::empty())) {
+    case SB_SET_ACTION_EMPTY: return {};
+    case SB_SET_ACTION_VALUE: break;
+    default: SetDetail::invalidOperation();
+  }
+#else
   if (Base::empty())
     return {};
+#endif
   auto i = prev(Base::end());
   value_type v = std::move(*i);
   Base::erase(i);
@@ -220,22 +289,54 @@ auto SetMixin<BaseSet>::maybeTakeLast() -> Maybe<value_type> {
 
 template <typename BaseSet>
 bool SetMixin<BaseSet>::hasIntersection(SetMixin const& s) const {
+#ifdef STAR_USE_RUST_SET
+  bool result = false;
+  SetDetail::withRange(s, [&](auto& it, auto& end) {
+    result = SetDetail::run(SB_SET_ANY, [&](uint32_t operation) -> uint32_t {
+      switch (operation) {
+        case SB_SET_MORE: return it != end ? 1u : 0u;
+        case SB_SET_ADVANCE: ++it; return 0;
+        case SB_SET_CONTAINS: {
+          auto const& v = *it;
+          return contains(v) ? 1u : 0u;
+        }
+        default: SetDetail::invalidOperation();
+      }
+    }) != 0;
+  });
+  return result;
+#else
   for (auto const& v : s) {
     if (contains(v)) {
       return true;
     }
   }
   return false;
+#endif
 }
 
 template <typename BaseSet>
 std::ostream& operator<<(std::ostream& os, SetMixin<BaseSet> const& set) {
   os << "(";
+#ifdef STAR_USE_RUST_SET
+  auto i = set.begin();
+  SetDetail::run(SB_SET_PRINT, [&](uint32_t operation) -> uint32_t {
+    switch (operation) {
+      case SB_SET_MORE: return i != set.end() ? 1u : 0u;
+      case SB_SET_ADVANCE: ++i; return 0;
+      case SB_SET_SEPARATOR_NEEDED: return i != set.begin() ? 1u : 0u;
+      case SB_SET_SEPARATOR: os << ", "; return 0;
+      case SB_SET_PRINT_VALUE: os << *i; return 0;
+      default: SetDetail::invalidOperation();
+    }
+  });
+#else
   for (auto i = set.begin(); i != set.end(); ++i) {
     if (i != set.begin())
       os << ", ";
     os << *i;
   }
+#endif
   os << ")";
   return os;
 }
@@ -291,10 +392,36 @@ template <typename BaseMap>
 HashSetMixin<BaseMap> HashSetMixin<BaseMap>::intersection(HashSetMixin const& s) const {
   // Can't use std::set_intersection, since not sorted, naive version is fine.
   HashSetMixin ret;
+#ifdef STAR_USE_RUST_SET
+  SetDetail::withRange(s, [&](auto& it, auto& end) {
+    SetDetail::run(SB_SET_SCOPED_RANGE, [&](uint32_t operation) -> uint32_t {
+      switch (operation) {
+        case SB_SET_MORE: return it != end ? 1u : 0u;
+        case SB_SET_ADVANCE: ++it; return 0;
+        case SB_SET_BODY: {
+          // A custom base may dereference to a proxy; keep it alive through add.
+          auto const& e = *it;
+          // Preserve the original unqualified lookup, including ADL. Qualifying
+          // this->contains would change valid custom-value behavior and make
+          // previously uninstantiable int intersections silently compile.
+          bool present = contains(e);
+          switch (SetDetail::selectAction(SB_SET_SELECT_FILTER_INTERSECTION, present)) {
+            case SB_SET_ACTION_VALUE: ret.add(e); break;
+            case SB_SET_ACTION_EMPTY: break;
+            default: SetDetail::invalidOperation();
+          }
+          return 0;
+        }
+        default: SetDetail::invalidOperation();
+      }
+    });
+  });
+#else
   for (auto const& e : s) {
     if (contains(e))
       ret.add(e);
   }
+#endif
   return ret;
 }
 
@@ -302,10 +429,33 @@ template <typename BaseMap>
 HashSetMixin<BaseMap> HashSetMixin<BaseMap>::difference(HashSetMixin const& s) const {
   // Can't use std::set_difference, since not sorted, naive version is fine.
   HashSetMixin ret;
+#ifdef STAR_USE_RUST_SET
+  SetDetail::withRange(*this, [&](auto& it, auto& end) {
+    SetDetail::run(SB_SET_SCOPED_RANGE, [&](uint32_t operation) -> uint32_t {
+      switch (operation) {
+        case SB_SET_MORE: return it != end ? 1u : 0u;
+        case SB_SET_ADVANCE: ++it; return 0;
+        case SB_SET_BODY: {
+          // Keep a dereference proxy alive through both the predicate and add.
+          auto const& e = *it;
+          bool present = s.contains(e);
+          switch (SetDetail::selectAction(SB_SET_SELECT_FILTER_DIFFERENCE, present)) {
+            case SB_SET_ACTION_VALUE: ret.add(e); break;
+            case SB_SET_ACTION_EMPTY: break;
+            default: SetDetail::invalidOperation();
+          }
+          return 0;
+        }
+        default: SetDetail::invalidOperation();
+      }
+    });
+  });
+#else
   for (auto const& e : *this) {
     if (!s.contains(e))
       ret.add(e);
   }
+#endif
   return ret;
 }
 

@@ -58,6 +58,8 @@
     {"id":"rust-ordered-set","module":"foundation.collections","disposition":"rust-candidate","pattern":"source/rust/ffi/src/ordered_set\\.rs"},
     {"id":"rust-ordered-set-abi","module":"foundation.collections","disposition":"ffi-adapter","pattern":"source/core/StarRustOrderedSet\\.h"},
     {"id":"rust-ordered-set-host","module":"foundation.collections","disposition":"ffi-adapter","pattern":"source/core/StarOrderedSetHost\\.hpp"},
+    {"id":"rust-set-abi","module":"foundation.collections","disposition":"ffi-adapter","pattern":"source/core/StarRustSet\\.h"},
+    {"id":"rust-set-host","module":"foundation.collections","disposition":"ffi-adapter","pattern":"source/core/StarSetHost\\.hpp"},
     {"id":"rust-bimap-host","module":"foundation.collections","disposition":"ffi-adapter","pattern":"source/core/StarBiMapHost\\.hpp"},
     {"id":"rust-static-vector-abi","module":"foundation.collections","disposition":"ffi-adapter","pattern":"source/core/StarRustStaticVector\\.h"},
     {"id":"rust-static-vector-host","module":"foundation.collections","disposition":"ffi-adapter","pattern":"source/core/StarStaticVectorHost\\.hpp"},

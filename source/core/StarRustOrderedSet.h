@@ -1,7 +1,7 @@
 #ifndef STAR_RUST_ORDERED_SET_H
 #define STAR_RUST_ORDERED_SET_H
 
-#include <stdint.h>
+#include "StarRustSet.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,13 +54,15 @@ enum {
  * Native values() keeps its copy/move scope inside APPEND_COPY. PRINT handles
  * only the loop, not opening/closing parentheses. There is no loop bound.
  */
-typedef uint32_t (*SbOrderedSetLeaf)(void*, uint32_t, uint32_t*);
+typedef SbSetLeaf SbOrderedSetLeaf;
 uint32_t sb_ordered_set_run(uint32_t mode, void* context, SbOrderedSetLeaf leaf);
 
 /* Per-thread wrapping counts: each valid mode with nonnull context/callback
  * counts once on entry, including HOST_ERROR/INVALID response/PANIC outcomes.
  * Nested ADD_RANGE is a separate entry. Rejected calls do not count. Querying
  * an invalid mode (including COUNT, the number of modes) returns zero.
+ * Counts aggregate generic and legacy consumers in the same per-thread cells;
+ * this legacy query exposes only modes 0..6. Run rejects generic modes 7/8.
  */
 uint64_t sb_ordered_set_count(uint32_t mode);
 
@@ -98,7 +100,8 @@ enum {
 uint32_t sb_ordered_set_select(uint32_t mode, uint32_t predicate, uint32_t* out_action);
 
 /* Separate per-thread wrapping accepted-call counts; loop counts are unchanged.
- * Unknown modes (including SELECT_COUNT) return zero.
+ * Unknown modes (including SELECT_COUNT) return zero. Generic and legacy
+ * selections share cells; this legacy API accepts/exposes only modes 0..3.
  */
 uint64_t sb_ordered_set_select_count(uint32_t mode);
 

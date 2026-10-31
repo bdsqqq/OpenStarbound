@@ -13,7 +13,10 @@ pub use bimap::{sb_bimap_count, sb_bimap_run, SbBiMapHost, SbBiMapReply, SbBiMap
 mod uuid;
 pub use uuid::{sb_uuid_compare, sb_uuid_count, sb_uuid_from_bytes, sb_uuid_hash};
 mod ordered_set;
-pub use ordered_set::{sb_ordered_set_count, sb_ordered_set_run, sb_ordered_set_select, sb_ordered_set_select_count};
+pub use ordered_set::{
+    sb_ordered_set_count, sb_ordered_set_run, sb_ordered_set_select, sb_ordered_set_select_count,
+    sb_set_count, sb_set_run, sb_set_select, sb_set_select_count, sb_set_global_count,
+};
 mod static_vector;
 pub use static_vector::{
     sb_static_vector_count, sb_static_vector_run, SbStaticVectorHost,
