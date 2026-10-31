@@ -13,15 +13,20 @@ class ConfigurationTests(unittest.TestCase):
         return ['-D' + key for key, value in config.profiles()['candidate'].items() if value == 'ON']
 
     def cache(self, role):
-        return '\n'.join(key + ':BOOL=' + value for key, value in config.profiles()[role].items())
+        values = dict(config.profiles()[role], **{config.BIMAP: 'OFF'})
+        return '\n'.join(key + ':BOOL=' + value for key, value in values.items())
 
     def test_current_source_defaults(self):
         config.validate_source()
         self.assertEqual(len(config.SELECTORS), 30)
-        self.assertEqual(len(config.configure_options('candidate')), 30)
+        for role in config.profiles():
+            self.assertEqual(len(config.configure_options(role)), 31)
+            self.assertIn('-DSTAR_USE_RUST_BIMAP=OFF', config.configure_options(role))
 
     def test_profiles_extend_existing_policy(self):
         profiles = config.profiles()
+        self.assertEqual(len(profiles['candidate']), 30)
+        self.assertEqual(sum(v == 'ON' for v in profiles['candidate'].values()), 29)
         self.assertEqual({k for k, v in profiles['candidate'].items() if v == 'OFF'},
                          {'STAR_USE_RUST_LINE_QUERY'})
         self.assertTrue(all(v == 'OFF' for v in profiles['reference'].values()))
@@ -48,6 +53,7 @@ class ConfigurationTests(unittest.TestCase):
     def test_missing_duplicate_unknown_or_undefined_macros_rejected(self):
         bad = [self.flags()[:-1], self.flags() + self.flags()[:1],
                self.flags() + ['-DSTAR_USE_RUST_FAKE'],
+               self.flags() + ['-DSTAR_USE_RUST_BIMAP'],
                self.flags() + ['-USTAR_USE_RUST_STATIC_VECTOR'],
                self.flags() + ['-U', 'STAR_USE_RUST_STATIC_VECTOR']]
         for flags in bad:
@@ -69,6 +75,11 @@ class ConfigurationTests(unittest.TestCase):
         candidate = self.cache('candidate')
         for text in [candidate.replace('STAR_USE_RUST_LINE_QUERY:BOOL=OFF', 'STAR_USE_RUST_LINE_QUERY:BOOL=ON'),
                      candidate + '\nSTAR_USE_RUST_STATIC_VECTOR:BOOL=ON',
+                     candidate.replace('STAR_USE_RUST_BIMAP:BOOL=OFF', 'STAR_USE_RUST_BIMAP:BOOL=ON'),
+                     candidate.replace('STAR_USE_RUST_BIMAP:BOOL=OFF', ''),
+                     candidate + '\nSTAR_USE_RUST_BIMAP:BOOL=OFF',
+                     candidate.replace('STAR_USE_RUST_STATIC_VECTOR:BOOL=ON', 'STAR_USE_RUST_BIMAP:BOOL=OFF'),
+                     candidate.replace('STAR_USE_RUST_BIMAP', 'STAR_USE_RUST_FAKE'),
                      candidate.replace('STAR_USE_RUST_STATIC_VECTOR:BOOL=ON', ''),
                      candidate.replace('STAR_USE_RUST_STATIC_VECTOR', 'STAR_USE_RUST_FAKE'),
                      candidate + '\nSTAR_USE_RUST_FAKE:STRING=ON',
@@ -84,12 +95,13 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_source_default_duplicate_missing_or_unknown_mutants_rejected(self):
         text = (config.ROOT / 'source/CMakeLists.txt').read_text()
-        line = next(line for line in text.splitlines(True) if line.startswith('option(STAR_USE_RUST_STATIC_VECTOR '))
-        bad = [text.replace(line, line.replace('OFF)', 'ON)')), text + line,
-               text.replace(line, ''), text.replace(line, line.replace('STATIC_VECTOR', 'FAKE'))]
-        for mutation in bad:
-            with self.subTest(size=len(mutation)), self.assertRaises(ValueError):
-                config.validate_source(mutation)
+        for selector in (config.STATIC_VECTOR, config.BIMAP):
+            line = next(line for line in text.splitlines(True) if line.startswith('option(' + selector + ' '))
+            bad = [text.replace(line, line.replace('OFF)', 'ON)')), text + line,
+                   text.replace(line, ''), text.replace(line, line.replace(selector, 'STAR_USE_RUST_FAKE'))]
+            for mutation in bad:
+                with self.subTest(selector=selector, size=len(mutation)), self.assertRaises(ValueError):
+                    config.validate_source(mutation)
 
 
 if __name__ == '__main__':

@@ -5,10 +5,9 @@
 extern "C" {
 #endif
 
-/* scalar source-policy increment, NOT a complete BiMap port or adoption.
- * native maps, keys, iterators, insertion-result prvalues and exceptions stay
- * in C++. the lab core adapter requires separate qualification; production
- * dispatch and the remaining typed wrappers are pending.
+/* Experimental default-OFF BiMap policy, not complete C++ storage retirement
+ * or application qualification. Native maps, keys, iterators, insertion-result
+ * prvalues and exceptions retain their native types and lifetime scopes.
  * callbacks catch all native exceptions and rethrow only AFTER Rust returns.
  * stop on non-OK without rollback. result initially contains a valid reply;
  * errors do not write result (callbacks' own mutations are not rolled back).
@@ -36,7 +35,11 @@ enum {
   SB_BIMAP_MODE_EQUAL_ENTRIES = 16,
   SB_BIMAP_MODE_EQUAL_PAIR = 17,
   SB_BIMAP_MODE_EQUAL_SCOPED_ENTRIES = 18,
-  SB_BIMAP_MODE_COUNT = 19
+  SB_BIMAP_MODE_PRESENT = 19,
+  SB_BIMAP_MODE_REMOVE_TAKEN = 20,
+  SB_BIMAP_MODE_THROW_TAKE = 21,
+  SB_BIMAP_MODE_PAIRS = 22,
+  SB_BIMAP_MODE_COUNT = 23
 };
 enum {
   SB_BIMAP_SIZE = 1,
@@ -71,7 +74,11 @@ enum {
   SB_BIMAP_LINK_LEFT = 30,
   SB_BIMAP_LINK_RIGHT = 31,
   SB_BIMAP_COMPARE_CURRENT_SCOPED = 32,
-  SB_BIMAP_OP_COUNT = 32
+  SB_BIMAP_PRESENT = 33,
+  SB_BIMAP_REMOVE_TAKEN = 34,
+  SB_BIMAP_THROW_TAKE = 35,
+  SB_BIMAP_APPEND_CURRENT = 36,
+  SB_BIMAP_OP_COUNT = 36
 };
 
 /* requests: size32/version1/reserved0/arg0=arg1=0. replies: size24/version1/
@@ -80,8 +87,12 @@ enum {
  * HAS_RIGHT, RIGHT_FOR_LEFT_PRESENT, LEFT_FOR_RIGHT_PRESENT, ASSIGN_DISTINCT,
  * ITERATOR_PRESENT, INSERT_CURRENT_CHECKED, SELF_EQUAL, EQUAL_ENTRIES,
  * FIND_CURRENT_RIGHT, CURRENT_RIGHT_NOT_EQUAL, LEFT_INSERTED,
- * COMPARE_CURRENT_SCOPED. others use VOID.
- * THROW_LEFT/THROW_RIGHT/THROW_CURRENT_DUPLICATE cannot acknowledge success.
+ * COMPARE_CURRENT_SCOPED/PRESENT. others use VOID.
+ * THROW_LEFT/THROW_RIGHT/THROW_CURRENT_DUPLICATE/THROW_TAKE cannot acknowledge success.
+ * PRESENT selects a native return expression while its iterator/pointer/Maybe
+ * remains live. REMOVE_TAKEN runs after the native key copy exists. THROW_TAKE
+ * runs only after the missing condition-local Maybe has been destroyed.
+ * PAIRS appends a scoped native reference pair, then advances.
  *
  * INSERT_ROUTE runs with the original native left insertion result alive.
  * INSERT_LINK runs with BOTH original results alive: assertion, left link,

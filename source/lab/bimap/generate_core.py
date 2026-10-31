@@ -2,7 +2,7 @@
 """Generate a LAB ONLY partial BiMap core adapter; never compile or run it.
 
 The frozen class, fields and signatures remain native. Forwarding, views, get,
-Maybe/take and pairs remain original and explicitly PENDING partial-port work.
+default wrappers and iterator operations remain original partial-port work.
 Only the listed bodies and include plumbing change. This is not production
 selection, nontrivial-value qualification, or native differential evidence.
 """
@@ -261,10 +261,94 @@ def bodies():
     }
   });
   return frame.run(SB_BIMAP_MODE_EQUAL).value;''')
+    # Keep value construction and return initialization native; Rust decides
+    # presence/removal only, never storing a Maybe or an element across the ABI.
+    for side, key_type, key, native_map in [
+        ("Right", "Left", "left", "m_leftMap"),
+        ("Left", "Right", "right", "m_rightMap"),
+    ]:
+        add(f"Maybe<{side}T> " + base + f"maybe{side}({key_type} const& {key}) const", f'''  auto i = {native_map}.find({key});
+  if (i != {native_map}.end())
+    return *i->second;
+  return {{}};''', f'''  auto i = {native_map}.find({key});
+  auto frame = BiMapFrames::makeFrame([&](SbBiMapRequest const& req) -> SbBiMapReply {{
+    if (req.op == SB_BIMAP_PRESENT) return BiMapFrames::boolReply((bool)(i != {native_map}.end()));
+    return BiMapFrames::invalidReply();
+  }});
+  if (frame.run(SB_BIMAP_MODE_PRESENT).value)
+    return *i->second;
+  return {{}};''')
+        value = side.lower()
+        pointer = value + "Ptr"
+        opposite_map = "m_" + value + "Map"
+        add(f"Maybe<{side}T> " + base + f"maybeTake{side}({key_type} const& {key})", f'''  if (auto {pointer} = {native_map}.maybeTake({key}).value()) {{
+    {side} {value} = *{pointer};
+    {opposite_map}.remove(*{pointer});
+    return {value};
+  }} else {{
+    return {{}};
+  }}''', f'''  auto {pointer} = {native_map}.maybeTake({key}).value();
+  auto present = BiMapFrames::makeFrame([&](SbBiMapRequest const& req) -> SbBiMapReply {{
+    if (req.op == SB_BIMAP_PRESENT) return BiMapFrames::boolReply((bool){pointer});
+    return BiMapFrames::invalidReply();
+  }});
+  if (present.run(SB_BIMAP_MODE_PRESENT).value) {{
+    {side} {value} = *{pointer};
+    auto remove = BiMapFrames::makeFrame([&](SbBiMapRequest const& req) -> SbBiMapReply {{
+      if (req.op == SB_BIMAP_REMOVE_TAKEN) {{ {opposite_map}.remove(*{pointer}); return BiMapFrames::voidReply(); }}
+      return BiMapFrames::invalidReply();
+    }});
+    remove.run(SB_BIMAP_MODE_REMOVE_TAKEN);
+    return {value};
+  }} else {{
+    return {{}};
+  }}''')
+        # The empty Maybe must die before formatting/throwing the missing key.
+        add(f"{side}T " + base + f"take{side}({key_type} const& {key})", f'''  if (auto {value} = maybeTake{side}({key}))
+    return {value}.take();
+  throw MapException::format("No such key in BiMap::take{side}", outputAny({key}));''', f'''  {{
+    auto {value} = maybeTake{side}({key});
+    auto present = BiMapFrames::makeFrame([&](SbBiMapRequest const& req) -> SbBiMapReply {{
+      if (req.op == SB_BIMAP_PRESENT) return BiMapFrames::boolReply((bool){value});
+      return BiMapFrames::invalidReply();
+    }});
+    if (present.run(SB_BIMAP_MODE_PRESENT).value)
+      return {value}.take();
+  }}
+  auto missing = BiMapFrames::makeFrame([&](SbBiMapRequest const& req) -> SbBiMapReply {{
+    if (req.op == SB_BIMAP_THROW_TAKE)
+      throw MapException::format("No such key in BiMap::take{side}", outputAny({key}));
+    return BiMapFrames::invalidReply();
+  }});
+  missing.run(SB_BIMAP_MODE_THROW_TAKE);
+  throw std::logic_error("Invalid BiMap boundary protocol");''')
+    # Range-for iterators die before the original NRVO-eligible return.
+    add("auto " + base + "pairs() const -> List<value_type>", '''  List<value_type> values;
+  for (auto const& p : *this)
+    values.append(p);
+  return values;''', '''  List<value_type> values;
+  {
+    auto cursor = begin();
+    auto last = end();
+    auto frame = BiMapFrames::makeFrame([&](SbBiMapRequest const& req) -> SbBiMapReply {
+      switch (req.op) {
+        case SB_BIMAP_ITERATOR_PRESENT: return BiMapFrames::boolReply((bool)(cursor != last));
+        case SB_BIMAP_APPEND_CURRENT: {
+          auto const& p = *cursor;
+          values.append(p);
+          return BiMapFrames::voidReply();
+        }
+        case SB_BIMAP_ADVANCE_ITERATOR: ++cursor; return BiMapFrames::voidReply();
+        default: return BiMapFrames::invalidReply();
+      }
+    });
+    frame.run(SB_BIMAP_MODE_PAIRS);
+  }
+  return values;''')
     return result
 
 
-def generate(output):
+def generate(output, real_support=False):
     # Caller owns admission, artifact conservation, compilation and execution.
     # Refuse overwrite, aliases and implicit parent creation.
     if not output.is_absolute() or output != output.resolve():
@@ -293,14 +377,15 @@ def generate(output):
     if source_projection != body_projection:
         raise ValueError("non-core body projection drift")
     include_old = '#include "StarString.hpp"'
-    include_new = '#include "' + str(HERE / "StarString.hpp") + '"\n#include "' + str(HERE / "frame.hpp") + '"'
+    support = ROOT / "source/core/StarString.hpp" if real_support else HERE / "StarString.hpp"
+    include_new = '#include "' + str(support) + '"\n#include "' + str(HERE / "frame.hpp") + '"'
     generated = unique_replace(generated, include_old, include_new)
     candidate = unique_replace(native.decode("utf-8"), '#include "StarBiMap.original.hpp"', '#include "StarBiMap.generated.hpp"')
     old_main = "  try { Fixture::cases(); return 0; }"
     new_main = '''  try {
     Fixture::cases();
     std::cerr << "BIMAP_RUST_COUNTS [";
-    for (uint32_t mode = 0; mode < 19; ++mode) {
+    for (uint32_t mode = 0; mode < SB_BIMAP_MODE_COUNT; ++mode) {
       if (mode) std::cerr << ',';
       std::cerr << sb_bimap_count(mode);
     }
@@ -317,16 +402,20 @@ def generate(output):
     inputs = [HERE / "StarBiMap.original.hpp", HERE / "native.cpp", HERE / "StarString.hpp",
               HERE / "frame.hpp", Path(__file__).resolve(), ROOT / "source/core/StarRustBiMap.h",
               ROOT / "source/rust/ffi/src/bimap.rs"]
+    if real_support:
+        inputs.append(support)
     manifest = {
         "schema": 1, "scope": "lab-only partial scalar core adapter; NOT production dispatch",
-        "pending_native_original": ["forwarding", "views", "get", "Maybe", "take", "pairs", "default wrappers", "iterator operations"],
+        "support": {"kind": "real" if real_support else "shim", "path": str(support),
+                    "sha256": sha(support.read_bytes())},
+        "pending_native_original": ["forwarding", "views", "get", "default wrappers", "iterator operations"],
         "inputs": [{"path": str(p), "sha256": sha(p.read_bytes())} for p in inputs],
         "body_replacements": records,
         "body_projection": {"sha256": sha(source_projection.encode()), "equal": True,
                             "fixture_reverse_projection_sha256": sha(reverse.encode())},
         "include_edits": [{"oldText": include_old, "newText": include_new}],
         "outputs": {"StarBiMap.generated.hpp": sha(generated.encode()), "candidate.cpp": sha(candidate.encode())},
-        "requires": "C++17; compiler -I source/core; fresh existing Rust aggregate with additive modes17/18 and op32",
+        "requires": "C++17; compiler -I source/core; fresh existing Rust aggregate with additive modes17..22 and ops32..36; candidate.cpp remains historical shim fixture, use separate fixture for real support",
         "execution": "NOT RUN by generator; parent owns all compilation, differential checks and qualification",
     }
     # All pins/projections are checked before the first output write.
@@ -339,8 +428,10 @@ def generate(output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", required=True, type=Path)
+    parser.add_argument("--real-support", action="store_true",
+                        help="include absolute production StarString.hpp; not production dispatch")
     args = parser.parse_args()
-    generate(args.output_dir)
+    generate(args.output_dir, real_support=args.real_support)
 
 
 if __name__ == "__main__":

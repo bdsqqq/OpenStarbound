@@ -10,7 +10,10 @@ _spec = importlib.util.spec_from_file_location(
     ROOT / 'source/lab/id-map-production/game_build_admission.py')
 _legacy = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_legacy)
+# scene26 remains the historical 30-selector projection; BiMap is not admitted.
 SELECTORS = (*_legacy.SELECTORS, STATIC_VECTOR)
+BIMAP = 'STAR_USE_RUST_BIMAP'
+CURRENT_SELECTORS = (*SELECTORS, BIMAP)
 
 
 def need(ok, why):
@@ -30,9 +33,9 @@ def validate_source(text=None):
         text = (ROOT / 'source/CMakeLists.txt').read_text()
     declared = re.findall(r'\b(?i:option)\s*\(\s*(STAR_USE_RUST_\w+)\b', text)
     rows = re.findall(r'\b(?i:option)\s*\(\s*(STAR_USE_RUST_\w+)\s+"[^"\n]*"\s+(ON|OFF)\s*\)', text)
-    need(len(declared) == len(set(declared)) == len(SELECTORS) == 30 and
-         set(declared) == set(SELECTORS), 'exact current30 selector declarations')
-    need(len(rows) == 30 and dict(rows) == {key: 'OFF' for key in SELECTORS},
+    need(len(declared) == len(set(declared)) == len(CURRENT_SELECTORS) == 31 and
+         set(declared) == set(CURRENT_SELECTORS), 'exact current31 selector declarations')
+    need(len(rows) == 31 and dict(rows) == {key: 'OFF' for key in CURRENT_SELECTORS},
          'all source selector defaults must remain OFF')
 
 
@@ -45,16 +48,19 @@ def validate_profile(role, values):
 def configure_options(role):
     validate_source()
     need(role in profiles(), 'exact reference/candidate role required')
-    return ['-D' + key + '=' + value for key, value in sorted(profiles()[role].items())]
+    values = dict(profiles()[role], **{BIMAP: 'OFF'})
+    return ['-D' + key + '=' + value for key, value in sorted(values.items())]
 
 
 def validate_cache(role, text):
     entries = re.findall(r'^(STAR_USE_RUST_[A-Z0-9_]+):([^=\n]+)=(.*)$', text, re.M)
-    need(len(entries) == 30 and all(kind == 'BOOL' and value in ('ON', 'OFF') for _, kind, value in entries),
-         'exact30 BOOL cached selectors required')
-    rows = [(key, value) for key, _, value in entries]
-    need(len(dict(rows)) == 30, 'unique cached selectors required')
-    validate_profile(role, dict(rows))
+    need(len(entries) == 31 and all(kind == 'BOOL' and value in ('ON', 'OFF') for _, kind, value in entries),
+         'exact31 BOOL cached selectors required')
+    rows = {key: value for key, _, value in entries}
+    need(len(rows) == 31, 'unique cached selectors required')
+    need(set(rows) == set(CURRENT_SELECTORS), 'exact current cached selectors required')
+    need(rows.pop(BIMAP) == 'OFF', 'BiMap must remain OFF')
+    validate_profile(role, rows)
 
 
 def validate_flags(role, flags):

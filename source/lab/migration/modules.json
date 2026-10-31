@@ -53,6 +53,7 @@
     {"id":"rust-id-map-host","module":"foundation.collections","disposition":"ffi-adapter","pattern":"source/core/StarIdMapHost\\.hpp"},
     {"id":"rust-id-map-abi","module":"foundation.collections","disposition":"ffi-adapter","pattern":"source/core/StarRustIdMap\\.h"},
     {"id":"rust-bimap-abi","module":"foundation.collections","disposition":"ffi-adapter","pattern":"source/core/StarRustBiMap\\.h"},
+    {"id":"rust-bimap-host","module":"foundation.collections","disposition":"ffi-adapter","pattern":"source/core/StarBiMapHost\\.hpp"},
     {"id":"rust-static-vector-abi","module":"foundation.collections","disposition":"ffi-adapter","pattern":"source/core/StarRustStaticVector\\.h"},
     {"id":"rust-static-vector-host","module":"foundation.collections","disposition":"ffi-adapter","pattern":"source/core/StarStaticVectorHost\\.hpp"},
     {"id":"static-vector-tile-observer","module":"foundation.collections","disposition":"ffi-adapter","pattern":"source/core/StarTileSectorArrayObserver\\.hpp"},

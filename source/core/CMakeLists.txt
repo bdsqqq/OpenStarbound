@@ -14,6 +14,8 @@ SET (star_core_HEADERS
     StarBTree.hpp
     StarBTreeDatabase.hpp
     StarBiMap.hpp
+    StarBiMapHost.hpp
+    StarRustBiMap.h
     StarBlockAllocator.hpp
     StarBuffer.hpp
     StarByteArray.hpp

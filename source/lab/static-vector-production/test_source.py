@@ -21,6 +21,9 @@ OPTION = b'option(STAR_USE_RUST_STATIC_VECTOR "Use experimental Rust StaticVecto
 DEFINE = b"if(STAR_USE_RUST_STATIC_VECTOR)\n  add_compile_definitions(STAR_USE_RUST_STATIC_VECTOR)\nendif()\n\n"
 ID_OPTION = b'option(STAR_USE_RUST_ID_MAP "Use experimental Rust IdMap controllers" OFF)\n'
 ID_DEFINE = b"if(STAR_USE_RUST_ID_MAP)\n  add_compile_definitions(STAR_USE_RUST_ID_MAP)\nendif()\n\n"
+BIMAP_OPTION = b'option(STAR_USE_RUST_BIMAP "Use experimental Rust BiMap controllers/policy" OFF)\n'
+BIMAP_DEFINE = b"if(STAR_USE_RUST_BIMAP)\n  add_compile_definitions(STAR_USE_RUST_BIMAP)\nendif()\n\n"
+BIMAP_MEMBER = b" OR STAR_USE_RUST_BIMAP)"
 
 
 def require(condition, label):
@@ -95,6 +98,19 @@ def check_define(cmake):
     require(cmake.count(b"add_compile_definitions(STAR_USE_RUST_STATIC_VECTOR)") == 1, "conditional define")
 
 
+def normalize_current_cmake(cmake):
+    # Exclude only the new default-off BiMap integration from this historical
+    # StaticVector contract; neither the snapshot nor its pinned hash changes.
+    require(cmake.count(BIMAP_OPTION) == 1 and cmake.count(BIMAP_DEFINE) == 1 and
+            cmake.count(BIMAP_MEMBER) == 1 and
+            aggregate_gate(cmake).count(b"STAR_USE_RUST_BIMAP") == 1,
+            "BiMap integration shape")
+    restored = cmake.replace(BIMAP_OPTION, b"", 1).replace(BIMAP_DEFINE, b"", 1)
+    restored = restored.replace(BIMAP_MEMBER, b")", 1)
+    require(b"STAR_USE_RUST_BIMAP" not in restored, "BiMap integration shape")
+    return restored
+
+
 def check_cmake_scope(cmake, before):
     # Reverse ONLY the three authorized edits. Exact equality then excludes new
     # crates, runtime/linker/provider settings and changes to existing defaults.
@@ -114,7 +130,8 @@ class SourceContract(unittest.TestCase):
         cls.helper = (ROOT / "source/core/StarStaticVectorHost.hpp").read_bytes()
         cls.candidate = (ROOT / "source/lab/static-vector-frames/StaticVector.hpp").read_bytes()
         cls.frame = (ROOT / "source/lab/static-vector-frames/frame.hpp").read_bytes()
-        cls.cmake = (ROOT / "source/CMakeLists.txt").read_bytes()
+        cls.current_cmake = (ROOT / "source/CMakeLists.txt").read_bytes()
+        cls.cmake = normalize_current_cmake(cls.current_cmake)
 
     def test_common_declaration_fields_exception_and_guarded_include(self):
         check_common(self.header, self.original)
@@ -204,6 +221,16 @@ class SourceContract(unittest.TestCase):
     def test_bad_production_lab_include(self):
         mutant = self.helper + b'\n#include "../lab/static-vector-frames/frame.hpp"\n'
         self.reject("production lab include", check_no_lab, self.header, mutant)
+
+    def test_bad_bimap_integration(self):
+        bad = [self.current_cmake.replace(BIMAP_OPTION, BIMAP_OPTION.replace(b" OFF)", b" ON)"), 1),
+               self.current_cmake.replace(BIMAP_OPTION, b"", 1),
+               self.current_cmake + BIMAP_OPTION,
+               self.current_cmake.replace(BIMAP_MEMBER, b")", 1),
+               self.current_cmake.replace(BIMAP_DEFINE, b"add_compile_definitions(STAR_USE_RUST_BIMAP)\n\n", 1)]
+        for mutant in bad:
+            with self.subTest(size=len(mutant)):
+                self.reject("BiMap integration shape", normalize_current_cmake, mutant)
 
     def test_bad_extra_runtime_configuration(self):
         mutant = self.cmake + b"\nset(STAR_RUST_TARGET_DIR unexpected)\n"

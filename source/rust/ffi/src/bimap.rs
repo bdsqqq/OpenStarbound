@@ -13,7 +13,7 @@ const PANIC: u32 = 3;
 const VOID: u32 = 0;
 const BOOL: u32 = 1;
 const SIZE_VALUE: u32 = 2;
-const MODES: u32 = 19;
+const MODES: u32 = 23;
 const M_SIZE: u32 = 0;
 const M_EMPTY: u32 = 1;
 const M_HAS_LEFT: u32 = 2;
@@ -33,6 +33,10 @@ const M_COPY_ENTRIES: u32 = 15;
 const M_EQUAL_ENTRIES: u32 = 16;
 const M_EQUAL_PAIR: u32 = 17;
 const M_EQUAL_SCOPED_ENTRIES: u32 = 18;
+const M_PRESENT: u32 = 19;
+const M_REMOVE_TAKEN: u32 = 20;
+const M_THROW_TAKE: u32 = 21;
+const M_PAIRS: u32 = 22;
 const SIZE: u32 = 1;
 const EMPTY: u32 = 2;
 const HAS_LEFT: u32 = 3;
@@ -65,6 +69,10 @@ const ASSERT_RIGHT_INSERTED: u32 = 29;
 const LINK_LEFT: u32 = 30;
 const LINK_RIGHT: u32 = 31;
 const COMPARE_CURRENT_SCOPED: u32 = 32;
+const PRESENT: u32 = 33;
+const REMOVE_TAKEN: u32 = 34;
+const THROW_TAKE: u32 = 35;
+const APPEND_CURRENT: u32 = 36;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -175,12 +183,14 @@ impl Controller {
                     self.effect(COPY_ENTRIES)?;
                 }
             }
-            M_RANGE_INSERT | M_COPY_ENTRIES | M_LIST_INSERT => {
+            M_RANGE_INSERT | M_COPY_ENTRIES | M_LIST_INSERT | M_PAIRS => {
                 while self.test(ITERATOR_PRESENT)? {
                     if mode == M_LIST_INSERT {
                         if !self.test(INSERT_CURRENT_CHECKED)? {
                             self.must_throw(THROW_CURRENT_DUPLICATE)?;
                         }
+                    } else if mode == M_PAIRS {
+                        self.effect(APPEND_CURRENT)?;
                     } else {
                         self.effect(INSERT_CURRENT_IGNORED)?;
                     }
@@ -213,6 +223,12 @@ impl Controller {
                 }
                 return Ok(reply(BOOL, 1));
             }
+            // Native scopes retain iterators, condition-local Maybe values and
+            // copied keys. Rust chooses the typed return route; removal occurs
+            // only after the native copy is constructed, in its own scope.
+            M_PRESENT => return Ok(reply(BOOL, u64::from(self.test(PRESENT)?))),
+            M_REMOVE_TAKEN => self.effect(REMOVE_TAKEN)?,
+            M_THROW_TAKE => self.must_throw(THROW_TAKE)?,
             M_INSERT_ROUTE => return Ok(reply(BOOL, u64::from(self.test(LEFT_INSERTED)?))),
             M_INSERT_LINK => {
                 // This assertion is native-build dependent. In assertion-off
@@ -307,12 +323,16 @@ mod tests {
             (M_EQUAL_ENTRIES, vec![b(ITERATOR_PRESENT, false)], reply(BOOL, 1)),
             (M_EQUAL_PAIR, vec![b(FIND_CURRENT_RIGHT, true), b(CURRENT_RIGHT_NOT_EQUAL, false)], reply(BOOL, 1)),
             (M_EQUAL_SCOPED_ENTRIES, vec![b(ITERATOR_PRESENT, true), b(COMPARE_CURRENT_SCOPED, true), v(ADVANCE_ITERATOR), b(ITERATOR_PRESENT, false)], reply(BOOL, 1)),
+            (M_PRESENT, vec![b(PRESENT, true)], reply(BOOL, 1)),
+            (M_REMOVE_TAKEN, vec![v(REMOVE_TAKEN)], reply(VOID, 0)),
+            (M_PAIRS, vec![b(ITERATOR_PRESENT, true), v(APPEND_CURRENT), v(ADVANCE_ITERATOR), b(ITERATOR_PRESENT, false)], reply(VOID, 0)),
         ]
     }
     #[test]
     fn all_modes_have_scripted_positive_and_count() {
         let cases = scenarios();
-        assert_eq!(cases.iter().map(|x| x.0).collect::<BTreeSet<_>>(), (0..MODES).collect());
+        assert_eq!(cases.iter().map(|x| x.0).collect::<BTreeSet<_>>(),
+            (0..MODES).filter(|m| *m != M_THROW_TAKE).collect());
         for (mode, steps, expected) in cases {
             let before = sb_bimap_count(mode); positive(mode, steps, expected);
             assert_eq!(sb_bimap_count(mode), before.wrapping_add(1));
@@ -393,6 +413,21 @@ mod tests {
         positive(M_EQUAL_PAIR, vec![b(FIND_CURRENT_RIGHT, false)], reply(BOOL, 1));
         positive(M_EQUAL_PAIR, vec![b(FIND_CURRENT_RIGHT, true), b(CURRENT_RIGHT_NOT_EQUAL, true)], reply(BOOL, 0));
         positive(M_EQUAL_SCOPED_ENTRIES, vec![b(ITERATOR_PRESENT, true), b(COMPARE_CURRENT_SCOPED, false)], reply(BOOL, 0));
+    }
+    #[test]
+    fn maybe_routes_and_required_take_keep_failure_and_empty_paths_lazy() {
+        positive(M_PRESENT, vec![b(PRESENT, false)], reply(BOOL, 0));
+        positive(M_PAIRS, vec![b(ITERATOR_PRESENT, false)], reply(VOID, 0));
+        for status in [OK, EXCEPTION, INVALID, PANIC, 55] {
+            let before = sb_bimap_count(M_THROW_TAKE);
+            let (got, out, s) = execute(M_THROW_TAKE, vec![Step { status, ..v(THROW_TAKE) }]);
+            assert_eq!(got, match status { EXCEPTION | INVALID | PANIC => status, _ => INVALID });
+            assert_eq!(out, reply(BOOL, 1));
+            assert_eq!(s.seen, [THROW_TAKE]);
+            assert_eq!(sb_bimap_count(M_THROW_TAKE), before.wrapping_add(1));
+            assert!(s.steps.is_empty());
+            assert!(!s.bad);
+        }
     }
     #[test]
     fn assertion_off_right_conflict_still_links_in_native_order() {

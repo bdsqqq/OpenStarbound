@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """source contracts only; before bytes are DATA, never compiler inputs."""
 import hashlib
+import importlib.util
 from pathlib import Path
 import re
 import unittest
@@ -215,16 +216,34 @@ class SourceContract(unittest.TestCase):
                          '31f3321d144eab0aa467b1accacac99173508378e89f5b1ec95cf9ac3b47f9ae')
 
     def test_protected_bytes(self):
+        spec = importlib.util.spec_from_file_location('_scene26_bimap_cmake_projection',
+            ROOT / 'source/lab/static-vector-production/test_source.py')
+        production = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(production)
         for path, digest in PROTECTED.items():
-            self.assertEqual(hashlib.sha256((ROOT / path).read_bytes()).hexdigest(), digest, path)
+            raw = (ROOT / path).read_bytes()
+            if path == 'source/CMakeLists.txt':
+                # Check the old scene's bytes after ONLY the exact separately
+                # tested default-OFF BiMap integration, not a renewed epoch.
+                raw = production.normalize_current_cmake(raw)
+            self.assertEqual(hashlib.sha256(raw).hexdigest(), digest, path)
 
     def test_all_rust_inputs_unchanged(self):
         paths = sorted(p for p in (ROOT / 'source/rust').rglob('*') if p.is_file()
                        and (p.suffix == '.rs' or p.name in ('Cargo.toml', 'Cargo.lock'))
                        and 'target' not in p.parts)
         digest = hashlib.sha256()
+        self.assertIn(ROOT / 'source/rust/ffi/src/bimap.rs', paths)
+        paths.remove(ROOT / 'source/rust/ffi/src/bimap.rs')
         for path in paths:
-            digest.update(path.relative_to(ROOT).as_posix().encode() + b'\0' + hashlib.sha256(path.read_bytes()).digest())
+            raw = path.read_bytes()
+            if path == ROOT / 'source/rust/ffi/src/lib.rs':
+                # Only the additive BiMap registration is outside scene26's
+                # historical Rust input contract; its policy has its own tests.
+                for line in (b'mod bimap;\n', b'pub use bimap::{sb_bimap_count, sb_bimap_run, SbBiMapHost, SbBiMapReply, SbBiMapRequest};\n'):
+                    self.assertEqual(raw.count(line), 1)
+                    raw = raw.replace(line, b'', 1)
+            digest.update(path.relative_to(ROOT).as_posix().encode() + b'\0' + hashlib.sha256(raw).digest())
         self.assertEqual(len(paths), 36)
         self.assertEqual(digest.hexdigest(), '22420f69b5e77de166075262c415b51a949d1021e244d61f3a0640c61c8d2dd3')
 

@@ -56,7 +56,7 @@
       "reason": "source reference absent from scanned files: source/extern/imgui/imgui.h"
     },
     {
-      "line": 235,
+      "line": 237,
       "path": "source/core/CMakeLists.txt",
       "reason": "unresolved target/source expression: ${CMAKE_CURRENT_BINARY_DIR}/StarVersion.cpp"
     }
@@ -3620,7 +3620,7 @@
           "source_line": 7,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -3638,7 +3638,7 @@
           "source_line": 8,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -3656,7 +3656,7 @@
           "source_line": 9,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -3671,10 +3671,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 142,
+          "source_line": 144,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -3692,7 +3692,7 @@
           "source_line": 10,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -3710,7 +3710,7 @@
           "source_line": 11,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -3725,10 +3725,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 141,
+          "source_line": 143,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -3746,7 +3746,7 @@
           "source_line": 12,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -3764,7 +3764,7 @@
           "source_line": 14,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -3779,10 +3779,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 143,
+          "source_line": 145,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -3800,7 +3800,7 @@
           "source_line": 15,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -3818,7 +3818,7 @@
           "source_line": 16,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -3836,7 +3836,25 @@
           "source_line": 17,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
+        }
+      ],
+      "disposition": "ffi-adapter",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "static-alternative",
+      "module": "foundation.collections",
+      "path": "source/core/StarBiMapHost.hpp",
+      "rule": "rust-bimap-host"
+    },
+    {
+      "cmake_membership": [
+        {
+          "cmake": "source/core/CMakeLists.txt",
+          "source_line": 19,
+          "static_context": [],
+          "target": "star_core",
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -3851,10 +3869,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 144,
+          "source_line": 146,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -3869,10 +3887,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 18,
+          "source_line": 20,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -3897,10 +3915,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 145,
+          "source_line": 147,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -3915,10 +3933,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 19,
+          "source_line": 21,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -3943,10 +3961,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 20,
+          "source_line": 22,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -3961,10 +3979,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 21,
+          "source_line": 23,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -3979,10 +3997,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 146,
+          "source_line": 148,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -3997,10 +4015,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 22,
+          "source_line": 24,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4015,10 +4033,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 148,
+          "source_line": 150,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4033,10 +4051,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 23,
+          "source_line": 25,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4061,10 +4079,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 24,
+          "source_line": 26,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4079,10 +4097,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 149,
+          "source_line": 151,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4097,10 +4115,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 25,
+          "source_line": 27,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4115,10 +4133,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 150,
+          "source_line": 152,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4133,10 +4151,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 26,
+          "source_line": 28,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4151,10 +4169,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 151,
+          "source_line": 153,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4169,10 +4187,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 27,
+          "source_line": 29,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4187,10 +4205,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 28,
+          "source_line": 30,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4215,10 +4233,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 152,
+          "source_line": 154,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4233,10 +4251,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 29,
+          "source_line": 31,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4251,10 +4269,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 30,
+          "source_line": 32,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4269,12 +4287,12 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 205,
+          "source_line": 207,
           "static_context": [
             "if(STAR_SYSTEM_FAMILY_UNIX)"
           ],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4289,12 +4307,12 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 220,
+          "source_line": 222,
           "static_context": [
             "if(STAR_SYSTEM_FAMILY_UNIX) -> elseif(STAR_SYSTEM_FAMILY_WINDOWS)"
           ],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4309,10 +4327,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 31,
+          "source_line": 33,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4327,10 +4345,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 153,
+          "source_line": 155,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4345,10 +4363,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 32,
+          "source_line": 34,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4363,10 +4381,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 33,
+          "source_line": 35,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4381,12 +4399,12 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 206,
+          "source_line": 208,
           "static_context": [
             "if(STAR_SYSTEM_FAMILY_UNIX)"
           ],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4401,12 +4419,12 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 228,
+          "source_line": 230,
           "static_context": [
             "if(STAR_SYSTEM_FAMILY_UNIX) -> elseif(STAR_SYSTEM_FAMILY_WINDOWS)"
           ],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4421,10 +4439,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 154,
+          "source_line": 156,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4439,10 +4457,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 34,
+          "source_line": 36,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4467,12 +4485,12 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 207,
+          "source_line": 209,
           "static_context": [
             "if(STAR_SYSTEM_FAMILY_UNIX)"
           ],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4487,12 +4505,12 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 221,
+          "source_line": 223,
           "static_context": [
             "if(STAR_SYSTEM_FAMILY_UNIX) -> elseif(STAR_SYSTEM_FAMILY_WINDOWS)"
           ],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4507,10 +4525,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 35,
+          "source_line": 37,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4525,10 +4543,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 36,
+          "source_line": 38,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4553,10 +4571,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 155,
+          "source_line": 157,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4571,10 +4589,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 37,
+          "source_line": 39,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4589,10 +4607,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 38,
+          "source_line": 40,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4607,10 +4625,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 169,
+          "source_line": 171,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4625,10 +4643,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 58,
+          "source_line": 60,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4643,10 +4661,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 39,
+          "source_line": 41,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4661,10 +4679,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 156,
+          "source_line": 158,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4679,10 +4697,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 40,
+          "source_line": 42,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4707,10 +4725,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 157,
+          "source_line": 159,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4725,10 +4743,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 41,
+          "source_line": 43,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4743,10 +4761,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 158,
+          "source_line": 160,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4761,10 +4779,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 42,
+          "source_line": 44,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4779,10 +4797,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 147,
+          "source_line": 149,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4800,7 +4818,7 @@
           "source_line": 13,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4825,10 +4843,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 43,
+          "source_line": 45,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4853,10 +4871,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 159,
+          "source_line": 161,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4871,10 +4889,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 44,
+          "source_line": 46,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4889,10 +4907,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 160,
+          "source_line": 162,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4907,10 +4925,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 45,
+          "source_line": 47,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4925,10 +4943,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 161,
+          "source_line": 163,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4943,10 +4961,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 46,
+          "source_line": 48,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4961,10 +4979,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 162,
+          "source_line": 164,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4979,10 +4997,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 47,
+          "source_line": 49,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -4997,10 +5015,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 48,
+          "source_line": 50,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5015,10 +5033,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 50,
+          "source_line": 52,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5033,10 +5051,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 163,
+          "source_line": 165,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5051,10 +5069,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 51,
+          "source_line": 53,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5069,10 +5087,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 164,
+          "source_line": 166,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5087,10 +5105,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 52,
+          "source_line": 54,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5105,10 +5123,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 165,
+          "source_line": 167,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5123,10 +5141,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 53,
+          "source_line": 55,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5141,10 +5159,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 54,
+          "source_line": 56,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5159,10 +5177,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 167,
+          "source_line": 169,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5177,10 +5195,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 56,
+          "source_line": 58,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5205,10 +5223,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 166,
+          "source_line": 168,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5223,10 +5241,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 55,
+          "source_line": 57,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5241,10 +5259,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 168,
+          "source_line": 170,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5259,10 +5277,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 57,
+          "source_line": 59,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5277,10 +5295,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 170,
+          "source_line": 172,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5295,10 +5313,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 59,
+          "source_line": 61,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5313,10 +5331,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 60,
+          "source_line": 62,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5331,10 +5349,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 61,
+          "source_line": 63,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5349,10 +5367,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 171,
+          "source_line": 173,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5367,10 +5385,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 62,
+          "source_line": 64,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5385,10 +5403,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 63,
+          "source_line": 65,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5403,12 +5421,12 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 208,
+          "source_line": 210,
           "static_context": [
             "if(STAR_SYSTEM_FAMILY_UNIX)"
           ],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5423,12 +5441,12 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 222,
+          "source_line": 224,
           "static_context": [
             "if(STAR_SYSTEM_FAMILY_UNIX) -> elseif(STAR_SYSTEM_FAMILY_WINDOWS)"
           ],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5443,10 +5461,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 172,
+          "source_line": 174,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5461,10 +5479,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 64,
+          "source_line": 66,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5479,10 +5497,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 65,
+          "source_line": 67,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5507,10 +5525,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 173,
+          "source_line": 175,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5525,10 +5543,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 66,
+          "source_line": 68,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5543,10 +5561,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 174,
+          "source_line": 176,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5561,10 +5579,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 67,
+          "source_line": 69,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5579,10 +5597,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 68,
+          "source_line": 70,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5597,10 +5615,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 69,
+          "source_line": 71,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5615,10 +5633,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 70,
+          "source_line": 72,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5633,10 +5651,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 71,
+          "source_line": 73,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5651,10 +5669,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 175,
+          "source_line": 177,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5669,10 +5687,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 72,
+          "source_line": 74,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5687,10 +5705,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 73,
+          "source_line": 75,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5705,12 +5723,12 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 223,
+          "source_line": 225,
           "static_context": [
             "if(STAR_SYSTEM_FAMILY_UNIX) -> elseif(STAR_SYSTEM_FAMILY_WINDOWS)"
           ],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5725,10 +5743,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 74,
+          "source_line": 76,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5743,10 +5761,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 75,
+          "source_line": 77,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5761,10 +5779,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 76,
+          "source_line": 78,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5779,10 +5797,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 176,
+          "source_line": 178,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5797,10 +5815,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 77,
+          "source_line": 79,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5815,10 +5833,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 177,
+          "source_line": 179,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5833,10 +5851,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 78,
+          "source_line": 80,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5851,10 +5869,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 178,
+          "source_line": 180,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5869,10 +5887,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 79,
+          "source_line": 81,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5887,10 +5905,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 80,
+          "source_line": 82,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5905,10 +5923,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 81,
+          "source_line": 83,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5923,10 +5941,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 82,
+          "source_line": 84,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5941,10 +5959,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 83,
+          "source_line": 85,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5959,10 +5977,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 179,
+          "source_line": 181,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5977,10 +5995,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 84,
+          "source_line": 86,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -5995,10 +6013,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 85,
+          "source_line": 87,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6013,10 +6031,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 180,
+          "source_line": 182,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6031,10 +6049,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 86,
+          "source_line": 88,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6049,10 +6067,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 87,
+          "source_line": 89,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6067,10 +6085,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 88,
+          "source_line": 90,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6085,10 +6103,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 89,
+          "source_line": 91,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6103,10 +6121,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 90,
+          "source_line": 92,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6121,10 +6139,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 181,
+          "source_line": 183,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6139,10 +6157,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 91,
+          "source_line": 93,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6167,10 +6185,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 92,
+          "source_line": 94,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6185,10 +6203,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 93,
+          "source_line": 95,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6203,10 +6221,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 94,
+          "source_line": 96,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6221,10 +6239,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 95,
+          "source_line": 97,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6239,10 +6257,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 182,
+          "source_line": 184,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6257,10 +6275,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 96,
+          "source_line": 98,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6275,10 +6293,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 97,
+          "source_line": 99,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6293,10 +6311,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 98,
+          "source_line": 100,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6311,10 +6329,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 99,
+          "source_line": 101,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6329,10 +6347,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 183,
+          "source_line": 185,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6347,10 +6365,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 100,
+          "source_line": 102,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6365,10 +6383,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 101,
+          "source_line": 103,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6383,10 +6401,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 102,
+          "source_line": 104,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6401,10 +6419,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 184,
+          "source_line": 186,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6419,10 +6437,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 103,
+          "source_line": 105,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6437,10 +6455,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 104,
+          "source_line": 106,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6455,10 +6473,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 105,
+          "source_line": 107,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6473,10 +6491,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 49,
+          "source_line": 51,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6491,10 +6509,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 106,
+          "source_line": 108,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6516,11 +6534,19 @@
       "rule": "rust-asset-path-abi"
     },
     {
-      "cmake_membership": [],
+      "cmake_membership": [
+        {
+          "cmake": "source/core/CMakeLists.txt",
+          "source_line": 18,
+          "static_context": [],
+          "target": "star_core",
+          "target_line": 237
+        }
+      ],
       "disposition": "ffi-adapter",
       "language": "c/c++",
       "line": 1,
-      "membership_status": "no-direct-target-found",
+      "membership_status": "static-alternative",
       "module": "foundation.collections",
       "path": "source/core/StarRustBiMap.h",
       "rule": "rust-bimap-abi"
@@ -6799,10 +6825,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 107,
+          "source_line": 109,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6817,10 +6843,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 108,
+          "source_line": 110,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6835,12 +6861,12 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 209,
+          "source_line": 211,
           "static_context": [
             "if(STAR_SYSTEM_FAMILY_UNIX)"
           ],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6855,12 +6881,12 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 229,
+          "source_line": 231,
           "static_context": [
             "if(STAR_SYSTEM_FAMILY_UNIX) -> elseif(STAR_SYSTEM_FAMILY_WINDOWS)"
           ],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6875,10 +6901,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 109,
+          "source_line": 111,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6893,10 +6919,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 185,
+          "source_line": 187,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6911,10 +6937,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 110,
+          "source_line": 112,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6929,10 +6955,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 186,
+          "source_line": 188,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6947,10 +6973,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 111,
+          "source_line": 113,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6965,10 +6991,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 112,
+          "source_line": 114,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -6983,12 +7009,12 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 210,
+          "source_line": 212,
           "static_context": [
             "if(STAR_SYSTEM_FAMILY_UNIX)"
           ],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7003,12 +7029,12 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 224,
+          "source_line": 226,
           "static_context": [
             "if(STAR_SYSTEM_FAMILY_UNIX) -> elseif(STAR_SYSTEM_FAMILY_WINDOWS)"
           ],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7033,10 +7059,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 187,
+          "source_line": 189,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7051,10 +7077,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 113,
+          "source_line": 115,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7069,10 +7095,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 114,
+          "source_line": 116,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7087,10 +7113,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 115,
+          "source_line": 117,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7105,10 +7131,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 116,
+          "source_line": 118,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7123,10 +7149,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 117,
+          "source_line": 119,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7151,10 +7177,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 188,
+          "source_line": 190,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7169,10 +7195,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 118,
+          "source_line": 120,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7187,10 +7213,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 189,
+          "source_line": 191,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7205,10 +7231,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 119,
+          "source_line": 121,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7233,12 +7259,12 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 225,
+          "source_line": 227,
           "static_context": [
             "if(STAR_SYSTEM_FAMILY_UNIX) -> elseif(STAR_SYSTEM_FAMILY_WINDOWS)"
           ],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7253,12 +7279,12 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 216,
+          "source_line": 218,
           "static_context": [
             "if(STAR_SYSTEM_FAMILY_UNIX) -> elseif(STAR_SYSTEM_FAMILY_WINDOWS)"
           ],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7273,10 +7299,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 120,
+          "source_line": 122,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7291,10 +7317,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 190,
+          "source_line": 192,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7309,10 +7335,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 121,
+          "source_line": 123,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7327,10 +7353,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 191,
+          "source_line": 193,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7345,10 +7371,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 122,
+          "source_line": 124,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7373,10 +7399,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 192,
+          "source_line": 194,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7391,10 +7417,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 123,
+          "source_line": 125,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7409,12 +7435,12 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 211,
+          "source_line": 213,
           "static_context": [
             "if(STAR_SYSTEM_FAMILY_UNIX)"
           ],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7429,12 +7455,12 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 226,
+          "source_line": 228,
           "static_context": [
             "if(STAR_SYSTEM_FAMILY_UNIX) -> elseif(STAR_SYSTEM_FAMILY_WINDOWS)"
           ],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7449,10 +7475,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 194,
+          "source_line": 196,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7467,10 +7493,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 124,
+          "source_line": 126,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7495,10 +7521,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 193,
+          "source_line": 195,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7513,10 +7539,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 125,
+          "source_line": 127,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7531,12 +7557,12 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 212,
+          "source_line": 214,
           "static_context": [
             "if(STAR_SYSTEM_FAMILY_UNIX)"
           ],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7551,12 +7577,12 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 227,
+          "source_line": 229,
           "static_context": [
             "if(STAR_SYSTEM_FAMILY_UNIX) -> elseif(STAR_SYSTEM_FAMILY_WINDOWS)"
           ],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7571,10 +7597,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 126,
+          "source_line": 128,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7599,10 +7625,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 195,
+          "source_line": 197,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7617,10 +7643,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 127,
+          "source_line": 129,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7635,10 +7661,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 196,
+          "source_line": 198,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7653,10 +7679,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 128,
+          "source_line": 130,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7671,10 +7697,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 197,
+          "source_line": 199,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7689,10 +7715,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 129,
+          "source_line": 131,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7717,10 +7743,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 130,
+          "source_line": 132,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7745,10 +7771,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 131,
+          "source_line": 133,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7763,10 +7789,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 132,
+          "source_line": 134,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7781,10 +7807,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 133,
+          "source_line": 135,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7809,10 +7835,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 198,
+          "source_line": 200,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7827,10 +7853,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 134,
+          "source_line": 136,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7845,10 +7871,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 135,
+          "source_line": 137,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7863,10 +7889,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 199,
+          "source_line": 201,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7881,10 +7907,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 136,
+          "source_line": 138,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7909,10 +7935,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 200,
+          "source_line": 202,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -7927,10 +7953,10 @@
       "cmake_membership": [
         {
           "cmake": "source/core/CMakeLists.txt",
-          "source_line": 137,
+          "source_line": 139,
           "static_context": [],
           "target": "star_core",
-          "target_line": 235
+          "target_line": 237
         }
       ],
       "disposition": "migrate",
@@ -21438,11 +21464,41 @@
     {
       "cmake_membership": [],
       "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/bimap/real.cpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/bimap/run_real.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
       "language": "harness/tool script",
       "line": 1,
       "membership_status": "no-direct-target-found",
       "module": "validation.oracles-harness",
       "path": "source/lab/bimap/test_generate_core.py",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
+      "language": "harness/tool script",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/bimap/test_production.py",
       "rule": "laboratories"
     },
     {
@@ -31063,7 +31119,7 @@
     },
     {
       "input": "StarVersion.cpp.in",
-      "line": 234,
+      "line": 236,
       "path": "source/core/CMakeLists.txt"
     }
   ],
@@ -31858,7 +31914,7 @@
     },
     {
       "path": "source/CMakeLists.txt",
-      "sha256": "c90560247c829ba19183cdd26ca88eb3d2f067daade3d2c1d17dfb7411ef42d0"
+      "sha256": "5b156fcae6dfd7bde2d31195980af861010bdfc00bf00743239135d23438f883"
     },
     {
       "path": "source/application/CMakeLists.txt",
@@ -32314,7 +32370,7 @@
     },
     {
       "path": "source/core/CMakeLists.txt",
-      "sha256": "45a59d0b38ad36de1ac27601a17320d0d6a440733de74b9b35276fe87c6be4f0"
+      "sha256": "9eddd4b87b001528eac9191dfbf34b415fe9c5bc7dfd62f735a66fbab6c412e5"
     },
     {
       "path": "source/core/StarAStar.hpp",
@@ -32362,7 +32418,11 @@
     },
     {
       "path": "source/core/StarBiMap.hpp",
-      "sha256": "7c24d65672b14d03234cdc09f67e3c6f5c1786c71c610ac1c017cca71e37c011"
+      "sha256": "4e85f7605c52309786a976d1f59ebe5c0134290b1bb7609456f4226dc43910d3"
+    },
+    {
+      "path": "source/core/StarBiMapHost.hpp",
+      "sha256": "bd76e6bd2b89df21c35bfaa2538c8f876b90953bffc73d059124e164e5a224dc"
     },
     {
       "path": "source/core/StarBlockAllocator.hpp",
@@ -32982,7 +33042,7 @@
     },
     {
       "path": "source/core/StarRustBiMap.h",
-      "sha256": "a90c807872a73263b7c89f7efbd7a664b196e2290f3863d67bb8a06771df57be"
+      "sha256": "f91a9df3cfe8c03fee5d466ff8020dd0e335b0370d14fc38334d6a2d00bde686"
     },
     {
       "path": "source/core/StarRustBuffer.h",
@@ -36594,7 +36654,7 @@
     },
     {
       "path": "source/lab/bimap/frame.hpp",
-      "sha256": "7132e007c43483cfcb984aea9e73389ebab9439e86eb32ebaa1d6f39c9b392a5"
+      "sha256": "2a1c77233f820625f7c4fcbf030180e885ec0c57398ebcd8a9ed181e0d59cef7"
     },
     {
       "path": "source/lab/bimap/frame_test.cpp",
@@ -36602,15 +36662,27 @@
     },
     {
       "path": "source/lab/bimap/generate_core.py",
-      "sha256": "dc4da94ada76ab9df3b243520b59c15b7860bda22fa5fcde332469cb704b449a"
+      "sha256": "4c77fa655144122fa36f9db9497dccd2c50318fe151e60cfa6ae0aeb86c12a99"
     },
     {
       "path": "source/lab/bimap/native.cpp",
       "sha256": "e194e36911bdce30ad9585f9cc57ca7ba42c70ff2e5d22c68e6613c313edf065"
     },
     {
+      "path": "source/lab/bimap/real.cpp",
+      "sha256": "ed0e454fa9beeaad333ebe269619c8d220ddfb4c02e94bd330624a31af1f3baa"
+    },
+    {
+      "path": "source/lab/bimap/run_real.py",
+      "sha256": "ee1cdf49b20bcf0043158a37e4de7930dd734df1cced5a153ebe2ca0c014844f"
+    },
+    {
       "path": "source/lab/bimap/test_generate_core.py",
-      "sha256": "9c7d2f07cc7b900fdccbd2dcdbb3392130ede6ef040b9ac4d6d4d92fb6bbdf5c"
+      "sha256": "5b755eabcb4100e97230e8da8412c74b4324f7632206a70fe3d49cf53d73cdaa"
+    },
+    {
+      "path": "source/lab/bimap/test_production.py",
+      "sha256": "fd48ffd1f89d43ff7e190ae14c73ae1243418505dfaa4f309cfee3b008291e9d"
     },
     {
       "path": "source/lab/buffer/StarBuffer.original.cpp",
@@ -37806,7 +37878,7 @@
     },
     {
       "path": "source/lab/migration/modules.json",
-      "sha256": "91dc406eb6f28866a330c013a30fce5f6d3dd2c105bbf048dd5a3fe510a98cfd"
+      "sha256": "208480b7e4c84db82f2c82c6b479f77b088e0502d9242528de1eebbdff926720"
     },
     {
       "path": "source/lab/native_artifacts.py",
@@ -38150,7 +38222,7 @@
     },
     {
       "path": "source/lab/static-vector-game/configuration.py",
-      "sha256": "2662ec6fb88e9f001ace7e64c3c0c894f63ff74280926257acda071d08a16a17"
+      "sha256": "2730779cc4cbaaa3bd8ec4ff4c159b93f49b7e0cd954d5d2219c8087ffe205e1"
     },
     {
       "path": "source/lab/static-vector-game/enclosure_policy.py",
@@ -38190,7 +38262,7 @@
     },
     {
       "path": "source/lab/static-vector-game/test_configuration.py",
-      "sha256": "1a4f9a6f3209db6e71e3c4c7effecc5b8bc3c73e830aecfadd0b7c9741f0f7a4"
+      "sha256": "ad2d4be4bb435ebf45116d17f4f22b819af4d6eecfddf3232cd8e69872670ffa"
     },
     {
       "path": "source/lab/static-vector-game/test_enclosure_policy.py",
@@ -38226,7 +38298,7 @@
     },
     {
       "path": "source/lab/static-vector-game/test_source.py",
-      "sha256": "a907c50dc96088302d084cb4658bbe62e305277864dbb37609b0c78691579a57"
+      "sha256": "46d1284809655dddcddf2b6ed394f675f0fb6c7aa936d1d151537f3965c6c1e8"
     },
     {
       "path": "source/lab/static-vector-game/test_tls_chained_fixups.py",
@@ -38246,7 +38318,7 @@
     },
     {
       "path": "source/lab/static-vector-production/test_source.py",
-      "sha256": "45183164fb845ba172354526b308174d31050b81be28daa6e1c2f4e800fed644"
+      "sha256": "41cab476034c9a550decbd9ea628ca6a113d968ee143feb6deacbd54a17eeaaf"
     },
     {
       "path": "source/lab/static-vector/StarStaticVector.original.hpp",
@@ -39138,7 +39210,7 @@
     },
     {
       "path": "source/rust/ffi/src/bimap.rs",
-      "sha256": "4f70c1cb051f5d33454609243f7b33dcc69754af719996b786323615796cd187"
+      "sha256": "eb01e350b395c826deb94a268285ace14d76794529ee8deca972d2c5689fbdb2"
     },
     {
       "path": "source/rust/ffi/src/blocks_along_line.rs",
@@ -40078,12 +40150,12 @@
   },
   "summary": {
     "by_disposition": {
-      "ffi-adapter": 48,
+      "ffi-adapter": 49,
       "harness": 29,
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 697,
+      "oracle/harness": 700,
       "retain-tooling": 35,
       "retained-third-party": 296,
       "rust-candidate": 31,
@@ -40093,7 +40165,7 @@
       "base.animation": 2,
       "base.geometry": 6,
       "base.lighting": 6,
-      "foundation.collections": 37,
+      "foundation.collections": 38,
       "foundation.compression-crypto": 18,
       "foundation.math-geometry": 16,
       "foundation.media": 14,
@@ -40124,14 +40196,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 50,
-      "validation.oracles-harness": 726,
+      "validation.oracles-harness": 729,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2198,
+    "files": 2202,
     "modules": 39,
-    "no_direct_target": 1092
+    "no_direct_target": 1094
   }
 }
