@@ -16,6 +16,9 @@
 #ifdef STAR_USE_RUST_SET
 #include "StarRustSet.h"
 #endif
+#ifdef STAR_USE_RUST_PERIODIC
+#include "StarRustPeriodic.h"
+#endif
 #ifdef STAR_USE_RUST_MAP
 #include "StarRustMap.h"
 #endif
@@ -4483,6 +4486,18 @@ void ClientApplication::renderBehaviorScenario() {
   };
 #ifdef STAR_USE_RUST_UUID
   metadata = metadata.set("rustUuidCalls", JsonArray{sb_uuid_count(0), sb_uuid_count(1), sb_uuid_count(2)});
+#endif
+#ifdef STAR_USE_RUST_PERIODIC
+  uint64_t periodicCalls[2][SB_PERIODIC_COUNT];
+  for (uint32_t kind = 0; kind != 2; ++kind)
+    for (uint32_t op = 0; op != SB_PERIODIC_COUNT; ++op)
+      periodicCalls[kind][op] = sb_periodic_count(kind, op);
+  JsonArray periodicMain, periodicAll;
+  for (uint32_t op = 0; op != SB_PERIODIC_COUNT; ++op) {
+    periodicMain.append(periodicCalls[0][op]);
+    periodicAll.append(periodicCalls[1][op]);
+  }
+  metadata = metadata.set("rustPeriodic", JsonObject{{"main", periodicMain}, {"allThreads", periodicAll}});
 #endif
 #ifdef STAR_USE_RUST_MAP
   uint64_t mapMainLoops[SB_MAP_COUNT], mapAllLoops[SB_MAP_COUNT];

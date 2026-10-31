@@ -106,6 +106,7 @@ SET (star_core_HEADERS
     StarParametricFunction.hpp
     StarPathEmbed.hpp
     StarPch.hpp
+    StarRustPeriodic.h
     StarPeriodic.hpp
     StarPeriodicFunction.hpp
     StarPerlin.hpp

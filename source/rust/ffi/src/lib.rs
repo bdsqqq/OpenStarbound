@@ -10,6 +10,8 @@ mod id_map;
 pub use id_map::{sb_idmap_count, sb_idmap_run, SbIdMapHost, SbIdMapReply, SbIdMapRequest};
 mod bimap;
 pub use bimap::{sb_bimap_count, sb_bimap_run, SbBiMapHost, SbBiMapReply, SbBiMapRequest};
+mod periodic;
+pub use periodic::{sb_periodic_count, sb_periodic_run, SbPeriodicReply, SbPeriodicState};
 mod map;
 pub use map::{sb_map_count, sb_map_global_count, sb_map_run, sb_map_select, sb_map_select_count};
 mod flat_hash_table;

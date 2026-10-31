@@ -39,6 +39,9 @@ FLAT_HASH_MEMBER = b" OR STAR_USE_RUST_FLAT_HASH_TABLE)"
 MAP_OPTION = b'option(STAR_USE_RUST_MAP "Use experimental Rust map controllers/policy" OFF)\n'
 MAP_DEFINE = b"if(STAR_USE_RUST_MAP)\n  add_compile_definitions(STAR_USE_RUST_MAP)\nendif()\n\n"
 MAP_MEMBER = b" OR STAR_USE_RUST_MAP)"
+PERIODIC_OPTION = b'option(STAR_USE_RUST_PERIODIC "Use the Rust unsigned Periodic state machine" OFF)\n'
+PERIODIC_DEFINE = b"if(STAR_USE_RUST_PERIODIC)\n  add_compile_definitions(STAR_USE_RUST_PERIODIC)\nendif()\n\n"
+PERIODIC_MEMBER = b" OR STAR_USE_RUST_PERIODIC)"
 
 
 def require(condition, label):
@@ -114,6 +117,11 @@ def check_define(cmake):
 
 
 def normalize_current_cmake(cmake):
+    require(cmake.count(PERIODIC_OPTION) == 1 and cmake.count(PERIODIC_DEFINE) == 1 and
+            cmake.count(PERIODIC_MEMBER) == 1 and aggregate_gate(cmake).count(b"STAR_USE_RUST_PERIODIC") == 1,
+            "Periodic integration shape")
+    cmake = cmake.replace(PERIODIC_OPTION, b"").replace(PERIODIC_DEFINE, b"").replace(PERIODIC_MEMBER, b")")
+    require(b"STAR_USE_RUST_PERIODIC" not in cmake, "Periodic integration shape")
     require(cmake.count(MAP_OPTION) == 1 and cmake.count(MAP_DEFINE) == 1 and
             cmake.count(MAP_MEMBER) == 1 and aggregate_gate(cmake).count(b"STAR_USE_RUST_MAP") == 1,
             "Map integration shape")
@@ -326,6 +334,16 @@ class SourceContract(unittest.TestCase):
         for mutant in bad:
             with self.subTest(size=len(mutant)):
                 self.reject("Map integration shape", normalize_current_cmake, mutant)
+
+    def test_bad_periodic_integration(self):
+        bad = [self.current_cmake.replace(PERIODIC_OPTION, PERIODIC_OPTION.replace(b" OFF)", b" ON)"), 1),
+               self.current_cmake.replace(PERIODIC_OPTION, b"", 1), self.current_cmake + PERIODIC_OPTION,
+               self.current_cmake.replace(b" OR STAR_USE_RUST_PERIODIC", b"", 1),
+               self.current_cmake.replace(PERIODIC_DEFINE, b"add_compile_definitions(STAR_USE_RUST_PERIODIC)\n\n", 1),
+               self.current_cmake + b"\nset(STAR_USE_RUST_PERIODIC ON)\n"]
+        for mutant in bad:
+            with self.subTest(size=len(mutant)):
+                self.reject("Periodic integration shape", normalize_current_cmake, mutant)
 
     def test_bad_extra_runtime_configuration(self):
         mutant = self.cmake + b"\nset(STAR_RUST_TARGET_DIR unexpected)\n"
