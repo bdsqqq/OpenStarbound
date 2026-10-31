@@ -17,8 +17,9 @@ const MERGE: u32 = 5;
 const MERGE_ITEM: u32 = 6;
 const EQUAL: u32 = 7;
 const COMPARE: u32 = 8;
-const COUNT: usize = 9;
-const SELECT_COUNT: usize = 5;
+const ASSIGN: u32 = 9;
+const COUNT: usize = 10;
+const SELECT_COUNT: usize = 7;
 const MORE: u32 = 0;
 const ADVANCE: u32 = 1;
 const APPEND: u32 = 2;
@@ -36,17 +37,25 @@ const SELF: u32 = 13;
 const SIZE_MISMATCH: u32 = 14;
 const ENTER_COMPARE: u32 = 15;
 const PAIR_MATCH: u32 = 16;
+const CLEAR: u32 = 17;
+const ENTER_COPY: u32 = 18;
 const REQUIRED: u32 = 0;
 const OPTIONAL: u32 = 1;
 const DEFAULT: u32 = 2;
 const SET: u32 = 3;
 const ADD: u32 = 4;
+const INSERT_SELECT: u32 = 5;
+const REMOVE_SELECT: u32 = 6;
 const VALUE: u32 = 0;
 const THROW: u32 = 1;
 const EMPTY: u32 = 2;
 const DEFAULT_ACTION: u32 = 3;
 const INSERT: u32 = 4;
 const UPDATE_ACTION: u32 = 5;
+const EXISTING: u32 = 6;
+const NEW: u32 = 7;
+const ERASE_ACTION: u32 = 8;
+const MISS: u32 = 9;
 
 pub type Leaf = unsafe extern "C" fn(*mut c_void, u32, *mut u32) -> u32;
 static TOTALS: [AtomicU64; COUNT] = [const { AtomicU64::new(0) }; COUNT];
@@ -78,6 +87,13 @@ unsafe fn run(mode: u32, ctx: *mut c_void, leaf: Leaf) -> Result<u32, u32> {
     if mode == MERGE_ITEM {
         if invoke(ctx, leaf, INSERTED)? != 0 { return Ok(1); }
         if invoke(ctx, leaf, OVERWRITE)? != 0 { invoke(ctx, leaf, UPDATE)?; }
+        return Ok(0);
+    }
+    if mode == ASSIGN {
+        if invoke(ctx, leaf, SELF)? != 0 { return Ok(0); }
+        invoke(ctx, leaf, CLEAR)?;
+        // Native range creation belongs AFTER clear, even for an empty source.
+        invoke(ctx, leaf, ENTER_COPY)?;
         return Ok(0);
     }
     if mode == EQUAL {
@@ -172,6 +188,8 @@ pub unsafe extern "C" fn sb_map_select(mode: u32, predicate: u32, out: *mut u32)
             OPTIONAL => if yes { VALUE } else { EMPTY },
             DEFAULT => if yes { VALUE } else { DEFAULT_ACTION },
             SET => if yes { UPDATE_ACTION } else { INSERT },
+            INSERT_SELECT => if yes { EXISTING } else { NEW },
+            REMOVE_SELECT => if yes { ERASE_ACTION } else { MISS },
             _ => unreachable!(),
         };
         out.write(action);
@@ -226,7 +244,9 @@ mod tests {
     fn execute(mode: u32, steps: &[Step], status: u32, result: u32) {
         let mut script = Script { steps: steps.iter().copied().collect(), seen: vec![], bad: false };
         let mut output = 91;
+        let before = sb_map_count(mode);
         let actual = unsafe { sb_map_run(mode, (&mut script as *mut Script).cast(), Some(scripted), &mut output) };
+        assert_eq!(sb_map_count(mode), before.wrapping_add(1));
         assert_eq!((actual, output), (status, if status == OK { result } else { 91 }));
         assert!(!script.bad, "{:?}", script.seen);
         assert!(script.steps.is_empty(), "{:?}", script.steps);
@@ -253,6 +273,8 @@ mod tests {
             (MERGE_ITEM, vec![s(INSERTED,1)], 1),
             (MERGE_ITEM, vec![s(INSERTED,0), s(OVERWRITE,0)], 0),
             (MERGE_ITEM, vec![s(INSERTED,0), s(OVERWRITE,1), s(UPDATE,0)], 0),
+            (ASSIGN, vec![s(SELF,1)], 0),
+            (ASSIGN, vec![s(SELF,0), s(CLEAR,0), s(ENTER_COPY,0)], 0),
             (EQUAL, vec![s(SELF,1)], 1),
             (EQUAL, vec![s(SELF,0), s(SIZE_MISMATCH,1)], 0),
             (EQUAL, vec![s(SELF,0), s(SIZE_MISMATCH,0), s(ENTER_COMPARE,1)], 1),
@@ -391,7 +413,8 @@ mod tests {
 
     #[test]
     fn selection_table_and_independent_accepted_counts() {
-        let expected = [[THROW,VALUE], [EMPTY,VALUE], [DEFAULT_ACTION,VALUE], [INSERT,UPDATE_ACTION], [THROW,VALUE]];
+        let expected = [[THROW,VALUE], [EMPTY,VALUE], [DEFAULT_ACTION,VALUE], [INSERT,UPDATE_ACTION], [THROW,VALUE],
+            [NEW,EXISTING], [MISS,ERASE_ACTION]];
         for mode in 0..SELECT_COUNT as u32 {
             let before = sb_map_select_count(mode);
             let loops = sb_map_count(mode);
@@ -407,11 +430,11 @@ mod tests {
 
     #[test]
     fn extra_loop_modes_do_not_extend_selection_bounds() {
-        for mode in [MERGE, MERGE_ITEM, EQUAL, COMPARE] {
+        for mode in [EQUAL, COMPARE, ASSIGN] {
             let loops = sb_map_count(mode);
             let before = sb_map_global_count(0, mode);
-            let op = match mode { MERGE | COMPARE => MORE, MERGE_ITEM => INSERTED, _ => SELF };
-            execute(mode, &[s(op, u32::from(op != MORE))], OK, 1);
+            let op = if mode == COMPARE { MORE } else { SELF };
+            execute(mode, &[s(op, u32::from(op != MORE))], OK, u32::from(mode != ASSIGN));
             assert_eq!(sb_map_count(mode), loops.wrapping_add(1));
             assert!(sb_map_global_count(0, mode).wrapping_sub(before) >= 1);
             let mut out = 91;
@@ -519,6 +542,77 @@ mod tests {
             for (i, mode) in [EQUAL,COMPARE].into_iter().enumerate() {
                 assert_eq!(sb_map_count(mode), before[i].wrapping_add(1));
                 assert!(sb_map_global_count(0,mode).wrapping_sub(global[i]) >= 1);
+            }
+        }
+    }
+
+    // Models clear-before-range ordering and nested errors, not native values.
+    struct AssignHost {
+        source: Vec<u32>, target: Vec<u32>, index: usize, self_copy: bool,
+        cleared: bool, active: bool, fail: bool, saved_error: u32, trace: Vec<u32>,
+    }
+    unsafe extern "C" fn assign_host(ctx: *mut c_void, op: u32, out: *mut u32) -> u32 {
+        let host = ctx.cast::<AssignHost>();
+        (*host).trace.push(op);
+        match op {
+            SELF => { assert!(!(*host).active); *out = u32::from((*host).self_copy); }
+            CLEAR => {
+                assert!(!(*host).active);
+                (*host).target.clear();
+                (*host).cleared = true;
+            }
+            ENTER_COPY => {
+                assert!((*host).cleared && !(*host).active);
+                assert!((*host).target.is_empty());
+                (*host).active = true; // Cached range initialized here, never before CLEAR.
+                let mut nested = 91;
+                let status = sb_map_run(COLLECT, ctx, Some(assign_host), &mut nested);
+                (*host).active = false;
+                if status != OK { assert_eq!(nested, 91); return 7; }
+                assert_eq!(nested, 0);
+            }
+            MORE => { assert!((*host).active); *out = u32::from((*host).index < (*host).source.len()); }
+            APPEND => {
+                assert!((*host).active && (*host).cleared);
+                if (*host).fail { (*host).saved_error = 42; return 7; }
+                let value = (&(*host).source)[(*host).index];
+                (*host).target.push(value);
+            }
+            ADVANCE => { assert!((*host).active); (*host).index += 1; }
+            _ => return 99,
+        }
+        0
+    }
+    #[test]
+    fn assignment_clear_then_nested_copy_self_empty_errors_and_counts() {
+        for (source, self_copy, fail) in [
+            (vec![2,3],false,false), (vec![],false,false),
+            (vec![2,3],true,false), (vec![],true,false), (vec![2,3],false,true),
+        ] {
+            let before = [sb_map_count(ASSIGN), sb_map_count(COLLECT)];
+            let global = [sb_map_global_count(0,ASSIGN), sb_map_global_count(0,COLLECT)];
+            let original = if self_copy { source.clone() } else { vec![9] };
+            let mut host = AssignHost { source: source.clone(), target: original.clone(), index: 0,
+                self_copy, cleared: false, active: false, fail, saved_error: 0, trace: vec![] };
+            let mut out = 91;
+            let status = unsafe { sb_map_run(ASSIGN, (&mut host as *mut AssignHost).cast(), Some(assign_host), &mut out) };
+            let mut expected = vec![SELF];
+            if !self_copy {
+                expected.extend([CLEAR,ENTER_COPY]);
+                if fail { expected.extend([MORE,APPEND]); }
+                else {
+                    for _ in &source { expected.extend([MORE,APPEND,ADVANCE]); }
+                    expected.push(MORE);
+                }
+            }
+            assert_eq!(host.trace, expected);
+            assert_eq!((status,out), if fail { (HOST_ERROR,91) } else { (OK,0) });
+            assert_eq!(host.target, if self_copy { original } else if fail { vec![] } else { source });
+            assert_eq!((host.cleared,host.active,host.saved_error), (!self_copy,false,if fail { 42 } else { 0 }));
+            for (i, mode) in [ASSIGN,COLLECT].into_iter().enumerate() {
+                let entries = u64::from(i == 0 || !self_copy);
+                assert_eq!(sb_map_count(mode), before[i].wrapping_add(entries));
+                assert!(sb_map_global_count(0,mode).wrapping_sub(global[i]) >= entries);
             }
         }
     }

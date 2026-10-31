@@ -24,7 +24,8 @@ enum {
   SB_MAP_MERGE_ITEM = 6,
   SB_MAP_EQUAL = 7,
   SB_MAP_COMPARE = 8,
-  SB_MAP_COUNT = 9
+  SB_MAP_ASSIGN = 9,
+  SB_MAP_COUNT = 10
 };
 
 enum {
@@ -44,7 +45,9 @@ enum {
   SB_MAP_SELF = 13,
   SB_MAP_SIZE_MISMATCH = 14,
   SB_MAP_ENTER_COMPARE = 15,
-  SB_MAP_PAIR_MATCH = 16
+  SB_MAP_PAIR_MATCH = 16,
+  SB_MAP_CLEAR = 17,
+  SB_MAP_ENTER_COPY = 18
 };
 
 /* The host owns values, storage, iterator lifetimes and native expression scopes.
@@ -57,7 +60,7 @@ enum {
  * Every invocation gets a fresh zero-initialized response. MORE, MATCH,
  * FIRST_ELEMENT, MERGE_ITEM_OP, INSERTED, OVERWRITE, SELF, SIZE_MISMATCH,
  * ENTER_COMPARE and PAIR_MATCH must respond with exact 0/1; all other operations
- * (including UPDATE) require 0.
+ * (including UPDATE, CLEAR and ENTER_COPY) require 0.
  * A nonzero host status takes precedence over malformed response, returning
  * HOST_ERROR. A malformed response with host status 0 returns INVALID. Both
  * stop immediately: no later callback is invoked. Host exceptions must be caught
@@ -98,7 +101,16 @@ enum {
  * full-expression lifetimes stay C++. Rust sees one boolean match; pair/lookup
  * scopes end BEFORE ADVANCE. No Value crosses the ABI. Nested host exceptions
  * must be caught and preserved in the original frame for outer rethrow.
- * COLLECT, FILTER and PRINT return 0; FIRST, REMOVE, MERGE, MERGE_ITEM, EQUAL
+ * ASSIGN: SELF once; true returns 0 WITHOUT CLEAR, ENTER_COPY or range creation.
+ * SELF preserves the native this != &map ? 0u : 1u expression, not a replacement
+ * address comparison. Otherwise CLEAR -> ENTER_COPY -> result 0. CLEAR owns the
+ * whole native ordered.clear(): index clear THEN order clear, preserving typed
+ * destruction/exception scopes and partial state. ENTER_COPY initializes the
+ * cached native range ONLY AFTER CLEAR completes, then reenters COLLECT. Do not
+ * create a fresh range before CLEAR, even for empty input. Each native APPEND
+ * leaf owns the original auto const& p binding and typed copy body; its scope
+ * ends before ADVANCE. Nested errors retain the original native exception.
+ * COLLECT, FILTER, PRINT and ASSIGN return 0; FIRST, REMOVE, MERGE, MERGE_ITEM, EQUAL
  * and COMPARE return exact boolean results on success.
  *
  * out_result must designate live writable aligned uint32_t storage. Invalid
@@ -120,7 +132,9 @@ enum {
   SB_MAP_SELECT_DEFAULT = 2,
   SB_MAP_SELECT_SET = 3,
   SB_MAP_SELECT_ADD = 4,
-  SB_MAP_SELECT_COUNT = 5
+  SB_MAP_SELECT_INSERT = 5,
+  SB_MAP_SELECT_REMOVE = 6,
+  SB_MAP_SELECT_COUNT = 7
 };
 
 enum {
@@ -129,15 +143,22 @@ enum {
   SB_MAP_ACTION_EMPTY = 2,
   SB_MAP_ACTION_DEFAULT = 3,
   SB_MAP_ACTION_INSERT = 4,
-  SB_MAP_ACTION_UPDATE = 5
+  SB_MAP_ACTION_UPDATE = 5,
+  SB_MAP_ACTION_EXISTING = 6,
+  SB_MAP_ACTION_NEW = 7,
+  SB_MAP_ACTION_ERASE = 8,
+  SB_MAP_ACTION_MISS = 9
 };
 
-/* predicate is FOUND for REQUIRED/OPTIONAL/DEFAULT/SET, INSERTED for ADD.
+/* predicate is FOUND for REQUIRED/OPTIONAL/DEFAULT/SET/INSERT/REMOVE,
+ * INSERTED for ADD.
  * Native comparisons must perform contextual bool conversion before entry;
  * predicate must be exact 0/1.
  * REQUIRED: true VALUE / false THROW; OPTIONAL: true VALUE / false EMPTY;
  * DEFAULT: true VALUE / false DEFAULT; SET: true UPDATE / false INSERT;
- * ADD: true VALUE / false THROW.
+ * ADD: true VALUE / false THROW; INSERT: true EXISTING / false NEW;
+ * REMOVE: true ERASE / false MISS. Selectors 5/6 are new OrderedMap adoption,
+ * not legacy projections of loop modes MERGE5/MERGE_ITEM6.
  * The host materializes typed references/prvalues/defaults/insertions/exceptions
  * AFTER selection, preserving original return and temporary lifetime scopes.
  * No Value, allocation or ownership crosses into Rust.
@@ -150,7 +171,7 @@ uint32_t sb_map_select(uint32_t mode, uint32_t predicate, uint32_t* out_action);
 
 /* Per-thread wrapping accepted-entry totals, separate for loops and selections.
  * Count host errors, malformed callback replies, panics and each reentrant entry.
- * Rejected calls do not count. Loop modes are 0..8; selection modes remain 0..4.
+ * Rejected calls do not count. Loop modes are 0..9; selection modes are 0..6.
  * Invalid mode queries return zero. These counters
  * are independent of Set/OrderedSet/FlatHashTable and do not count consumers.
  */
@@ -158,7 +179,7 @@ uint64_t sb_map_count(uint32_t mode);
 uint64_t sb_map_select_count(uint32_t mode);
 
 /* Process-wide wrapping accepted totals: kind 0 loops, kind 1 selections.
- * Bounds are family-specific: kind 0 accepts 0..8, kind 1 accepts only 0..4.
+ * Bounds are family-specific: kind 0 accepts 0..9, kind 1 accepts only 0..6.
  * Invalid kind/mode queries return zero. Relaxed atomics are diagnostics only,
  * not synchronized snapshots, program-state barriers or distinct-container counts.
  */

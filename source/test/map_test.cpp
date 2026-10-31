@@ -377,14 +377,14 @@ TEST(MapTest, PrintRealSeparatorWriteFailurePreservesExceptionIdentity) {
 
 #ifdef STAR_USE_RUST_MAP
 TEST(MapTest, RustCountersObserveAllFiveLoopAndSelectionModes) {
-  uint64_t loops[SB_MAP_PRINT + 1], selects[SB_MAP_SELECT_COUNT];
+  uint64_t loops[SB_MAP_PRINT + 1], selects[SB_MAP_SELECT_ADD + 1];
   for (uint32_t i = 0; i <= SB_MAP_PRINT; ++i) loops[i] = sb_map_count(i);
-  for (uint32_t i = 0; i < SB_MAP_SELECT_COUNT; ++i) selects[i] = sb_map_select_count(i);
+  for (uint32_t i = 0; i <= SB_MAP_SELECT_ADD; ++i) selects[i] = sb_map_select_count(i);
   Map<int, int> m{{1, 7}, {2, 8}};
   m.keys(); m.hasValue(7); m.keysOf(8); m.removeValues(8); std::ostringstream out; out << m;
   m.get(1); m.maybe(1); m.value(1); m.set(1, 9); m.add(3, 10);
   for (uint32_t i = 0; i <= SB_MAP_PRINT; ++i) EXPECT_GT(sb_map_count(i), loops[i]);
-  for (uint32_t i = 0; i < SB_MAP_SELECT_COUNT; ++i) EXPECT_GT(sb_map_select_count(i), selects[i]);
+  for (uint32_t i = 0; i <= SB_MAP_SELECT_ADD; ++i) EXPECT_GT(sb_map_select_count(i), selects[i]);
 }
 #endif
 
@@ -551,10 +551,11 @@ TEST(MapMerge, CopyAssignmentFailureKeepsMutatedStoredIdentityAndPrefix) {
 #ifdef STAR_USE_RUST_MAP
 TEST(MapMerge, RustMergeCountersAreLoopsNotSelections) {
   auto merge = sb_map_count(5), item = sb_map_count(6);
+  auto insertSelect = sb_map_select_count(5), removeSelect = sb_map_select_count(6);
   Map<int, int> target{{1, 10}}, source{{1, 11}, {2, 22}};
   EXPECT_FALSE(target.merge(source, true));
   EXPECT_GT(sb_map_count(5), merge); EXPECT_GT(sb_map_count(6), item);
-  EXPECT_EQ(sb_map_select_count(5), 0u); EXPECT_EQ(sb_map_select_count(6), 0u);
+  EXPECT_EQ(sb_map_select_count(5), insertSelect); EXPECT_EQ(sb_map_select_count(6), removeSelect);
 }
 #endif
 

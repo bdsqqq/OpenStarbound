@@ -175,38 +175,101 @@ OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::OrderedMapWrapper() {
 
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::OrderedMapWrapper(OrderedMapWrapper const& map) {
+#ifdef STAR_USE_RUST_MAP
+  MapDetail::withNativeRange(map, [&](auto& i, auto& end) {
+    MapDetail::run(SB_MAP_COLLECT, [&](uint32_t op) -> uint32_t {
+      switch (op) {
+        case SB_MAP_MORE: return i != end ? 1u : 0u;
+        case SB_MAP_APPEND: { auto const& p = *i; insert(p); return 0; }
+        case SB_MAP_ADVANCE: ++i; return 0;
+        default: MapDetail::invalidOperation();
+      }
+    });
+  });
+#else
   for (auto const& p : map)
     insert(p);
+#endif
 }
 
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 template <typename InputIterator>
 OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::OrderedMapWrapper(InputIterator beg, InputIterator end) {
+#ifdef STAR_USE_RUST_MAP
+  MapDetail::run(SB_MAP_COLLECT, [&](uint32_t op) -> uint32_t {
+    switch (op) {
+      case SB_MAP_MORE: return beg != end ? 1u : 0u;
+      case SB_MAP_APPEND: insert(*beg); return 0;
+      case SB_MAP_ADVANCE: ++beg; return 0;
+      default: MapDetail::invalidOperation();
+    }
+  });
+#else
   while (beg != end) {
     insert(*beg);
     ++beg;
   }
+#endif
 }
 
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::OrderedMapWrapper(initializer_list<value_type> list) {
+#ifdef STAR_USE_RUST_MAP
+  MapDetail::withNativeRange(list, [&](auto& i, auto& end) {
+    MapDetail::run(SB_MAP_COLLECT, [&](uint32_t op) -> uint32_t {
+      switch (op) {
+        case SB_MAP_MORE: return i != end ? 1u : 0u;
+        case SB_MAP_APPEND: { value_type v = *i; insert(std::move(v)); return 0; }
+        case SB_MAP_ADVANCE: ++i; return 0;
+        default: MapDetail::invalidOperation();
+      }
+    });
+  });
+#else
   for (value_type v : list)
     insert(std::move(v));
+#endif
 }
 
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::keys() const -> List<key_type> {
   List<key_type> keys;
+#ifdef STAR_USE_RUST_MAP
+  MapDetail::withNativeRange(*this, [&](auto& i, auto& end) {
+    MapDetail::run(SB_MAP_COLLECT, [&](uint32_t op) -> uint32_t {
+      switch (op) {
+        case SB_MAP_MORE: return i != end ? 1u : 0u;
+        case SB_MAP_APPEND: { auto const& p = *i; keys.append(p.first); return 0; }
+        case SB_MAP_ADVANCE: ++i; return 0;
+        default: MapDetail::invalidOperation();
+      }
+    });
+  });
+#else
   for (auto const& p : *this)
     keys.append(p.first);
+#endif
   return keys;
 }
 
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::values() const -> List<mapped_type> {
   List<mapped_type> values;
+#ifdef STAR_USE_RUST_MAP
+  MapDetail::withNativeRange(*this, [&](auto& i, auto& end) {
+    MapDetail::run(SB_MAP_COLLECT, [&](uint32_t op) -> uint32_t {
+      switch (op) {
+        case SB_MAP_MORE: return i != end ? 1u : 0u;
+        case SB_MAP_APPEND: { auto const& p = *i; values.append(p.second); return 0; }
+        case SB_MAP_ADVANCE: ++i; return 0;
+        default: MapDetail::invalidOperation();
+      }
+    });
+  });
+#else
   for (auto const& p : *this)
     values.append(p.second);
+#endif
   return values;
 }
 
@@ -226,7 +289,12 @@ bool OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::contains(key_typ
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::get(key_type const& k) -> mapped_type& {
   auto i = m_map.find(k);
+#ifdef STAR_USE_RUST_MAP
+  bool found = i == m_map.end() ? false : true;
+  if (MapDetail::selectAction(SB_MAP_SELECT_REQUIRED, found) == SB_MAP_ACTION_THROW)
+#else
   if (i == m_map.end())
+#endif
     throw MapException(strf("Key '{}' not found in OrderedMap::get()", outputAny(k)));
 
   return i->second->second;
@@ -240,7 +308,12 @@ auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::get(key_type con
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::value(key_type const& k, mapped_type d) const -> mapped_type {
   auto i = m_map.find(k);
+#ifdef STAR_USE_RUST_MAP
+  bool found = i == m_map.end() ? false : true;
+  if (MapDetail::selectAction(SB_MAP_SELECT_DEFAULT, found) == SB_MAP_ACTION_DEFAULT)
+#else
   if (i == m_map.end())
+#endif
     return d;
   else
     return i->second->second;
@@ -249,7 +322,12 @@ auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::value(key_type c
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::maybe(key_type const& k) const -> Maybe<mapped_type> {
   auto i = find(k);
+#ifdef STAR_USE_RUST_MAP
+  bool found = i == end() ? false : true;
+  if (MapDetail::selectAction(SB_MAP_SELECT_OPTIONAL, found) == SB_MAP_ACTION_EMPTY)
+#else
   if (i == end())
+#endif
     return {};
   else
     return i->second;
@@ -258,7 +336,12 @@ auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::maybe(key_type c
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::ptr(key_type const& k) const -> mapped_const_ptr {
   auto i = find(k);
+#ifdef STAR_USE_RUST_MAP
+  bool found = i == end() ? false : true;
+  if (MapDetail::selectAction(SB_MAP_SELECT_OPTIONAL, found) == SB_MAP_ACTION_EMPTY)
+#else
   if (i == end())
+#endif
     return nullptr;
   else
     return &i->second;
@@ -267,7 +350,12 @@ auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::ptr(key_type con
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::ptr(key_type const& k) -> mapped_ptr {
   iterator i = find(k);
+#ifdef STAR_USE_RUST_MAP
+  bool found = i == end() ? false : true;
+  if (MapDetail::selectAction(SB_MAP_SELECT_OPTIONAL, found) == SB_MAP_ACTION_EMPTY)
+#else
   if (i == end())
+#endif
     return nullptr;
   else
     return &i->second;
@@ -276,7 +364,12 @@ auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::ptr(key_type con
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::operator[](key_type const& k) -> mapped_type& {
   auto i = m_map.find(k);
+#ifdef STAR_USE_RUST_MAP
+  bool found = i == m_map.end() ? false : true;
+  if (MapDetail::selectAction(SB_MAP_SELECT_INSERT, found) == SB_MAP_ACTION_NEW) {
+#else
   if (i == m_map.end()) {
+#endif
     iterator orderIt = m_order.insert(m_order.end(), value_type(k, mapped_type()));
     i = m_map.insert(typename MapType::value_type(std::cref(orderIt->first), orderIt)).first;
     return orderIt->second;
@@ -287,11 +380,33 @@ auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::operator[](key_t
 
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::operator=(OrderedMapWrapper const& map) -> OrderedMapWrapper& {
+#ifdef STAR_USE_RUST_MAP
+  MapDetail::run(SB_MAP_ASSIGN, [&](uint32_t op) -> uint32_t {
+    switch (op) {
+      case SB_MAP_SELF: return this != &map ? 0u : 1u;
+      case SB_MAP_CLEAR: clear(); return 0;
+      case SB_MAP_ENTER_COPY:
+        MapDetail::withNativeRange(map, [&](auto& i, auto& end) {
+          MapDetail::run(SB_MAP_COLLECT, [&](uint32_t itemOp) -> uint32_t {
+            switch (itemOp) {
+              case SB_MAP_MORE: return i != end ? 1u : 0u;
+              case SB_MAP_APPEND: { auto const& p = *i; insert(p); return 0; }
+              case SB_MAP_ADVANCE: ++i; return 0;
+              default: MapDetail::invalidOperation();
+            }
+          });
+        });
+        return 0;
+      default: MapDetail::invalidOperation();
+    }
+  });
+#else
   if (this != &map) {
     clear();
     for (auto const& p : map)
       insert(p);
   }
+#endif
 
   return *this;
 }
@@ -303,10 +418,26 @@ bool OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::operator==(Order
 
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::keyOf(mapped_type const& v) const -> key_type {
+#ifdef STAR_USE_RUST_MAP
+  {
+    const_iterator i = begin();
+    auto found = MapDetail::run(SB_MAP_FIRST, [&](uint32_t op) -> uint32_t {
+      switch (op) {
+        case SB_MAP_MORE: return i != end() ? 1u : 0u;
+        case SB_MAP_MATCH: return i->second == v ? 1u : 0u;
+        case SB_MAP_ADVANCE: ++i; return 0;
+        default: MapDetail::invalidOperation();
+      }
+    });
+    if (found)
+      return i->first;
+  }
+#else
   for (const_iterator i = begin(); i != end(); ++i) {
     if (i->second == v)
       return i->first;
   }
+#endif
   throw MapException(strf("Value '{}' not found in OrderedMap::keyOf()", outputAny(v)));
 }
 
@@ -323,7 +454,12 @@ auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::keysOf(mapped_ty
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::insert(value_type const& v) -> pair<iterator, bool> {
   auto i = m_map.find(v.first);
+#ifdef STAR_USE_RUST_MAP
+  bool found = i == m_map.end() ? false : true;
+  if (MapDetail::selectAction(SB_MAP_SELECT_INSERT, found) == SB_MAP_ACTION_NEW) {
+#else
   if (i == m_map.end()) {
+#endif
     iterator orderIt = m_order.insert(m_order.end(), v);
     m_map.insert(i, typename MapType::value_type(std::cref(orderIt->first), orderIt));
     return std::make_pair(orderIt, true);
@@ -340,7 +476,12 @@ auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::insert(key_type 
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::insertFront(value_type const& v) -> pair<iterator, bool> {
   auto i = m_map.find(v.first);
+#ifdef STAR_USE_RUST_MAP
+  bool found = i == m_map.end() ? false : true;
+  if (MapDetail::selectAction(SB_MAP_SELECT_INSERT, found) == SB_MAP_ACTION_NEW) {
+#else
   if (i == m_map.end()) {
+#endif
     iterator orderIt = m_order.insert(m_order.begin(), v);
     m_map.insert(i, typename MapType::value_type(std::cref(orderIt->first), orderIt));
     return std::make_pair(orderIt, true);
@@ -357,7 +498,12 @@ auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::insertFront(key_
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::add(key_type k, mapped_type v) -> mapped_type& {
   auto pair = insert(value_type(std::move(k), std::move(v)));
+#ifdef STAR_USE_RUST_MAP
+  bool inserted = !pair.second ? false : true;
+  if (MapDetail::selectAction(SB_MAP_SELECT_ADD, inserted) == SB_MAP_ACTION_THROW)
+#else
   if (!pair.second)
+#endif
     throw MapException(strf("Entry with key '{}' already present.", outputAny(k)));
   else
     return pair.first->second;
@@ -366,7 +512,12 @@ auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::add(key_type k, 
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::set(key_type k, mapped_type v) -> mapped_type& {
   auto i = find(k);
+#ifdef STAR_USE_RUST_MAP
+  bool found = i != end() ? true : false;
+  if (MapDetail::selectAction(SB_MAP_SELECT_SET, found) == SB_MAP_ACTION_UPDATE) {
+#else
   if (i != end()) {
+#endif
     i->second = std::move(v);
     return i->second;
   } else {
@@ -382,7 +533,12 @@ bool OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::merge(OrderedMap
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 bool OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::remove(key_type const& k) {
   auto i = m_map.find(k);
+#ifdef STAR_USE_RUST_MAP
+  bool found = i != m_map.end() ? true : false;
+  if (MapDetail::selectAction(SB_MAP_SELECT_REMOVE, found) == SB_MAP_ACTION_ERASE) {
+#else
   if (i != m_map.end()) {
+#endif
     auto orderIt = i->second;
     m_map.erase(i);
 
@@ -411,7 +567,12 @@ auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::take(key_type co
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::maybeTake(key_type const& k) -> Maybe<value_type> {
   iterator i = find(k);
+#ifdef STAR_USE_RUST_MAP
+  bool found = i != end() ? true : false;
+  if (MapDetail::selectAction(SB_MAP_SELECT_OPTIONAL, found) == SB_MAP_ACTION_VALUE) {
+#else
   if (i != end()) {
+#endif
     value_type v = *i;
     erase(i);
     return v;
@@ -481,7 +642,12 @@ auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::erase(key_type c
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::find(key_type const& k) -> iterator {
   auto i = m_map.find(k);
+#ifdef STAR_USE_RUST_MAP
+  bool found = i == m_map.end() ? false : true;
+  if (MapDetail::selectAction(SB_MAP_SELECT_OPTIONAL, found) == SB_MAP_ACTION_EMPTY)
+#else
   if (i == m_map.end())
+#endif
     return m_order.end();
   else
     return i->second;
@@ -490,7 +656,12 @@ auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::find(key_type co
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::find(key_type const& k) const -> const_iterator {
   auto i = m_map.find(k);
+#ifdef STAR_USE_RUST_MAP
+  bool found = i == m_map.end() ? false : true;
+  if (MapDetail::selectAction(SB_MAP_SELECT_OPTIONAL, found) == SB_MAP_ACTION_EMPTY)
+#else
   if (i == m_map.end())
+#endif
     return m_order.end();
   else
     return i->second;
@@ -499,7 +670,12 @@ auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::find(key_type co
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::indexOf(key_type const& k) const -> Maybe<size_t> {
   typename MapType::const_iterator i = m_map.find(k);
+#ifdef STAR_USE_RUST_MAP
+  bool found = i == m_map.end() ? false : true;
+  if (MapDetail::selectAction(SB_MAP_SELECT_OPTIONAL, found) == SB_MAP_ACTION_EMPTY)
+#else
   if (i == m_map.end())
+#endif
     return {};
 
   return std::distance(begin(), const_iterator(i->second));
@@ -507,7 +683,12 @@ auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::indexOf(key_type
 
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::keyAt(size_t i) const -> key_type const& {
+#ifdef STAR_USE_RUST_MAP
+  bool found = i >= size() ? false : true;
+  if (MapDetail::selectAction(SB_MAP_SELECT_REQUIRED, found) == SB_MAP_ACTION_THROW)
+#else
   if (i >= size())
+#endif
     throw MapException(strf("index {} out of range in OrderedMap::at()", i));
 
   auto it = begin();
@@ -522,7 +703,12 @@ auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::valueAt(size_t i
 
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::valueAt(size_t i) -> mapped_type& {
+#ifdef STAR_USE_RUST_MAP
+  bool found = i >= size() ? false : true;
+  if (MapDetail::selectAction(SB_MAP_SELECT_REQUIRED, found) == SB_MAP_ACTION_THROW)
+#else
   if (i >= size())
+#endif
     throw MapException(strf("index {} out of range in OrderedMap::valueAt()", i));
 
   auto it = m_order.begin();
@@ -549,7 +735,12 @@ void OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::removeFirst() {
 
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::first() const -> value_type const& {
+#ifdef STAR_USE_RUST_MAP
+  bool found = empty() ? false : true;
+  if (MapDetail::selectAction(SB_MAP_SELECT_REQUIRED, found) == SB_MAP_ACTION_THROW)
+#else
   if (empty())
+#endif
     throw MapException("OrderedMap::takeFirst() called on empty OrderedMap");
 
   return *m_order.begin();
@@ -573,7 +764,12 @@ auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::firstKey() const
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::insert(iterator pos, value_type v) -> iterator {
   auto i = m_map.find(v.first);
+#ifdef STAR_USE_RUST_MAP
+  bool found = i == m_map.end() ? false : true;
+  if (MapDetail::selectAction(SB_MAP_SELECT_INSERT, found) == SB_MAP_ACTION_NEW) {
+#else
   if (i == m_map.end()) {
+#endif
     iterator orderIt = m_order.insert(pos, std::move(v));
     m_map.insert(typename MapType::value_type(std::cref(orderIt->first), orderIt));
     return orderIt;
@@ -610,7 +806,12 @@ auto OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::toFront(iterator
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 void OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::toBack(key_type const& k) {
   auto i = m_map.find(k);
+#ifdef STAR_USE_RUST_MAP
+  bool found = i == m_map.end() ? false : true;
+  if (MapDetail::selectAction(SB_MAP_SELECT_REQUIRED, found) == SB_MAP_ACTION_THROW)
+#else
   if (i == m_map.end())
+#endif
     throw MapException(strf("Key not found in OrderedMap::toBack('{}')", outputAny(k)));
 
   toBack(i->second);
@@ -619,7 +820,12 @@ void OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::toBack(key_type 
 template <template <typename...> class Map, typename Key, typename Value, typename Allocator, typename... MapArgs>
 void OrderedMapWrapper<Map, Key, Value, Allocator, MapArgs...>::toFront(key_type const& k) {
   auto i = m_map.find(k);
+#ifdef STAR_USE_RUST_MAP
+  bool found = i == m_map.end() ? false : true;
+  if (MapDetail::selectAction(SB_MAP_SELECT_REQUIRED, found) == SB_MAP_ACTION_THROW)
+#else
   if (i == m_map.end())
+#endif
     throw MapException(strf("Key not found in OrderedMap::toFront('{}')", outputAny(k)));
 
   toFront(i->second);
