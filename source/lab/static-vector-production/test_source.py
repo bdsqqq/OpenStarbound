@@ -33,7 +33,7 @@ ORDERED_SET_MEMBER = b" OR STAR_USE_RUST_ORDERED_SET)"
 SET_OPTION = b'option(STAR_USE_RUST_SET "Use experimental Rust set/hash-set controllers/policy" OFF)\n'
 SET_DEFINE = b"if(STAR_USE_RUST_SET)\n  add_compile_definitions(STAR_USE_RUST_SET)\nendif()\n\n"
 SET_MEMBER = b" OR STAR_USE_RUST_SET)"
-FLAT_HASH_OPTION = b'option(STAR_USE_RUST_FLAT_HASH_TABLE "Use experimental Rust flat-hash probe controllers" OFF)\n'
+FLAT_HASH_OPTION = b'option(STAR_USE_RUST_FLAT_HASH_TABLE "Use experimental Rust flat-hash controllers/policy" OFF)\n'
 FLAT_HASH_DEFINE = b"if(STAR_USE_RUST_FLAT_HASH_TABLE)\n  add_compile_definitions(STAR_USE_RUST_FLAT_HASH_TABLE)\nendif()\n\n"
 FLAT_HASH_MEMBER = b" OR STAR_USE_RUST_FLAT_HASH_TABLE)"
 

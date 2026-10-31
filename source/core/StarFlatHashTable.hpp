@@ -345,6 +345,41 @@ void FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::clear() {
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
 auto FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::insert(Value value) -> pair<iterator, bool> {
+#ifdef STAR_USE_RUST_FLAT_HASH_TABLE
+  Bucket* active = nullptr;
+  Value* activeValue = nullptr;
+  auto reply = FlatHashTableDetail::run(SB_FLAT_HASH_INSERT, [&](uint32_t operation, size_t argument) -> size_t {
+    switch (operation) {
+      case SB_FLAT_HASH_SIZE: return m_buckets.size();
+      case SB_FLAT_HASH_HASH: return m_hash(m_getKey(value));
+      case SB_FLAT_HASH_LOAD:
+        active = &m_buckets[argument];
+        activeValue = active->valuePtr();
+        return activeValue ? 1 : 0;
+      case SB_FLAT_HASH_EQUALS:
+        return m_equals(m_getKey(*activeValue), m_getKey(value)) ? 1 : 0;
+      // Retain the selected bucket across equality and Value swap reentry.
+      case SB_FLAT_HASH_ACTIVE_HASH: return active->hash;
+      // Keep the original expression native: Release fast-math may evaluate
+      // its load-factor comparison differently from Rust floating arithmetic.
+      case SB_FLAT_HASH_CAPACITY_NEEDED:
+        return (m_buckets.empty() || m_filledCount + 1 > (m_buckets.size() - 1) * MaxFillLevel) ? 1 : 0;
+      case SB_FLAT_HASH_ENSURE_CAPACITY: checkCapacity(1); return 0;
+      case SB_FLAT_HASH_SWAP_VALUE: swap(value, *activeValue); return 0;
+      case SB_FLAT_HASH_EXCHANGE_HASH: {
+        size_t previous = active->hash;
+        active->hash = argument;
+        return previous;
+      }
+      case SB_FLAT_HASH_SET_FILLED: active->setFilled(argument, std::move(value)); return 0;
+      case SB_FLAT_HASH_INCREMENT_FILLED: ++m_filledCount; return 0;
+      default: FlatHashTableDetail::invalidOperation();
+    }
+  });
+  if (reply.found > 1)
+    FlatHashTableDetail::invalidOperation();
+  return make_pair(iterator{m_buckets.data() + reply.index}, reply.found == 0);
+#else
   if (m_buckets.empty() || m_filledCount + 1 > (m_buckets.size() - 1) * MaxFillLevel)
     checkCapacity(1);
 
@@ -381,6 +416,7 @@ auto FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::insert(Value va
       return make_pair(iterator{m_buckets.data() + insertedBucket}, true);
     }
   }
+#endif
 }
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>

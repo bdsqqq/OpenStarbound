@@ -472,3 +472,241 @@ TEST(FlatHashProbe, PublicDiagnostics) {
     for (uint32_t mode = 0; mode != 2; ++mode) EXPECT_GT(sb_flat_hash_count(kind, mode), before[kind][mode]);
 }
 #endif
+
+namespace {
+struct FlatInsertMarker {};
+struct FlatInsertHooks {
+  std::string trace;
+  FlatInsertMarker* marker = nullptr;
+  int failAt = 0, swapFailure = 0, moveFailure = 0;
+  int liveTemps = 0, liveValues = 0, moves = 0, copies = 0;
+  bool inserting = false;
+  void event(char kind, int key) { trace += kind + std::to_string(key) + ";"; }
+  void fail(int stage) {
+    if (failAt != stage) return;
+    try { throw FlatInsertMarker{}; }
+    catch (FlatInsertMarker& original) { marker = &original; throw; }
+  }
+  void emit(char const* label) const {
+    std::printf("FLAT_INSERT_TRACE %s %s\n", label, trace.c_str());
+  }
+};
+// The guard also disarms callbacks on a fatal assertion, before bucket cleanup.
+struct FlatInsertArm {
+  FlatInsertHooks& hooks;
+  explicit FlatInsertArm(FlatInsertHooks& h) : hooks(h) { hooks.inserting = true; }
+  ~FlatInsertArm() {
+    hooks.inserting = false;
+    hooks.failAt = hooks.swapFailure = hooks.moveFailure = 0;
+  }
+};
+struct FlatInsertValue {
+  int key, payload;
+  FlatInsertHooks* hooks;
+  FlatInsertValue(int k, FlatInsertHooks* h) : key(k), payload(k * 17), hooks(h) {
+    ++hooks->liveValues; hooks->event('N', key);
+  }
+  FlatInsertValue(FlatInsertValue const& v) : key(v.key), payload(v.payload), hooks(v.hooks) {
+    ++hooks->copies; ++hooks->liveValues; hooks->event('C', key);
+  }
+  FlatInsertValue(FlatInsertValue&& v) : key(v.key), payload(v.payload), hooks(v.hooks) {
+    ++hooks->moves; hooks->event('M', key);
+    if (hooks->inserting && hooks->moves == hooks->moveFailure) hooks->fail(4);
+    ++hooks->liveValues;
+  }
+  FlatInsertValue& operator=(FlatInsertValue const& v) {
+    key = v.key; payload = v.payload; ++hooks->copies; hooks->event('c', key); return *this;
+  }
+  FlatInsertValue& operator=(FlatInsertValue&& v) {
+    key = v.key; payload = v.payload; ++hooks->moves; hooks->event('m', key); return *this;
+  }
+  ~FlatInsertValue() { --hooks->liveValues; hooks->event('D', key); }
+};
+void swap(FlatInsertValue& a, FlatInsertValue& b) {
+  auto& h = *a.hooks;
+  h.event('S', a.key); h.event('s', b.key);
+  if (h.inserting && h.swapFailure == 1) h.fail(5);
+  // Deliberately only partially mutate before the second failure. Native insert
+  // has not exchanged bucket hash metadata yet; repairing it would change behavior.
+  int key = a.key; a.key = b.key; b.key = key;
+  if (h.inserting && h.swapFailure == 2) h.fail(5);
+  int payload = a.payload; a.payload = b.payload; b.payload = payload;
+}
+struct FlatInsertTemp {
+  int const* key;
+  FlatInsertHooks* hooks;
+  FlatInsertTemp(int const& k, FlatInsertHooks* h) : key(&k), hooks(h) {
+    ++hooks->liveTemps; hooks->event('+', *key);
+  }
+  FlatInsertTemp(FlatInsertTemp const&) = delete;
+  ~FlatInsertTemp() { hooks->event('-', *key); --hooks->liveTemps; }
+  operator int const&() const { EXPECT_GT(hooks->liveTemps, 0); return *key; }
+};
+struct FlatInsertGetKey {
+  FlatInsertHooks* hooks;
+  FlatInsertTemp operator()(FlatInsertValue const& v) const {
+    hooks->event('g', v.key); hooks->fail(1); return FlatInsertTemp(v.key, hooks);
+  }
+};
+struct FlatInsertHash {
+  FlatInsertHooks* hooks = nullptr;
+  size_t operator()(int key) const {
+    if (hooks) { hooks->event('h', key); hooks->fail(2); }
+    return key == 2 ? 2 : 0;
+  }
+};
+struct FlatInsertEquals {
+  FlatInsertHooks* hooks;
+  bool operator()(int const& a, int const& b) const {
+    hooks->event('e', a); hooks->event('q', b);
+    // Both argument temporaries survive into Equals; their construction order
+    // is deliberately observed, not prescribed across native compilers.
+    EXPECT_EQ(hooks->liveTemps, hooks->inserting ? 2 : 1);
+    hooks->fail(3); return a == b;
+  }
+};
+using FlatInsertTable = FlatHashTable<FlatInsertValue, int, FlatInsertGetKey,
+    FlatInsertHash, FlatInsertEquals, std::allocator<FlatInsertValue>>;
+}
+
+TEST(FlatHashInsert, DisplacementDuplicateAndScopedArguments) {
+  FlatInsertHooks h;
+  {
+    FlatInsertTable table(3, FlatInsertGetKey{&h}, FlatInsertHash{&h}, FlatInsertEquals{&h}, {});
+    FlatInsertArm arm(h);
+    for (int key : {0, 1, 2}) table.insert(FlatInsertValue(key, &h));
+    auto base = table.begin().current;
+    h.trace.clear();
+    auto added = table.insert(FlatInsertValue(3, &h));
+    ASSERT_TRUE(added.second);
+    EXPECT_EQ(added.first.current - base, 2);
+    EXPECT_EQ(added.first->key, 3);
+    EXPECT_EQ(added.first->payload, 51);
+    EXPECT_EQ((base + 3)->valuePtr()->key, 2);
+    EXPECT_EQ(h.liveTemps, 0);
+    h.emit("displace"); h.trace.clear();
+    auto duplicate = table.insert(FlatInsertValue(3, &h));
+    EXPECT_FALSE(duplicate.second);
+    EXPECT_EQ(duplicate.first, added.first);
+    EXPECT_EQ(table.size(), 4u);
+    EXPECT_EQ(h.liveValues, 4);
+    EXPECT_EQ(h.liveTemps, 0);
+    h.emit("duplicate"); h.trace.clear();
+    table.reserve(40);
+    EXPECT_EQ(table.size(), 4u);
+    EXPECT_EQ(h.liveValues, 4); EXPECT_EQ(h.liveTemps, 0);
+    for (auto const& value : table) EXPECT_EQ(value.payload, value.key * 17);
+    h.event('C', h.copies); h.event('M', h.moves);
+    h.emit("reserve-reinsert"); h.trace.clear();
+  }
+  EXPECT_EQ(h.liveValues, 0); h.emit("displace-cleanup");
+}
+
+TEST(FlatHashInsert, CallbackExceptionsKeepOriginalObjectAndParameterLifetime) {
+  for (int stage : {1, 2, 3}) {
+    FlatInsertHooks h;
+    {
+      FlatInsertTable table(3, FlatInsertGetKey{&h}, FlatInsertHash{&h}, FlatInsertEquals{&h}, {});
+      table.insert(FlatInsertValue(0, &h));
+      FlatInsertValue caller(3, &h);
+      h.trace.clear();
+      {
+        FlatInsertArm arm(h); h.failAt = stage;
+        bool caught = false;
+        try { table.insert(caller); }
+        catch (FlatInsertMarker& original) { caught = true; EXPECT_EQ(&original, h.marker); }
+        EXPECT_TRUE(caught);
+        EXPECT_EQ(table.size(), 1u);
+        EXPECT_EQ(h.liveTemps, 0);
+        EXPECT_EQ(h.liveValues, 2); // Only stored key and the caller remain alive.
+        EXPECT_EQ(caller.key, 3); EXPECT_EQ(caller.payload, 51);
+      }
+      h.event('F', stage); h.emit("callback-throw"); h.trace.clear();
+    }
+    EXPECT_EQ(h.liveValues, 0); h.emit("callback-cleanup");
+  }
+}
+
+TEST(FlatHashInsert, AdlSwapExceptionsPreserveNativePartialMutation) {
+  for (int stage : {1, 2}) {
+    FlatInsertHooks h;
+    {
+      FlatInsertTable table(3, FlatInsertGetKey{&h}, FlatInsertHash{&h}, FlatInsertEquals{&h}, {});
+      {
+        FlatInsertArm arm(h);
+        for (int key : {0, 1, 2}) table.insert(FlatInsertValue(key, &h));
+      }
+      h.trace.clear();
+      {
+        FlatInsertArm arm(h); h.swapFailure = stage; h.failAt = 5;
+        bool caught = false;
+        try { table.insert(FlatInsertValue(3, &h)); }
+        catch (FlatInsertMarker& original) { caught = true; EXPECT_EQ(&original, h.marker); }
+        EXPECT_TRUE(caught);
+        EXPECT_EQ(h.liveTemps, 0); EXPECT_EQ(h.liveValues, 3);
+      }
+      EXPECT_EQ(table.size(), 3u);
+      std::set<int> keys;
+      for (auto const& value : table) keys.insert(value.key);
+      EXPECT_EQ(keys, stage == 1 ? (std::set<int>{0, 1, 2}) : (std::set<int>{0, 1, 3}));
+      // At stage two slot 2 still carries hash 2, not key 3's hash 0.
+      EXPECT_EQ(table.find(3), table.end());
+      h.event('F', stage); h.emit("swap-throw"); h.trace.clear();
+    }
+    EXPECT_EQ(h.liveValues, 0); h.emit("swap-cleanup");
+  }
+}
+
+TEST(FlatHashInsert, SetFilledMoveFailuresNeverDestroyUnconstructedValue) {
+  for (int stage : {1, 2}) {
+    FlatInsertHooks h;
+    {
+      FlatInsertTable table(3, FlatInsertGetKey{&h}, FlatInsertHash{&h}, FlatInsertEquals{&h}, {});
+      FlatInsertValue caller(9, &h);
+      h.trace.clear(); h.moves = h.copies = 0;
+      {
+        FlatInsertArm arm(h); h.moveFailure = stage; h.failAt = 4;
+        bool caught = false;
+        try { table.insert(caller); }
+        catch (FlatInsertMarker& original) { caught = true; EXPECT_EQ(&original, h.marker); }
+        EXPECT_TRUE(caught);
+        EXPECT_EQ(table.size(), 0u); EXPECT_EQ(table.begin(), table.end());
+        EXPECT_EQ(h.liveTemps, 0); EXPECT_EQ(h.liveValues, 1);
+        EXPECT_EQ(h.copies, 1); EXPECT_EQ(h.moves, stage);
+        EXPECT_EQ(caller.key, 9); EXPECT_EQ(caller.payload, 153);
+      }
+      h.event('F', stage); h.emit("set-filled-throw"); h.trace.clear();
+    }
+    EXPECT_EQ(h.liveValues, 0); h.emit("set-filled-cleanup");
+  }
+}
+
+TEST(FlatHashInsert, GrowthAndReserveReinsertActualMapFields) {
+  FlatHashMap<int, int, FlatInsertHash> map(0, FlatInsertHash{});
+  for (int key = 0; key != 192; ++key) {
+    auto added = map.insert({key, key * 17});
+    EXPECT_TRUE(added.second); EXPECT_EQ(added.first->first, key);
+    EXPECT_EQ(added.first->second, key * 17);
+    if (key == 23 || key == 95) map.reserve(size_t(key + 100));
+  }
+  EXPECT_EQ(map.size(), 192u);
+  for (int key = 0; key != 192; ++key) {
+    auto duplicate = map.insert({key, -1});
+    EXPECT_FALSE(duplicate.second); EXPECT_EQ(duplicate.first->second, key * 17);
+    EXPECT_EQ(map.at(key), key * 17);
+  }
+}
+
+#ifdef STAR_USE_RUST_FLAT_HASH_TABLE
+TEST(FlatHashInsert, PublicInsertDiagnostics) {
+  uint64_t before[2];
+  FlatHashSet<int> set;
+  for (uint32_t kind = 0; kind != 2; ++kind) before[kind] = sb_flat_hash_count(kind, SB_FLAT_HASH_INSERT);
+  EXPECT_TRUE(set.insert(3).second);
+  EXPECT_FALSE(set.insert(3).second);
+  for (uint32_t kind = 0; kind != 2; ++kind)
+    EXPECT_GT(sb_flat_hash_count(kind, SB_FLAT_HASH_INSERT), before[kind]);
+  EXPECT_EQ(sb_flat_hash_count(0, SB_FLAT_HASH_COUNT), 0u);
+  EXPECT_EQ(sb_flat_hash_count(1, SB_FLAT_HASH_COUNT), 0u);
+}
+#endif

@@ -1,4 +1,4 @@
-//! FlatHashTable find/scan policy only; native storage and pointer lifetimes stay native.
+//! FlatHashTable probe/insert policy; native storage and value lifetimes stay native.
 use std::cell::Cell;
 use std::ffi::c_void;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -10,7 +10,8 @@ const HOST_ERROR: u32 = 2;
 const PANIC: u32 = 3;
 const FIND: u32 = 0;
 const SCAN: u32 = 1;
-const COUNT: usize = 2;
+const INSERT: u32 = 2;
+const COUNT: usize = 3;
 const SIZE: u32 = 0;
 const HASH: u32 = 1;
 const LOAD: u32 = 2;
@@ -18,6 +19,12 @@ const EQUALS: u32 = 3;
 const ACTIVE_HASH: u32 = 4;
 const SCAN_EMPTY: u32 = 5;
 const SCAN_ADVANCE: u32 = 6;
+const CAPACITY_NEEDED: u32 = 7;
+const ENSURE_CAPACITY: u32 = 8;
+const SWAP_VALUE: u32 = 9;
+const EXCHANGE_HASH: u32 = 10;
+const SET_FILLED: u32 = 11;
+const INCREMENT_FILLED: u32 = 12;
 const FILLED: usize = 1usize << (usize::BITS - 1);
 
 type Leaf = unsafe extern "C" fn(*mut c_void, u32, usize, *mut usize) -> u32;
@@ -52,15 +59,63 @@ unsafe fn invoke(ctx: *mut c_void, leaf: Leaf, op: u32, arg: usize) -> Result<us
     if leaf(ctx, op, arg, &mut value) != 0 {
         return Err(HOST_ERROR);
     }
-    if ((op == LOAD || op == EQUALS || op == SCAN_EMPTY) && value > 1)
-        || (op == SCAN_ADVANCE && value != 0)
+    if ((op == LOAD || op == EQUALS || op == SCAN_EMPTY || op == CAPACITY_NEEDED) && value > 1)
+        || ((op == SCAN_ADVANCE || op == ENSURE_CAPACITY || op == SWAP_VALUE
+            || op == SET_FILLED || op == INCREMENT_FILLED) && value != 0)
     {
         return Err(INVALID);
     }
     Ok(value)
 }
 
+unsafe fn insert(ctx: *mut c_void, leaf: Leaf) -> Result<SbFlatHashReply, u32> {
+    // Keep native fast-math load-factor arithmetic and growth/reentry native.
+    if invoke(ctx, leaf, CAPACITY_NEEDED, 0)? != 0 {
+        invoke(ctx, leaf, ENSURE_CAPACITY, 0)?;
+    }
+    let mut hash = invoke(ctx, leaf, HASH, 0)? | FILLED;
+    let mut target = hash & invoke(ctx, leaf, SIZE, 0)?.wrapping_sub(2);
+    let mut current = target;
+    let mut inserted = usize::MAX;
+    loop {
+        if invoke(ctx, leaf, LOAD, current)? != 0 {
+            let loaded_hash = invoke(ctx, leaf, ACTIVE_HASH, 0)?;
+            if loaded_hash == hash && invoke(ctx, leaf, EQUALS, 0)? != 0 {
+                // Native returns this duplicate bucket even after earlier swaps.
+                return Ok(SbFlatHashReply { index: current, found: 1 });
+            }
+            let active_hash = invoke(ctx, leaf, ACTIVE_HASH, 0)?;
+            let mask = invoke(ctx, leaf, SIZE, 0)?.wrapping_sub(2);
+            let entry_target = active_hash & mask;
+            let entry_error = current.wrapping_sub(entry_target) & mask;
+            let add_error = current.wrapping_sub(target) & mask;
+            if add_error > entry_error {
+                if inserted == usize::MAX {
+                    inserted = current;
+                }
+                invoke(ctx, leaf, SWAP_VALUE, 0)?;
+                // Value swap may mutate native hash metadata: exchange only now,
+                // and do not normalize the returned raw native hash again.
+                hash = invoke(ctx, leaf, EXCHANGE_HASH, hash)?;
+                target = entry_target;
+            }
+            let mask = invoke(ctx, leaf, SIZE, 0)?.wrapping_sub(2);
+            current = current.wrapping_add(1) & mask;
+        } else {
+            invoke(ctx, leaf, SET_FILLED, hash)?;
+            invoke(ctx, leaf, INCREMENT_FILLED, 0)?;
+            if inserted == usize::MAX {
+                inserted = current;
+            }
+            return Ok(SbFlatHashReply { index: inserted, found: 0 });
+        }
+    }
+}
+
 unsafe fn run(mode: u32, ctx: *mut c_void, leaf: Leaf) -> Result<SbFlatHashReply, u32> {
+    if mode == INSERT {
+        return insert(ctx, leaf);
+    }
     if mode == SCAN {
         while invoke(ctx, leaf, SCAN_EMPTY, 0)? != 0 {
             invoke(ctx, leaf, SCAN_ADVANCE, 0)?;
@@ -98,7 +153,7 @@ unsafe fn run(mode: u32, ctx: *mut c_void, leaf: Leaf) -> Result<SbFlatHashReply
     }
 }
 
-/// Executes only find/scan control, publishing a reply only after success.
+/// Executes find/scan/insert control, publishing a reply only after success.
 ///
 /// # Safety
 /// Context must remain live and satisfy every leaf operation's native contract.
@@ -193,6 +248,198 @@ mod tests {
             s(ACTIVE_HASH, 0, FILLED | 7), s(SIZE, 0, 9),
             s(LOAD, 0, 1), s(ACTIVE_HASH, 0, FILLED | 7), s(EQUALS, 0, 1)]);
         v
+    }
+    fn insert_prefix(capacity: bool, hash: usize, size: usize) -> Vec<Step> {
+        let mut v = vec![s(CAPACITY_NEEDED, 0, capacity as usize)];
+        if capacity {
+            v.push(s(ENSURE_CAPACITY, 0, 0));
+        }
+        v.extend([s(HASH, 0, hash), s(SIZE, 0, size)]);
+        v
+    }
+    fn insert_new(capacity: bool) -> Vec<Step> {
+        let mut v = insert_prefix(capacity, 12, 17);
+        v.extend([s(LOAD, 12, 0), s(SET_FILLED, FILLED | 12, 0),
+            s(INCREMENT_FILLED, 0, 0)]);
+        v
+    }
+    fn insert_duplicate() -> Vec<Step> {
+        let mut v = insert_prefix(false, 3, 9);
+        v.extend([s(LOAD, 3, 1), s(ACTIVE_HASH, 0, FILLED | 3), s(EQUALS, 0, 1)]);
+        v
+    }
+    fn insert_swaps() -> Vec<Step> {
+        let mut v = insert_prefix(false, 7, 9);
+        v.extend([s(LOAD, 7, 1), s(ACTIVE_HASH, 0, FILLED | 7), s(EQUALS, 0, 0),
+            s(ACTIVE_HASH, 0, FILLED | 7), s(SIZE, 0, 9), s(SIZE, 0, 9),
+            s(LOAD, 0, 1), s(ACTIVE_HASH, 0, FILLED),
+            s(ACTIVE_HASH, 0, FILLED), s(SIZE, 0, 9), s(SWAP_VALUE, 0, 0),
+            // Value swap changes the hash to raw 2: don't OR FILLED on exchange.
+            s(EXCHANGE_HASH, FILLED | 7, 2), s(SIZE, 0, 9),
+            s(LOAD, 1, 1), s(ACTIVE_HASH, 0, FILLED | 1),
+            s(ACTIVE_HASH, 0, FILLED | 1), s(SIZE, 0, 9), s(SWAP_VALUE, 0, 0),
+            s(EXCHANGE_HASH, 2, 0), s(SIZE, 0, 9),
+            s(LOAD, 2, 0), s(SET_FILLED, 0, 0), s(INCREMENT_FILLED, 0, 0)]);
+        v
+    }
+    #[test]
+    fn insert_duplicate_new_and_native_capacity_before_hash() {
+        execute(INSERT, &insert_duplicate(), OK, SbFlatHashReply { index: 3, found: 1 });
+        for capacity in [false, true] {
+            // Capacity growth determines the new hash and size before LOAD.
+            execute(INSERT, &insert_new(capacity), OK, SbFlatHashReply { index: 12, found: 0 });
+        }
+        let mut v = insert_prefix(false, 7, 9);
+        v.extend([s(LOAD, 7, 1), s(ACTIVE_HASH, 0, FILLED | 7), s(EQUALS, 0, 0),
+            s(ACTIVE_HASH, 0, FILLED | 7), s(SIZE, 0, 9), s(SIZE, 0, 9),
+            s(LOAD, 0, 0), s(SET_FILLED, FILLED | 7, 0), s(INCREMENT_FILLED, 0, 0)]);
+        execute(INSERT, &v, OK, SbFlatHashReply { index: 0, found: 0 });
+    }
+    #[test]
+    fn insert_robin_hood_returns_first_swap_bucket_and_raw_exchanged_hash() {
+        // A reversed add_error > entry_error consumes an unexpected SWAP at 7
+        // or misses the required swap at 0. Later swaps must not replace index 0.
+        execute(INSERT, &insert_swaps(), OK, SbFlatHashReply { index: 0, found: 0 });
+        let mut v = insert_swaps();
+        v.truncate(v.iter().position(|step| step.op == LOAD && step.arg == 1).unwrap());
+        v.extend([s(LOAD, 1, 1), s(ACTIVE_HASH, 0, 2), s(EQUALS, 0, 1)]);
+        execute(INSERT, &v, OK, SbFlatHashReply { index: 1, found: 1 });
+    }
+    #[test]
+    fn insert_retains_pre_swap_entry_target_not_exchanged_hash_target() {
+        let mut v = insert_swaps();
+        let next = v.iter().position(|step| step.op == LOAD && step.arg == 1).unwrap();
+        v.truncate(next);
+        v.extend([s(LOAD, 1, 1), s(ACTIVE_HASH, 0, FILLED),
+            s(ACTIVE_HASH, 0, FILLED), s(SIZE, 0, 9),
+            // Correct target remains 0: add_error == entry_error == 1, no swap.
+            // Recomputing target from the exchanged hash 2 would swap here.
+            s(SIZE, 0, 9), s(LOAD, 2, 0), s(SET_FILLED, 2, 0), s(INCREMENT_FILLED, 0, 0)]);
+        execute(INSERT, &v, OK, SbFlatHashReply { index: 0, found: 0 });
+    }
+    #[test]
+    fn insert_equality_metadata_and_advance_size_are_fresh() {
+        let mut v = insert_prefix(false, 7, 9);
+        v.extend([s(LOAD, 7, 1), s(ACTIVE_HASH, 0, FILLED | 7), s(EQUALS, 0, 0),
+            // Reach bucket 0, where equality changes both hash and size;
+            // its fresh entry target is 0 rather than the comparison target 7.
+            s(ACTIVE_HASH, 0, FILLED | 7), s(SIZE, 0, 9), s(SIZE, 0, 9),
+            s(LOAD, 0, 1), s(ACTIVE_HASH, 0, FILLED | 7), s(EQUALS, 0, 0),
+            s(ACTIVE_HASH, 0, FILLED), s(SIZE, 0, 17), s(SWAP_VALUE, 0, 0),
+            s(EXCHANGE_HASH, FILLED | 7, FILLED | 4), s(SIZE, 0, 33),
+            s(LOAD, 1, 0), s(SET_FILLED, FILLED | 4, 0), s(INCREMENT_FILLED, 0, 0)]);
+        execute(INSERT, &v, OK, SbFlatHashReply { index: 0, found: 0 });
+        // A swap can resize before advancing: stale mask 7 would wrap to 0,
+        // whereas the new mask 15 advances to bucket 8.
+        let mut v = insert_prefix(false, 6, 9);
+        v.extend([s(LOAD, 6, 1), s(ACTIVE_HASH, 0, FILLED | 6), s(EQUALS, 0, 0),
+            s(ACTIVE_HASH, 0, FILLED | 6), s(SIZE, 0, 9), s(SIZE, 0, 9),
+            s(LOAD, 7, 1), s(ACTIVE_HASH, 0, FILLED | 7),
+            s(ACTIVE_HASH, 0, FILLED | 7), s(SIZE, 0, 9), s(SWAP_VALUE, 0, 0),
+            s(EXCHANGE_HASH, FILLED | 6, 1), s(SIZE, 0, 17),
+            s(LOAD, 8, 0), s(SET_FILLED, 1, 0), s(INCREMENT_FILLED, 0, 0)]);
+        execute(INSERT, &v, OK, SbFlatHashReply { index: 7, found: 0 });
+    }
+    #[test]
+    fn insert_growth_reentry_keeps_frames_counts_and_post_capacity_hash_fresh() {
+        struct Growth { outer: Host, inner: Host, nested: bool, hash: usize }
+        unsafe extern "C" fn growth(ctx: *mut c_void, op: u32, arg: usize, out: *mut usize) -> u32 {
+            let state = ctx.cast::<Growth>();
+            if (*state).nested {
+                return scripted(std::ptr::addr_of_mut!((*state).inner).cast(), op, arg, out);
+            }
+            let status = scripted(std::ptr::addr_of_mut!((*state).outer).cast(), op, arg, out);
+            if status != 0 {
+                return status;
+            }
+            if op == ENSURE_CAPACITY {
+                (*state).nested = true;
+                let mut reply = UNCHANGED;
+                // No reference into either host frame spans nested INSERT.
+                let status = sb_flat_hash_run(INSERT, ctx, Some(growth), &mut reply);
+                (*state).nested = false;
+                if status != OK || reply != (SbFlatHashReply { index: 3, found: 0 }) {
+                    return 1;
+                }
+                (*state).hash = 12;
+            } else if op == HASH {
+                if (*state).hash != 12 {
+                    return 1;
+                }
+                out.write((*state).hash);
+            }
+            0
+        }
+        let mut inner = insert_prefix(false, 3, 9);
+        inner.extend([s(LOAD, 3, 0), s(SET_FILLED, FILLED | 3, 0), s(INCREMENT_FILLED, 0, 0)]);
+        let mut state = Growth {
+            outer: Host { steps: insert_new(true), next: 0, bad: false },
+            inner: Host { steps: inner, next: 0, bad: false },
+            nested: false,
+            hash: 3,
+        };
+        let before = sb_flat_hash_count(0, INSERT);
+        let mut out = UNCHANGED;
+        let status = unsafe {
+            sb_flat_hash_run(INSERT, (&mut state as *mut Growth).cast(), Some(growth), &mut out)
+        };
+        assert_eq!(status, OK);
+        assert_eq!(out, SbFlatHashReply { index: 12, found: 0 });
+        assert_eq!(state.hash, 12);
+        assert!(!state.nested);
+        for host in [&state.outer, &state.inner] {
+            assert!(!host.bad);
+            assert_eq!(host.next, host.steps.len());
+        }
+        assert_eq!(sb_flat_hash_count(0, INSERT), before.wrapping_add(2));
+    }
+    #[test]
+    fn insert_exchange_accepts_all_word_bits_and_sizes_are_not_validated() {
+        let mut v = insert_swaps();
+        let last_exchange = v.iter().rposition(|step| step.op == EXCHANGE_HASH).unwrap();
+        v[last_exchange].value = usize::MAX;
+        let set_filled = v.iter().position(|step| step.op == SET_FILLED).unwrap();
+        v[set_filled].arg = usize::MAX;
+        execute(INSERT, &v, OK, SbFlatHashReply { index: 0, found: 0 });
+        let mut v = insert_prefix(false, 3, 0);
+        v.extend([s(LOAD, FILLED | 2, 0), s(SET_FILLED, FILLED | 3, 0), s(INCREMENT_FILLED, 0, 0)]);
+        execute(INSERT, &v, OK, SbFlatHashReply { index: FILLED | 2, found: 0 });
+    }
+    #[test]
+    fn insert_every_callback_error_stops_with_unchanged_output() {
+        for steps in [insert_new(false), insert_new(true), insert_duplicate(), insert_swaps()] {
+            for fail in 0..steps.len() {
+                for status in [1, 2, u32::MAX] {
+                    let mut v = steps[..=fail].to_vec();
+                    v[fail].status = status;
+                    v[fail].value = usize::MAX;
+                    // Includes SWAP_VALUE failure (no EXCHANGE_HASH) and
+                    // SET_FILLED failure (no INCREMENT_FILLED).
+                    execute(INSERT, &v, HOST_ERROR, UNCHANGED);
+                }
+            }
+        }
+    }
+    #[test]
+    fn insert_rejects_malformed_predicate_and_void_replies() {
+        for steps in [insert_new(true), insert_duplicate(), insert_swaps()] {
+            for (i, step) in steps.iter().enumerate() {
+                let predicate = matches!(step.op, CAPACITY_NEEDED | LOAD | EQUALS);
+                let void = matches!(step.op, ENSURE_CAPACITY | SWAP_VALUE | SET_FILLED | INCREMENT_FILLED);
+                if predicate || void {
+                    for value in [2, usize::MAX] {
+                        let mut v = steps[..=i].to_vec();
+                        v[i].value = value;
+                        execute(INSERT, &v, INVALID, UNCHANGED);
+                    }
+                    if void {
+                        let mut v = steps[..=i].to_vec();
+                        v[i].value = 1;
+                        execute(INSERT, &v, INVALID, UNCHANGED);
+                    }
+                }
+            }
+        }
     }
     #[test]
     fn empty_end_match_mismatch_collision() {
@@ -302,9 +549,9 @@ mod tests {
         let mut host = Host { steps: vec![], next: 0, bad: false };
         let ctx = (&mut host as *mut Host).cast();
         let mut out = UNCHANGED;
-        let before = [sb_flat_hash_count(0, FIND), sb_flat_hash_count(0, SCAN)];
+        let before = [sb_flat_hash_count(0, FIND), sb_flat_hash_count(0, SCAN), sb_flat_hash_count(0, INSERT)];
         unsafe {
-            assert_eq!(sb_flat_hash_run(2, ctx, Some(scripted), &mut out), INVALID);
+            assert_eq!(sb_flat_hash_run(COUNT as u32, ctx, Some(scripted), &mut out), INVALID);
             assert_eq!(sb_flat_hash_run(FIND, std::ptr::null_mut(), Some(scripted), &mut out), INVALID);
             assert_eq!(sb_flat_hash_run(FIND, ctx, None, &mut out), INVALID);
             assert_eq!(sb_flat_hash_run(FIND, ctx, Some(scripted), std::ptr::null_mut()), INVALID);
@@ -316,9 +563,9 @@ mod tests {
         assert_eq!(out, UNCHANGED);
         assert!(!host.bad);
         assert_eq!(host.next, 0);
-        assert_eq!(before, [sb_flat_hash_count(0, FIND), sb_flat_hash_count(0, SCAN)]);
+        assert_eq!(before, [sb_flat_hash_count(0, FIND), sb_flat_hash_count(0, SCAN), sb_flat_hash_count(0, INSERT)]);
         assert_eq!(sb_flat_hash_count(2, FIND), 0);
-        assert_eq!(sb_flat_hash_count(0, 2), 0);
+        assert_eq!(sb_flat_hash_count(0, COUNT as u32), 0);
         assert_eq!(sb_flat_hash_count(1, u32::MAX), 0);
     }
     #[test]

@@ -4482,11 +4482,11 @@ void ClientApplication::renderBehaviorScenario() {
   metadata = metadata.set("rustUuidCalls", JsonArray{sb_uuid_count(0), sb_uuid_count(1), sb_uuid_count(2)});
 #endif
 #ifdef STAR_USE_RUST_FLAT_HASH_TABLE
-  uint64_t flatHashCalls[] = {sb_flat_hash_count(0, 0), sb_flat_hash_count(0, 1),
-      sb_flat_hash_count(1, 0), sb_flat_hash_count(1, 1)};
-  metadata = metadata.set("rustFlatHashProbe", JsonObject{
-      {"main", JsonArray{flatHashCalls[0], flatHashCalls[1]}},
-      {"allThreads", JsonArray{flatHashCalls[2], flatHashCalls[3]}}});
+  uint64_t flatHashCalls[] = {sb_flat_hash_count(0, 0), sb_flat_hash_count(0, 1), sb_flat_hash_count(0, 2),
+      sb_flat_hash_count(1, 0), sb_flat_hash_count(1, 1), sb_flat_hash_count(1, 2)};
+  metadata = metadata.set("rustFlatHashTable", JsonObject{
+      {"main", JsonArray{flatHashCalls[0], flatHashCalls[1], flatHashCalls[2]}},
+      {"allThreads", JsonArray{flatHashCalls[3], flatHashCalls[4], flatHashCalls[5]}}});
 #endif
 #ifdef STAR_USE_RUST_SET
   JsonArray setLoops, setSelections, allSetLoops, allSetSelections;
