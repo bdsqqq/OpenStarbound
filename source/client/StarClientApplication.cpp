@@ -10,6 +10,9 @@
 #ifdef STAR_USE_RUST_UUID
 #include "StarRustUuid.h"
 #endif
+#ifdef STAR_USE_RUST_ORDERED_SET
+#include "StarRustOrderedSet.h"
+#endif
 #ifdef STAR_USE_RUST_BIMAP
 #include "StarRustBiMap.h"
 #endif
@@ -4471,6 +4474,12 @@ void ClientApplication::renderBehaviorScenario() {
   };
 #ifdef STAR_USE_RUST_UUID
   metadata = metadata.set("rustUuidCalls", JsonArray{sb_uuid_count(0), sb_uuid_count(1), sb_uuid_count(2)});
+#endif
+#ifdef STAR_USE_RUST_ORDERED_SET
+  JsonArray orderedSetCalls;
+  for (uint32_t mode = 0; mode != SB_ORDERED_SET_COUNT; ++mode)
+    orderedSetCalls.append(sb_ordered_set_count(mode));
+  metadata = metadata.set("rustOrderedSetCalls", orderedSetCalls);
 #endif
   if (biMapUniqueIdProbe()) {
     Json proof;

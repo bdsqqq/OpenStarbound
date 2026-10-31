@@ -6,6 +6,10 @@
 #include "StarSet.hpp"
 #include "StarList.hpp"
 
+#ifdef STAR_USE_RUST_ORDERED_SET
+#include "StarOrderedSetHost.hpp"
+#endif
+
 namespace Star {
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
@@ -132,32 +136,64 @@ OrderedSetWrapper<Map, Value, Allocator, Args...>::OrderedSetWrapper() {}
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
 OrderedSetWrapper<Map, Value, Allocator, Args...>::OrderedSetWrapper(OrderedSetWrapper const& set) {
+#ifdef STAR_USE_RUST_ORDERED_SET
+  addAll(set);
+#else
   for (auto const& p : set)
     add(p);
+#endif
 }
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
 template <typename InputIterator>
 OrderedSetWrapper<Map, Value, Allocator, Args...>::OrderedSetWrapper(InputIterator beg, InputIterator end) {
+#ifdef STAR_USE_RUST_ORDERED_SET
+  OrderedSetDetail::run(SB_ORDERED_SET_ADD_RANGE, [&](uint32_t operation) -> uint32_t {
+    switch (operation) {
+      case SB_ORDERED_SET_MORE: return beg != end ? 1u : 0u;
+      case SB_ORDERED_SET_ADVANCE: ++beg; return 0;
+      case SB_ORDERED_SET_ADD: add(*beg); return 0;
+      default: OrderedSetDetail::invalidOperation();
+    }
+  });
+#else
   while (beg != end) {
     add(*beg);
     ++beg;
   }
+#endif
 }
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
 OrderedSetWrapper<Map, Value, Allocator, Args...>::OrderedSetWrapper(initializer_list<value_type> list) {
+#ifdef STAR_USE_RUST_ORDERED_SET
+  addAll(list);
+#else
   for (value_type const& v : list)
     add(v);
+#endif
 }
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
 auto OrderedSetWrapper<Map, Value, Allocator, Args...>::operator=(OrderedSetWrapper const& set) -> OrderedSetWrapper& {
+#ifdef STAR_USE_RUST_ORDERED_SET
+  OrderedSetDetail::run(SB_ORDERED_SET_ASSIGN, [&](uint32_t operation) -> uint32_t {
+    switch (operation) {
+      case SB_ORDERED_SET_SELF: return this == &set;
+      case SB_ORDERED_SET_CLEAR: clear(); return 0;
+      // Initializing the range before clear would observe the wrong source if
+      // destruction of an old value changes that source.
+      case SB_ORDERED_SET_ENTER_ADD_RANGE: addAll(set); return 0;
+      default: OrderedSetDetail::invalidOperation();
+    }
+  });
+#else
   if (this != &set) {
     clear();
     for (auto const& p : set)
       add(p);
   }
+#endif
 
   return *this;
 }
@@ -165,8 +201,25 @@ auto OrderedSetWrapper<Map, Value, Allocator, Args...>::operator=(OrderedSetWrap
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
 auto OrderedSetWrapper<Map, Value, Allocator, Args...>::values() const -> List<value_type> {
   List<value_type> values;
+#ifdef STAR_USE_RUST_ORDERED_SET
+  OrderedSetDetail::withRange(*this, [&](auto& iterator, auto& end) {
+    OrderedSetDetail::run(SB_ORDERED_SET_VALUES, [&](uint32_t operation) -> uint32_t {
+      switch (operation) {
+        case SB_ORDERED_SET_MORE: return iterator != end ? 1u : 0u;
+        case SB_ORDERED_SET_ADVANCE: ++iterator; return 0;
+        case SB_ORDERED_SET_APPEND_COPY: {
+          auto p = *iterator;
+          values.append(std::move(p));
+          return 0;
+        }
+        default: OrderedSetDetail::invalidOperation();
+      }
+    });
+  });
+#else
   for (auto p : *this)
     values.append(std::move(p));
+#endif
   return values;
 }
 
@@ -227,8 +280,25 @@ bool OrderedSetWrapper<Map, Value, Allocator, Args...>::addFront(Value const& v)
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
 template <typename Container>
 void OrderedSetWrapper<Map, Value, Allocator, Args...>::addAll(Container const& c) {
+#ifdef STAR_USE_RUST_ORDERED_SET
+  OrderedSetDetail::withRange(c, [&](auto& iterator, auto& end) {
+    OrderedSetDetail::run(SB_ORDERED_SET_ADD_RANGE, [&](uint32_t operation) -> uint32_t {
+      switch (operation) {
+        case SB_ORDERED_SET_MORE: return iterator != end ? 1u : 0u;
+        case SB_ORDERED_SET_ADVANCE: ++iterator; return 0;
+        case SB_ORDERED_SET_ADD: {
+          auto const& v = *iterator;
+          add(v);
+          return 0;
+        }
+        default: OrderedSetDetail::invalidOperation();
+      }
+    });
+  });
+#else
   for (auto const& v : c)
     add(v);
+#endif
 }
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
@@ -258,8 +328,25 @@ bool OrderedSetWrapper<Map, Value, Allocator, Args...>::remove(value_type const&
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
 template <typename Container>
 void OrderedSetWrapper<Map, Value, Allocator, Args...>::removeAll(Container const& c) {
+#ifdef STAR_USE_RUST_ORDERED_SET
+  OrderedSetDetail::withRange(c, [&](auto& iterator, auto& end) {
+    OrderedSetDetail::run(SB_ORDERED_SET_REMOVE_RANGE, [&](uint32_t operation) -> uint32_t {
+      switch (operation) {
+        case SB_ORDERED_SET_MORE: return iterator != end ? 1u : 0u;
+        case SB_ORDERED_SET_ADVANCE: ++iterator; return 0;
+        case SB_ORDERED_SET_REMOVE: {
+          auto const& v = *iterator;
+          remove(v);
+          return 0;
+        }
+        default: OrderedSetDetail::invalidOperation();
+      }
+    });
+  });
+#else
   for (auto const& v : c)
     remove(v);
+#endif
 }
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
@@ -395,31 +482,88 @@ auto OrderedSetWrapper<Map, Value, Allocator, Args...>::at(size_t i) -> value_ty
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
 auto OrderedSetWrapper<Map, Value, Allocator, Args...>::intersection(OrderedSetWrapper const& s) const -> OrderedSetWrapper {
   OrderedSetWrapper ret;
+#ifdef STAR_USE_RUST_ORDERED_SET
+  OrderedSetDetail::withRange(s, [&](auto& iterator, auto& end) {
+    // These are native const-list iterators, not proxy iterators. Keep the
+    // referred-to element across the predicate/action without copying a Value.
+    value_type const* element = nullptr;
+    OrderedSetDetail::run(SB_ORDERED_SET_INTERSECTION, [&](uint32_t operation) -> uint32_t {
+      switch (operation) {
+        case SB_ORDERED_SET_MORE: return iterator != end ? 1u : 0u;
+        case SB_ORDERED_SET_ADVANCE: ++iterator; return 0;
+        case SB_ORDERED_SET_CONTAINS: {
+          auto const& e = *iterator;
+          element = std::addressof(e);
+          return contains(e);
+        }
+        case SB_ORDERED_SET_ADD_RESULT: ret.add(*element); return 0;
+        default: OrderedSetDetail::invalidOperation();
+      }
+    });
+  });
+#else
   for (auto const& e : s) {
     if (contains(e))
       ret.add(e);
   }
+#endif
   return ret;
 }
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
 auto OrderedSetWrapper<Map, Value, Allocator, Args...>::difference(OrderedSetWrapper const& s) const -> OrderedSetWrapper {
   OrderedSetWrapper ret;
+#ifdef STAR_USE_RUST_ORDERED_SET
+  OrderedSetDetail::withRange(*this, [&](auto& iterator, auto& end) {
+    // The native list keeps this element alive through both Rust callbacks.
+    value_type const* element = nullptr;
+    OrderedSetDetail::run(SB_ORDERED_SET_DIFFERENCE, [&](uint32_t operation) -> uint32_t {
+      switch (operation) {
+        case SB_ORDERED_SET_MORE: return iterator != end ? 1u : 0u;
+        case SB_ORDERED_SET_ADVANCE: ++iterator; return 0;
+        case SB_ORDERED_SET_CONTAINS: {
+          auto const& e = *iterator;
+          element = std::addressof(e);
+          return s.contains(e);
+        }
+        case SB_ORDERED_SET_ADD_RESULT: ret.add(*element); return 0;
+        default: OrderedSetDetail::invalidOperation();
+      }
+    });
+  });
+#else
   for (auto const& e : *this) {
     if (!s.contains(e))
       ret.add(e);
   }
+#endif
   return ret;
 }
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
 std::ostream& operator<<(std::ostream& os, OrderedSetWrapper<Map, Value, Allocator, Args...> const& set) {
   os << "(";
+#ifdef STAR_USE_RUST_ORDERED_SET
+  {
+    auto i = set.begin();
+    OrderedSetDetail::run(SB_ORDERED_SET_PRINT, [&](uint32_t operation) -> uint32_t {
+      switch (operation) {
+        case SB_ORDERED_SET_MORE: return i != set.end() ? 1u : 0u;
+        case SB_ORDERED_SET_ADVANCE: ++i; return 0;
+        case SB_ORDERED_SET_SEPARATOR_NEEDED: return i != set.begin() ? 1u : 0u;
+        case SB_ORDERED_SET_SEPARATOR: os << ", "; return 0;
+        case SB_ORDERED_SET_PRINT_VALUE: os << *i; return 0;
+        default: OrderedSetDetail::invalidOperation();
+      }
+    });
+  }
+#else
   for (auto i = set.begin(); i != set.end(); ++i) {
     if (i != set.begin())
       os << ", ";
     os << *i;
   }
+#endif
   os << ")";
   return os;
 }

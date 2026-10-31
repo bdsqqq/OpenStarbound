@@ -10,11 +10,12 @@ _spec = importlib.util.spec_from_file_location(
     ROOT / 'source/lab/id-map-production/game_build_admission.py')
 _legacy = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_legacy)
-# scene26 remains the historical 30-selector projection; BiMap and UUID are not admitted.
+# scene26 keeps its historical 30-selector projection; newer kernels are not admitted.
 SELECTORS = (*_legacy.SELECTORS, STATIC_VECTOR)
 BIMAP = 'STAR_USE_RUST_BIMAP'
 UUID = 'STAR_USE_RUST_UUID'
-CURRENT_SELECTORS = (*SELECTORS, BIMAP, UUID)
+ORDERED_SET = 'STAR_USE_RUST_ORDERED_SET'
+CURRENT_SELECTORS = (*SELECTORS, BIMAP, UUID, ORDERED_SET)
 
 
 def need(ok, why):
@@ -34,9 +35,9 @@ def validate_source(text=None):
         text = (ROOT / 'source/CMakeLists.txt').read_text()
     declared = re.findall(r'\b(?i:option)\s*\(\s*(STAR_USE_RUST_\w+)\b', text)
     rows = re.findall(r'\b(?i:option)\s*\(\s*(STAR_USE_RUST_\w+)\s+"[^"\n]*"\s+(ON|OFF)\s*\)', text)
-    need(len(declared) == len(set(declared)) == len(CURRENT_SELECTORS) == 32 and
-         set(declared) == set(CURRENT_SELECTORS), 'exact current32 selector declarations')
-    need(len(rows) == 32 and dict(rows) == {key: 'OFF' for key in CURRENT_SELECTORS},
+    need(len(declared) == len(set(declared)) == len(CURRENT_SELECTORS) and
+         set(declared) == set(CURRENT_SELECTORS), 'exact current selector declarations')
+    need(len(rows) == len(CURRENT_SELECTORS) and dict(rows) == {key: 'OFF' for key in CURRENT_SELECTORS},
          'all source selector defaults must remain OFF')
 
 
@@ -49,19 +50,20 @@ def validate_profile(role, values):
 def configure_options(role):
     validate_source()
     need(role in profiles(), 'exact reference/candidate role required')
-    values = dict(profiles()[role], **{BIMAP: 'OFF', UUID: 'OFF'})
+    values = dict(profiles()[role], **{BIMAP: 'OFF', UUID: 'OFF', ORDERED_SET: 'OFF'})
     return ['-D' + key + '=' + value for key, value in sorted(values.items())]
 
 
 def validate_cache(role, text):
     entries = re.findall(r'^(STAR_USE_RUST_[A-Z0-9_]+):([^=\n]+)=(.*)$', text, re.M)
-    need(len(entries) == 32 and all(kind == 'BOOL' and value in ('ON', 'OFF') for _, kind, value in entries),
-         'exact32 BOOL cached selectors required')
+    need(len(entries) == len(CURRENT_SELECTORS) and all(kind == 'BOOL' and value in ('ON', 'OFF') for _, kind, value in entries),
+         'exact current BOOL cached selectors required')
     rows = {key: value for key, _, value in entries}
-    need(len(rows) == 32, 'unique cached selectors required')
+    need(len(rows) == len(CURRENT_SELECTORS), 'unique cached selectors required')
     need(set(rows) == set(CURRENT_SELECTORS), 'exact current cached selectors required')
     need(rows.pop(BIMAP) == 'OFF', 'BiMap must remain OFF')
     need(rows.pop(UUID) == 'OFF', 'UUID must remain OFF')
+    need(rows.pop(ORDERED_SET) == 'OFF', 'OrderedSet must remain OFF')
     validate_profile(role, rows)
 
 
