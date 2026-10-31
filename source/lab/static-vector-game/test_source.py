@@ -39,6 +39,8 @@ def replace(text, old, new='', count=1):
 def project_client(text):
     """remove named opt-in seams, projecting old branches back to before DATA."""
     for seam in (
+        "#ifdef STAR_USE_RUST_NET_GROUP\n#include \"StarRustNetRules.h\"\n#endif\n",
+        "#ifdef STAR_USE_RUST_NET_GROUP\n  JsonArray rulesMain, rulesAll;\n  for (uint32_t mode = 0; mode != SB_NET_RULES_COUNT; ++mode) {\n    rulesMain.append(sb_net_rules_count(0, mode));\n    rulesAll.append(sb_net_rules_count(1, mode));\n  }\n  metadata = metadata.set(\"rustNetRules\", JsonObject{\n      {\"main\", rulesMain}, {\"allThreads\", rulesAll}});\n#endif\n",
         "#ifdef STAR_USE_RUST_NET_GROUP\n#include \"StarRustNetCompat.h\"\n#endif\n",
         "#ifdef STAR_USE_RUST_NET_GROUP\n  JsonArray compatMain, compatAll;\n  for (uint32_t mode = 0; mode != SB_NET_COMPAT_COUNT; ++mode) {\n    compatMain.append(sb_net_compat_count(0, mode));\n    compatAll.append(sb_net_compat_count(1, mode));\n  }\n  metadata = metadata.set(\"rustNetCompat\", JsonObject{\n      {\"main\", compatMain}, {\"allThreads\", compatAll}});\n#endif\n",
         "#ifdef STAR_USE_RUST_NET_GROUP\n#include \"StarRustNetVersion.h\"\n#endif\n",
@@ -290,7 +292,7 @@ class SourceContract(unittest.TestCase):
                        and (p.suffix == '.rs' or p.name in ('Cargo.toml', 'Cargo.lock'))
                        and 'target' not in p.parts)
         digest = hashlib.sha256()
-        for module in ('bimap.rs', 'uuid.rs', 'ordered_set.rs', 'flat_hash_table.rs', 'map.rs', 'periodic.rs', 'worker_pool.rs', 'time.rs', 'net_signal.rs', 'net_field.rs', 'net_scalar.rs', 'net_group.rs', 'net_sync.rs', 'net_dynamic.rs', 'net_top.rs', 'net_map.rs', 'net_override.rs', 'net_float.rs', 'net_version.rs', 'net_compat.rs'):
+        for module in ('bimap.rs', 'uuid.rs', 'ordered_set.rs', 'flat_hash_table.rs', 'map.rs', 'periodic.rs', 'worker_pool.rs', 'time.rs', 'net_signal.rs', 'net_field.rs', 'net_scalar.rs', 'net_group.rs', 'net_sync.rs', 'net_dynamic.rs', 'net_top.rs', 'net_map.rs', 'net_override.rs', 'net_float.rs', 'net_version.rs', 'net_compat.rs', 'net_rules.rs'):
             self.assertIn(ROOT / 'source/rust/ffi/src' / module, paths)
             paths.remove(ROOT / 'source/rust/ffi/src' / module)
         for path in paths:
@@ -298,7 +300,8 @@ class SourceContract(unittest.TestCase):
             if path == ROOT / 'source/rust/ffi/src/lib.rs':
                 # Only the additive BiMap/UUID registrations are outside
                 # scene26's historical Rust input contract.
-                for line in (b'mod net_compat;\n', b'pub use net_compat::{sb_net_compat_run, sb_net_compat_count};\n',
+                for line in (b'mod net_rules;\n', b'pub use net_rules::{sb_net_rules_run, sb_net_rules_count};\n',
+                             b'mod net_compat;\n', b'pub use net_compat::{sb_net_compat_run, sb_net_compat_count};\n',
                              b'mod net_version;\n', b'pub use net_version::{sb_net_version_run, sb_net_version_count};\n',
                              b'mod net_float;\n', b'pub use net_float::{sb_net_float_run, sb_net_float_count};\n',
                              b'mod net_override;\n', b'pub use net_override::{sb_net_override_run, sb_net_override_count};\n',
