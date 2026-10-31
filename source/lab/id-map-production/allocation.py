@@ -5,6 +5,7 @@ outside storage. Classify each inode directly instead. Concurrent changes remain
 possible, so report the observation interval and fail closed on traversal errors.
 """
 import datetime as dt
+import errno
 import os
 from pathlib import Path
 import stat
@@ -116,3 +117,29 @@ def check(observation):
 
 def enforce(repo, active_root):
     return check(measure(repo, active_root))
+
+
+def enforce_live(repo, active_root):
+    """Restart, never skip entries, when an owned build temporary disappears.
+
+    Compilers atomically rename/unlink outputs during a live observation. Only
+    ENOENT inside the active root admits up to three WHOLE traversals. Archive,
+    outside-root, permission, device and cap failures remain immediate failures.
+    The successful final walk is still an observation, not an atomic snapshot.
+    """
+    active = Path(active_root)
+    restarts = []
+    for attempt in range(3):
+        try:
+            result = enforce(repo, active)
+            return dict(result, liveWalkRestarts=restarts)
+        except AllocationError as error:
+            cause = error.__cause__
+            missing = Path(cause.filename) if isinstance(cause, FileNotFoundError) and cause.errno == errno.ENOENT and cause.filename else None
+            if missing is None or not missing.is_absolute() or '..' in missing.parts or not missing.is_relative_to(active):
+                raise
+            restarts.append(dict(path=str(missing), startedUTC=error.observation['startedUTC'],
+                                 finishedUTC=error.observation['finishedUTC']))
+            if attempt == 2:
+                error.observation['liveWalkRestarts'] = restarts
+                raise

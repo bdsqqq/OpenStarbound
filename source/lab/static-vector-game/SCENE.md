@@ -1,9 +1,23 @@
-# static-vector-room — source-only seam26
+# static-vector-room — seam26
 
-status: source controls and finite current-source **c++ syntax parsing passed**
-at `f29e41d44ae6d9e79261bd112c72cc413a757f25`. **not object-built, linked,
-game-built or runtime-tested.** no actual game admission or parity claim.
-parent owns integration, readers, retention and commits.
+status: actual macOS clients now compile/link and run this seam. a combined
+candidate enables30 of31 Rust options (LINE_QUERY remains OFF). nine isolated
+native/reference-repeat/candidate captures matched full RGBA, world state,
+wrapped tile observations and authoritative restoration. the observed Rust
+constructor/push/emplace root deltas were1/2/2, exactly the predeclared contract
+below; continuation deltas stayed zero. candidate screenshots were inspected.
+
+this is finite current-source game evidence, not the older frontend's complete
+whole-origin/allocated-bound certificate or universal qualification. unrelated
+all-C++ fresh-start runs exposed native world-cleanup and Metal-renderer crashes;
+those remain FAILED/unresolved. the successful component fixture seeds an owned
+saved ship context/system and restores its revive target to that ship, avoiding
+unrelated randomized starter-world generation. it does not exonerate those
+crashes or change production world creation. compact records live under
+`build/behavior/static-vector-combined-r1/combined-game-r1/`.
+
+historical syntax-only acceptance at
+`f29e41d44ae6d9e79261bd112c72cc413a757f25` remains historical.
 
 ## current capture/build frontend status
 

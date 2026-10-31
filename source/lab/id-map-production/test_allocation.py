@@ -1,5 +1,6 @@
 """Allocation observations only; no native build or historical cause attribution."""
 import ast
+import errno
 from pathlib import Path
 import os
 import stat
@@ -102,6 +103,45 @@ class AllocationTests(unittest.TestCase):
             with self.assertRaises(a.AllocationError) as caught:
                 a.measure(self.root, self.active)
         self.assertFalse(caught.exception.observation['complete'])
+
+    def test_live_walk_restarts_whole_observation_instead_of_skipping_output(self):
+        self.file(self.active / 'completed.o')
+        expected = a.enforce(self.root, self.active)
+        missing = FileNotFoundError(errno.ENOENT, 'renamed temporary', str(self.active / 'compile.o.tmp'))
+        entries = list(a._entries(self.build))
+        with patch.object(a, '_entries', side_effect=[missing, entries]) as walk:
+            actual = a.enforce_live(self.root, self.active)
+        self.assertEqual(walk.call_count, 2)
+        for key in ('archiveBytes', 'activeRootBytes', 'outsideBytes', 'uniqueInodes', 'observedEntries'):
+            self.assertEqual(actual[key], expected[key])
+        self.assertEqual(len(actual['liveWalkRestarts']), 1)
+        # The original strict/quiescent API still rejects this same race.
+        with patch.object(a, '_entries', side_effect=missing) as walk:
+            with self.assertRaises(a.AllocationError):
+                a.enforce(self.root, self.active)
+            self.assertEqual(walk.call_count, 1)
+
+    def test_live_walk_retry_is_bounded_and_incomplete_on_exhaustion(self):
+        missing = FileNotFoundError(errno.ENOENT, 'still changing', str(self.active / 'compile.o.tmp'))
+        with patch.object(a, '_entries', side_effect=missing) as walk:
+            with self.assertRaises(a.AllocationError) as caught:
+                a.enforce_live(self.root, self.active)
+        self.assertEqual(walk.call_count, 3)
+        self.assertFalse(caught.exception.observation['complete'])
+        self.assertEqual(len(caught.exception.observation['liveWalkRestarts']), 3)
+
+    def test_live_walk_does_not_retry_unowned_or_permission_failures(self):
+        failures = [FileNotFoundError(errno.ENOENT, 'outside', str(self.build / 'outside')),
+                    FileNotFoundError(errno.ENOENT, 'archive', str(self.archive / 'blob')),
+                    FileNotFoundError(errno.ENOENT, 'relative', 'relative'),
+                    FileNotFoundError(errno.ENOENT, 'escape', str(self.active / '../outside')),
+                    PermissionError(errno.EACCES, 'denied', str(self.active / 'private')),
+                    FileNotFoundError('no observed path')]
+        for error in failures:
+            with self.subTest(error=error), patch.object(a, '_entries', side_effect=error) as walk:
+                with self.assertRaises(a.AllocationError):
+                    a.enforce_live(self.root, self.active)
+                self.assertEqual(walk.call_count, 1)
 
     def test_boundary_and_actual_outside_growth(self):
         outside = a.CAPS['liveBytes'] - a.CAPS['newRootBytes']

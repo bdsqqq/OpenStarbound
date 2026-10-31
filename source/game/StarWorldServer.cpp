@@ -1886,6 +1886,10 @@ void WorldServer::init(bool firstTime) {
 
     generateRegion(RectI::integral(RectF(m_playerStart, m_playerStart)).padded(m_serverConfig.getInt("playerStartInitialGenRadius")));
   } catch (std::exception const& e) {
+    // Preserve the initiating failure even if partially initialized storage
+    // cannot be unloaded. Cleanup failures must not erase the useful cause.
+    Logger::error("WorldServer initialization failed (seed {}, firstTime {}), before cleanup: {}",
+        m_worldTemplate->worldSeed(), firstTime, outputException(e, true));
     m_worldStorage->unloadAll(true);
     throw WorldServerException("Exception encountered initializing world", e);
   }
