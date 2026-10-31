@@ -74,6 +74,8 @@ SET (star_core_HEADERS
     StarLruCache.hpp
     StarLua.hpp
     StarLuaConverters.hpp
+    StarRustMap.h
+    StarMapHost.hpp
     StarMap.hpp
     StarMathCommon.hpp
     StarMatrix3.hpp

@@ -6,6 +6,10 @@
 #include "StarFlatHashMap.hpp"
 #include "StarList.hpp"
 
+#ifdef STAR_USE_RUST_MAP
+#include "StarMapHost.hpp"
+#endif
+
 namespace Star {
 
 STAR_EXCEPTION(MapException, StarException);
@@ -103,6 +107,8 @@ using HashMap = MapMixin<FlatHashMap<Key, Value, Hash, Equals, Allocator>>;
 template <typename Key, typename Value, typename Hash = hash<Key>, typename Equals = std::equal_to<Key>, typename Allocator = std::allocator<pair<Key const, Value>>>
 using StableHashMap = MapMixin<std::unordered_map<Key, Value, Hash, Equals, Allocator>>;
 
+// Constructors/storage, from, insert, contains/remove and merge/equality helpers
+// remain native; the Rust selector covers only the typed policies below.
 template <typename BaseMap>
 template <typename MapType>
 auto MapMixin<BaseMap>::from(MapType const& m) -> MapMixin {
@@ -112,24 +118,66 @@ auto MapMixin<BaseMap>::from(MapType const& m) -> MapMixin {
 template <typename BaseMap>
 auto MapMixin<BaseMap>::keys() const -> List<key_type> {
   List<key_type> klist;
+#ifdef STAR_USE_RUST_MAP
+  {
+    const_iterator i = Base::begin();
+    MapDetail::run(SB_MAP_COLLECT, [&](uint32_t operation) -> uint32_t {
+      switch (operation) {
+        case SB_MAP_MORE: return i != Base::end() ? 1u : 0u;
+        case SB_MAP_APPEND: klist.push_back(i->first); return 0;
+        case SB_MAP_ADVANCE: ++i; return 0;
+        default: MapDetail::invalidOperation();
+      }
+    });
+  }
+#else
   for (const_iterator i = Base::begin(); i != Base::end(); ++i)
     klist.push_back(i->first);
+#endif
   return klist;
 }
 
 template <typename BaseMap>
 auto MapMixin<BaseMap>::values() const -> List<mapped_type> {
   List<mapped_type> vlist;
+#ifdef STAR_USE_RUST_MAP
+  {
+    const_iterator i = Base::begin();
+    MapDetail::run(SB_MAP_COLLECT, [&](uint32_t operation) -> uint32_t {
+      switch (operation) {
+        case SB_MAP_MORE: return i != Base::end() ? 1u : 0u;
+        case SB_MAP_APPEND: vlist.push_back(i->second); return 0;
+        case SB_MAP_ADVANCE: ++i; return 0;
+        default: MapDetail::invalidOperation();
+      }
+    });
+  }
+#else
   for (const_iterator i = Base::begin(); i != Base::end(); ++i)
     vlist.push_back(i->second);
+#endif
   return vlist;
 }
 
 template <typename BaseMap>
 auto MapMixin<BaseMap>::pairs() const -> List<pair<key_type, mapped_type>> {
   List<pair<key_type, mapped_type>> plist;
+#ifdef STAR_USE_RUST_MAP
+  {
+    const_iterator i = Base::begin();
+    MapDetail::run(SB_MAP_COLLECT, [&](uint32_t operation) -> uint32_t {
+      switch (operation) {
+        case SB_MAP_MORE: return i != Base::end() ? 1u : 0u;
+        case SB_MAP_APPEND: plist.push_back(*i); return 0;
+        case SB_MAP_ADVANCE: ++i; return 0;
+        default: MapDetail::invalidOperation();
+      }
+    });
+  }
+#else
   for (const_iterator i = Base::begin(); i != Base::end(); ++i)
     plist.push_back(*i);
+#endif
   return plist;
 }
 
@@ -145,6 +193,18 @@ bool MapMixin<BaseMap>::remove(key_type const& k) {
 
 template <typename BaseMap>
 bool MapMixin<BaseMap>::removeValues(mapped_type const& v) {
+#ifdef STAR_USE_RUST_MAP
+  const_iterator i = Base::begin();
+  return MapDetail::run(SB_MAP_REMOVE, [&](uint32_t operation) -> uint32_t {
+    switch (operation) {
+      case SB_MAP_MORE: return i != Base::end() ? 1u : 0u;
+      case SB_MAP_MATCH: return i->second == v ? 1u : 0u;
+      case SB_MAP_ERASE: Base::erase(i++); return 0;
+      case SB_MAP_ADVANCE: ++i; return 0;
+      default: MapDetail::invalidOperation();
+    }
+  }) != 0;
+#else
   bool removed = false;
   const_iterator i = Base::begin();
   while (i != Base::end()) {
@@ -156,18 +216,43 @@ bool MapMixin<BaseMap>::removeValues(mapped_type const& v) {
     }
   }
   return removed;
+#endif
 }
 
 template <typename BaseMap>
 auto MapMixin<BaseMap>::take(key_type const& k) -> mapped_type {
+#ifdef STAR_USE_RUST_MAP
+  {
+    auto v = maybeTake(k);
+    bool present = v ? true : false;
+    switch (MapDetail::selectAction(SB_MAP_SELECT_REQUIRED, present)) {
+      case SB_MAP_ACTION_VALUE: return v.take();
+      case SB_MAP_ACTION_THROW: break;
+      default: MapDetail::invalidOperation();
+    }
+  }
+#else
   if (auto v = maybeTake(k))
     return v.take();
+#endif
   throw MapException(strf("Key '{}' not found in Map::take()", outputAny(k)));
 }
 
 template <typename BaseMap>
 auto MapMixin<BaseMap>::maybeTake(key_type const& k) -> Maybe<mapped_type> {
   const_iterator i = Base::find(k);
+#ifdef STAR_USE_RUST_MAP
+  bool present = i != Base::end() ? true : false;
+  switch (MapDetail::selectAction(SB_MAP_SELECT_OPTIONAL, present)) {
+    case SB_MAP_ACTION_VALUE: {
+      mapped_type v = std::move(i->second);
+      Base::erase(i);
+      return v;
+    }
+    case SB_MAP_ACTION_EMPTY: return {};
+    default: MapDetail::invalidOperation();
+  }
+#else
   if (i != Base::end()) {
     mapped_type v = std::move(i->second);
     Base::erase(i);
@@ -175,86 +260,191 @@ auto MapMixin<BaseMap>::maybeTake(key_type const& k) -> Maybe<mapped_type> {
   }
 
   return {};
+#endif
 }
 
 template <typename BaseMap>
 auto MapMixin<BaseMap>::get(key_type const& k) -> mapped_type& {
   iterator i = Base::find(k);
+#ifdef STAR_USE_RUST_MAP
+  bool present = i == Base::end() ? false : true;
+  switch (MapDetail::selectAction(SB_MAP_SELECT_REQUIRED, present)) {
+    case SB_MAP_ACTION_VALUE: return i->second;
+    case SB_MAP_ACTION_THROW:
+      throw MapException(strf("Key '{}' not found in Map::get()", outputAny(k)));
+    default: MapDetail::invalidOperation();
+  }
+#else
   if (i == Base::end())
     throw MapException(strf("Key '{}' not found in Map::get()", outputAny(k)));
   return i->second;
+#endif
 }
 
 template <typename BaseMap>
 auto MapMixin<BaseMap>::get(key_type const& k) const -> mapped_type const& {
   const_iterator i = Base::find(k);
+#ifdef STAR_USE_RUST_MAP
+  bool present = i == Base::end() ? false : true;
+  switch (MapDetail::selectAction(SB_MAP_SELECT_REQUIRED, present)) {
+    case SB_MAP_ACTION_VALUE: return i->second;
+    case SB_MAP_ACTION_THROW:
+      throw MapException(strf("Key '{}' not found in Map::get()", outputAny(k)));
+    default: MapDetail::invalidOperation();
+  }
+#else
   if (i == Base::end())
     throw MapException(strf("Key '{}' not found in Map::get()", outputAny(k)));
   return i->second;
+#endif
 }
 
 template <typename BaseMap>
 auto MapMixin<BaseMap>::value(key_type const& k, mapped_type d) const -> mapped_type {
   const_iterator i = Base::find(k);
+#ifdef STAR_USE_RUST_MAP
+  bool present = i == Base::end() ? false : true;
+  switch (MapDetail::selectAction(SB_MAP_SELECT_DEFAULT, present)) {
+    case SB_MAP_ACTION_DEFAULT: return d;
+    case SB_MAP_ACTION_VALUE: return i->second;
+    default: MapDetail::invalidOperation();
+  }
+#else
   if (i == Base::end())
     return d;
   else
     return i->second;
+#endif
 }
 
 template <typename BaseMap>
 auto MapMixin<BaseMap>::maybe(key_type const& k) const -> Maybe<mapped_type> {
   auto i = Base::find(k);
+#ifdef STAR_USE_RUST_MAP
+  bool present = i == Base::end() ? false : true;
+  switch (MapDetail::selectAction(SB_MAP_SELECT_OPTIONAL, present)) {
+    case SB_MAP_ACTION_EMPTY: return {};
+    case SB_MAP_ACTION_VALUE: return i->second;
+    default: MapDetail::invalidOperation();
+  }
+#else
   if (i == Base::end())
     return {};
   else
     return i->second;
+#endif
 }
 
 template <typename BaseMap>
 auto MapMixin<BaseMap>::ptr(key_type const& k) const -> mapped_const_ptr {
   auto i = Base::find(k);
+#ifdef STAR_USE_RUST_MAP
+  bool present = i == Base::end() ? false : true;
+  switch (MapDetail::selectAction(SB_MAP_SELECT_OPTIONAL, present)) {
+    case SB_MAP_ACTION_EMPTY: return nullptr;
+    case SB_MAP_ACTION_VALUE: return &i->second;
+    default: MapDetail::invalidOperation();
+  }
+#else
   if (i == Base::end())
     return nullptr;
   else
     return &i->second;
+#endif
 }
 
 template <typename BaseMap>
 auto MapMixin<BaseMap>::ptr(key_type const& k) -> mapped_ptr {
   auto i = Base::find(k);
+#ifdef STAR_USE_RUST_MAP
+  bool present = i == Base::end() ? false : true;
+  switch (MapDetail::selectAction(SB_MAP_SELECT_OPTIONAL, present)) {
+    case SB_MAP_ACTION_EMPTY: return nullptr;
+    case SB_MAP_ACTION_VALUE: return &i->second;
+    default: MapDetail::invalidOperation();
+  }
+#else
   if (i == Base::end())
     return nullptr;
   else
     return &i->second;
+#endif
 }
 
 template <typename BaseMap>
 auto MapMixin<BaseMap>::keyOf(mapped_type const& v) const -> key_type {
+#ifdef STAR_USE_RUST_MAP
+  {
+    const_iterator i = Base::begin();
+    auto found = MapDetail::run(SB_MAP_FIRST, [&](uint32_t operation) -> uint32_t {
+      switch (operation) {
+        case SB_MAP_MORE: return i != Base::end() ? 1u : 0u;
+        case SB_MAP_MATCH: return i->second == v ? 1u : 0u;
+        case SB_MAP_ADVANCE: ++i; return 0;
+        default: MapDetail::invalidOperation();
+      }
+    });
+    if (found)
+      return i->first;
+  }
+#else
   for (const_iterator i = Base::begin(); i != Base::end(); ++i) {
     if (i->second == v)
       return i->first;
   }
+#endif
   throw MapException(strf("Value '{}' not found in Map::keyOf()", outputAny(v)));
 }
 
 template <typename BaseMap>
 auto MapMixin<BaseMap>::keysOf(mapped_type const& v) const -> List<key_type> {
   List<key_type> keys;
+#ifdef STAR_USE_RUST_MAP
+  {
+    const_iterator i = Base::begin();
+    MapDetail::run(SB_MAP_FILTER, [&](uint32_t operation) -> uint32_t {
+      switch (operation) {
+        case SB_MAP_MORE: return i != Base::end() ? 1u : 0u;
+        case SB_MAP_MATCH: return i->second == v ? 1u : 0u;
+        case SB_MAP_APPEND: keys.append(i->first); return 0;
+        case SB_MAP_ADVANCE: ++i; return 0;
+        default: MapDetail::invalidOperation();
+      }
+    });
+  }
+#else
   for (const_iterator i = Base::begin(); i != Base::end(); ++i) {
     if (i->second == v)
       keys.append(i->first);
   }
+#endif
   return keys;
 }
 
 template <typename BaseMap>
 auto MapMixin<BaseMap>::hasValue(mapped_type const& v) const -> bool {
+#ifdef STAR_USE_RUST_MAP
+  {
+    const_iterator i = Base::begin();
+    auto found = MapDetail::run(SB_MAP_FIRST, [&](uint32_t operation) -> uint32_t {
+      switch (operation) {
+        case SB_MAP_MORE: return i != Base::end() ? 1u : 0u;
+        case SB_MAP_MATCH: return i->second == v ? 1u : 0u;
+        case SB_MAP_ADVANCE: ++i; return 0;
+        default: MapDetail::invalidOperation();
+      }
+    });
+    if (found)
+      return true;
+  }
+  return false;
+#else
   for (const_iterator i = Base::begin(); i != Base::end(); ++i) {
     if (i->second == v)
       return true;
   }
   return false;
+#endif
 }
 
 template <typename BaseMap>
@@ -265,21 +455,43 @@ auto MapMixin<BaseMap>::insert(key_type k, mapped_type v) -> pair<iterator, bool
 template <typename BaseMap>
 auto MapMixin<BaseMap>::add(key_type k, mapped_type v) -> mapped_type& {
   auto pair = Base::insert(value_type(std::move(k), std::move(v)));
+#ifdef STAR_USE_RUST_MAP
+  bool inserted = !pair.second ? false : true;
+  switch (MapDetail::selectAction(SB_MAP_SELECT_ADD, inserted)) {
+    case SB_MAP_ACTION_THROW:
+      throw MapException(strf("Entry with key '{}' already present.", outputAny(k)));
+    case SB_MAP_ACTION_VALUE: return pair.first->second;
+    default: MapDetail::invalidOperation();
+  }
+#else
   if (!pair.second)
     throw MapException(strf("Entry with key '{}' already present.", outputAny(k)));
   else
     return pair.first->second;
+#endif
 }
 
 template <typename BaseMap>
 auto MapMixin<BaseMap>::set(key_type k, mapped_type v) -> mapped_type& {
   auto i = Base::find(k);
+#ifdef STAR_USE_RUST_MAP
+  bool present = i != Base::end() ? true : false;
+  switch (MapDetail::selectAction(SB_MAP_SELECT_SET, present)) {
+    case SB_MAP_ACTION_UPDATE:
+      i->second = std::move(v);
+      return i->second;
+    case SB_MAP_ACTION_INSERT:
+      return Base::insert(value_type(std::move(k), std::move(v))).first->second;
+    default: MapDetail::invalidOperation();
+  }
+#else
   if (i != Base::end()) {
     i->second = std::move(v);
     return i->second;
   } else {
     return Base::insert(value_type(std::move(k), std::move(v))).first->second;
   }
+#endif
 }
 
 template <typename BaseMap>
@@ -296,6 +508,22 @@ bool MapMixin<BaseMap>::operator==(MapMixin const& m) const {
 template <typename MapType>
 void printMap(std::ostream& os, MapType const& m) {
   os << "{ ";
+#ifdef STAR_USE_RUST_MAP
+  {
+    auto i = m.begin();
+    MapDetail::run(SB_MAP_PRINT, [&](uint32_t operation) -> uint32_t {
+      switch (operation) {
+        case SB_MAP_MORE: return i != m.end() ? 1u : 0u;
+        case SB_MAP_FIRST_ELEMENT: return m.begin() == i ? 1u : 0u;
+        case SB_MAP_FIRST_PREFIX: os << "\""; return 0;
+        case SB_MAP_NEXT_PREFIX: os << ", \""; return 0;
+        case SB_MAP_PRINT_VALUE: os << i->first << "\" : \"" << i->second << "\""; return 0;
+        case SB_MAP_ADVANCE: ++i; return 0;
+        default: MapDetail::invalidOperation();
+      }
+    });
+  }
+#else
   for (auto i = m.begin(); i != m.end(); ++i) {
     if (m.begin() == i)
       os << "\"";
@@ -303,6 +531,7 @@ void printMap(std::ostream& os, MapType const& m) {
       os << ", \"";
     os << i->first << "\" : \"" << i->second << "\"";
   }
+#endif
   os << " }";
 }
 

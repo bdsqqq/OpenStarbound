@@ -39,6 +39,8 @@ def replace(text, old, new='', count=1):
 def project_client(text):
     """remove named opt-in seams, projecting old branches back to before DATA."""
     for seam in (
+        "#ifdef STAR_USE_RUST_MAP\n#include \"StarRustMap.h\"\n#endif\n",
+        "#ifdef STAR_USE_RUST_MAP\n  uint64_t mapMain[2][SB_MAP_COUNT], mapAll[2][SB_MAP_COUNT];\n  for (uint32_t kind = 0; kind != 2; ++kind)\n    for (uint32_t mode = 0; mode != SB_MAP_COUNT; ++mode) {\n      mapMain[kind][mode] = kind == 0 ? sb_map_count(mode) : sb_map_select_count(mode);\n      mapAll[kind][mode] = sb_map_global_count(kind, mode);\n    }\n  JsonArray mapLoops, mapSelections, allMapLoops, allMapSelections;\n  for (uint32_t mode = 0; mode != SB_MAP_COUNT; ++mode) {\n    mapLoops.append(mapMain[0][mode]);\n    mapSelections.append(mapMain[1][mode]);\n    allMapLoops.append(mapAll[0][mode]);\n    allMapSelections.append(mapAll[1][mode]);\n  }\n  metadata = metadata.set(\"rustMap\", JsonObject{\n      {\"main\", JsonObject{{\"loops\", mapLoops}, {\"selections\", mapSelections}}},\n      {\"allThreads\", JsonObject{{\"loops\", allMapLoops}, {\"selections\", allMapSelections}}}});\n#endif\n",
         '#ifdef STAR_USE_RUST_FLAT_HASH_TABLE\n#include "StarRustFlatHashTable.h"\n#endif\n',
         '#ifdef STAR_USE_RUST_FLAT_HASH_TABLE\n  uint64_t flatHashCalls[2][SB_FLAT_HASH_COUNT];\n  for (uint32_t kind = 0; kind != 2; ++kind)\n    for (uint32_t mode = 0; mode != SB_FLAT_HASH_COUNT; ++mode)\n      flatHashCalls[kind][mode] = sb_flat_hash_count(kind, mode);\n  JsonArray flatHashMain, flatHashAll;\n  for (uint32_t mode = 0; mode != SB_FLAT_HASH_COUNT; ++mode) {\n    flatHashMain.append(flatHashCalls[0][mode]);\n    flatHashAll.append(flatHashCalls[1][mode]);\n  }\n  metadata = metadata.set("rustFlatHashTable", JsonObject{{"main", flatHashMain}, {"allThreads", flatHashAll}});\n#endif\n',
         '#ifdef STAR_USE_RUST_SET\n#include "StarRustSet.h"\n#endif\n',
@@ -258,7 +260,7 @@ class SourceContract(unittest.TestCase):
                        and (p.suffix == '.rs' or p.name in ('Cargo.toml', 'Cargo.lock'))
                        and 'target' not in p.parts)
         digest = hashlib.sha256()
-        for module in ('bimap.rs', 'uuid.rs', 'ordered_set.rs', 'flat_hash_table.rs'):
+        for module in ('bimap.rs', 'uuid.rs', 'ordered_set.rs', 'flat_hash_table.rs', 'map.rs'):
             self.assertIn(ROOT / 'source/rust/ffi/src' / module, paths)
             paths.remove(ROOT / 'source/rust/ffi/src' / module)
         for path in paths:
@@ -266,7 +268,8 @@ class SourceContract(unittest.TestCase):
             if path == ROOT / 'source/rust/ffi/src/lib.rs':
                 # Only the additive BiMap/UUID registrations are outside
                 # scene26's historical Rust input contract.
-                for line in (b'mod bimap;\n', b'pub use bimap::{sb_bimap_count, sb_bimap_run, SbBiMapHost, SbBiMapReply, SbBiMapRequest};\n',
+                for line in (b'mod map;\n', b'pub use map::{sb_map_count, sb_map_global_count, sb_map_run, sb_map_select, sb_map_select_count};\n',
+                             b'mod bimap;\n', b'pub use bimap::{sb_bimap_count, sb_bimap_run, SbBiMapHost, SbBiMapReply, SbBiMapRequest};\n',
                              b'mod flat_hash_table;\n', b'pub use flat_hash_table::{sb_flat_hash_count, sb_flat_hash_run, SbFlatHashReply};\n',
                              b'mod uuid;\n', b'pub use uuid::{sb_uuid_compare, sb_uuid_count, sb_uuid_from_bytes, sb_uuid_hash};\n',
                              b'mod ordered_set;\n', b'pub use ordered_set::{\n    sb_ordered_set_count, sb_ordered_set_run, sb_ordered_set_select, sb_ordered_set_select_count,\n    sb_set_count, sb_set_run, sb_set_select, sb_set_select_count, sb_set_global_count,\n};\n'):

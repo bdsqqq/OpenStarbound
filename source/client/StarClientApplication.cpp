@@ -16,6 +16,9 @@
 #ifdef STAR_USE_RUST_SET
 #include "StarRustSet.h"
 #endif
+#ifdef STAR_USE_RUST_MAP
+#include "StarRustMap.h"
+#endif
 #ifdef STAR_USE_RUST_FLAT_HASH_TABLE
 #include "StarRustFlatHashTable.h"
 #endif
@@ -4480,6 +4483,24 @@ void ClientApplication::renderBehaviorScenario() {
   };
 #ifdef STAR_USE_RUST_UUID
   metadata = metadata.set("rustUuidCalls", JsonArray{sb_uuid_count(0), sb_uuid_count(1), sb_uuid_count(2)});
+#endif
+#ifdef STAR_USE_RUST_MAP
+  uint64_t mapMain[2][SB_MAP_COUNT], mapAll[2][SB_MAP_COUNT];
+  for (uint32_t kind = 0; kind != 2; ++kind)
+    for (uint32_t mode = 0; mode != SB_MAP_COUNT; ++mode) {
+      mapMain[kind][mode] = kind == 0 ? sb_map_count(mode) : sb_map_select_count(mode);
+      mapAll[kind][mode] = sb_map_global_count(kind, mode);
+    }
+  JsonArray mapLoops, mapSelections, allMapLoops, allMapSelections;
+  for (uint32_t mode = 0; mode != SB_MAP_COUNT; ++mode) {
+    mapLoops.append(mapMain[0][mode]);
+    mapSelections.append(mapMain[1][mode]);
+    allMapLoops.append(mapAll[0][mode]);
+    allMapSelections.append(mapAll[1][mode]);
+  }
+  metadata = metadata.set("rustMap", JsonObject{
+      {"main", JsonObject{{"loops", mapLoops}, {"selections", mapSelections}}},
+      {"allThreads", JsonObject{{"loops", allMapLoops}, {"selections", allMapSelections}}}});
 #endif
 #ifdef STAR_USE_RUST_FLAT_HASH_TABLE
   uint64_t flatHashCalls[2][SB_FLAT_HASH_COUNT];
