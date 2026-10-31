@@ -45,6 +45,9 @@ PERIODIC_MEMBER = b" OR STAR_USE_RUST_PERIODIC)"
 WORKER_OPTION = b'option(STAR_USE_RUST_WORKER_POOL "Use experimental Rust worker-pool control policy" OFF)\n'
 WORKER_DEFINE = b"if(STAR_USE_RUST_WORKER_POOL)\n  add_compile_definitions(STAR_USE_RUST_WORKER_POOL)\nendif()\n\n"
 WORKER_MEMBER = b" OR STAR_USE_RUST_WORKER_POOL)"
+TIME_OPTION = b'option(STAR_USE_RUST_TIME "Use Rust integer time conversions" OFF)\n'
+TIME_DEFINE = b"if(STAR_USE_RUST_TIME)\n  add_compile_definitions(STAR_USE_RUST_TIME)\nendif()\n\n"
+TIME_MEMBER = b" OR STAR_USE_RUST_TIME)"
 
 
 def require(condition, label):
@@ -120,6 +123,11 @@ def check_define(cmake):
 
 
 def normalize_current_cmake(cmake):
+    require(cmake.count(TIME_OPTION) == 1 and cmake.count(TIME_DEFINE) == 1 and
+            cmake.count(TIME_MEMBER) == 1 and aggregate_gate(cmake).count(b"STAR_USE_RUST_TIME") == 1,
+            "Time integration shape")
+    cmake = cmake.replace(TIME_OPTION, b"").replace(TIME_DEFINE, b"").replace(TIME_MEMBER, b")")
+    require(b"STAR_USE_RUST_TIME" not in cmake, "Time integration shape")
     require(cmake.count(WORKER_OPTION) == 1 and cmake.count(WORKER_DEFINE) == 1 and
             cmake.count(WORKER_MEMBER) == 1 and aggregate_gate(cmake).count(b"STAR_USE_RUST_WORKER_POOL") == 1,
             "WorkerPool integration shape")
@@ -362,6 +370,16 @@ class SourceContract(unittest.TestCase):
         for mutant in bad:
             with self.subTest(size=len(mutant)):
                 self.reject("WorkerPool integration shape", normalize_current_cmake, mutant)
+
+    def test_bad_time_integration(self):
+        bad = [self.current_cmake.replace(TIME_OPTION, TIME_OPTION.replace(b" OFF)", b" ON)"), 1),
+               self.current_cmake.replace(TIME_OPTION, b"", 1), self.current_cmake + TIME_OPTION,
+               self.current_cmake.replace(b" OR STAR_USE_RUST_TIME", b"", 1),
+               self.current_cmake.replace(TIME_DEFINE, b"add_compile_definitions(STAR_USE_RUST_TIME)\n\n", 1),
+               self.current_cmake + b"\nset(STAR_USE_RUST_TIME ON)\n"]
+        for mutant in bad:
+            with self.subTest(size=len(mutant)):
+                self.reject("Time integration shape", normalize_current_cmake, mutant)
 
     def test_bad_extra_runtime_configuration(self):
         mutant = self.cmake + b"\nset(STAR_RUST_TARGET_DIR unexpected)\n"

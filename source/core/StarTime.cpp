@@ -1,8 +1,26 @@
 #include "StarTime.hpp"
 #include "StarMathCommon.hpp"
 #include "StarLexicalCast.hpp"
+#ifdef STAR_USE_RUST_TIME
+#include "StarRustTime.h"
+#include <stdexcept>
+#endif
 
 namespace Star {
+#ifdef STAR_USE_RUST_TIME
+namespace {
+bool rustTimeConvert(uint32_t operation, int64_t value, int64_t frequency, int64_t& output) {
+  auto status = sb_time_convert(operation, value, frequency, &output);
+  if (status == SB_TIME_OK)
+    return true;
+  // Keep unsupported native signed-arithmetic domains unsupported. In
+  // particular, do not turn overflow or a zero divisor into zero or wrapping.
+  if (status == SB_TIME_DOMAIN)
+    return false;
+  throw std::logic_error("Time Rust conversion protocol failure");
+}
+}
+#endif
 
 double Time::timeSinceEpoch() {
   return ticksToSeconds(epochTicks(), epochTickFrequency());
@@ -58,11 +76,21 @@ double Time::ticksToSeconds(int64_t ticks, int64_t tickFrequency) {
 }
 
 int64_t Time::ticksToMilliseconds(int64_t ticks, int64_t tickFrequency) {
+#ifdef STAR_USE_RUST_TIME
+  alignas(8) int64_t converted;
+  if (rustTimeConvert(SB_TIME_TO_MILLISECONDS, ticks, tickFrequency, converted))
+    return converted;
+#endif
   int64_t ticksPerMs = (tickFrequency + 500) / 1000;
   return (ticks + ticksPerMs / 2) / ticksPerMs;
 }
 
 int64_t Time::ticksToMicroseconds(int64_t ticks, int64_t tickFrequency) {
+#ifdef STAR_USE_RUST_TIME
+  alignas(8) int64_t converted;
+  if (rustTimeConvert(SB_TIME_TO_MICROSECONDS, ticks, tickFrequency, converted))
+    return converted;
+#endif
   int64_t ticksPerUs = (tickFrequency + 500000) / 1000000;
   return (ticks + ticksPerUs / 2) / ticksPerUs;
 }
@@ -72,10 +100,20 @@ int64_t Time::secondsToTicks(double seconds, int64_t tickFrequency) {
 }
 
 int64_t Time::millisecondsToTicks(int64_t milliseconds, int64_t tickFrequency) {
+#ifdef STAR_USE_RUST_TIME
+  alignas(8) int64_t converted;
+  if (rustTimeConvert(SB_TIME_FROM_MILLISECONDS, milliseconds, tickFrequency, converted))
+    return converted;
+#endif
   return milliseconds * ((tickFrequency + 500) / 1000);
 }
 
 int64_t Time::microsecondsToTicks(int64_t microseconds, int64_t tickFrequency) {
+#ifdef STAR_USE_RUST_TIME
+  alignas(8) int64_t converted;
+  if (rustTimeConvert(SB_TIME_FROM_MICROSECONDS, microseconds, tickFrequency, converted))
+    return converted;
+#endif
   return microseconds * ((tickFrequency + 500000) / 1000000);
 }
 

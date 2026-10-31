@@ -39,6 +39,8 @@ def replace(text, old, new='', count=1):
 def project_client(text):
     """remove named opt-in seams, projecting old branches back to before DATA."""
     for seam in (
+        "#ifdef STAR_USE_RUST_TIME\n#include \"StarRustTime.h\"\n#endif\n",
+        "#ifdef STAR_USE_RUST_TIME\n  uint64_t timeMain[SB_TIME_COUNT], timeAll[SB_TIME_COUNT], timeDomains[SB_TIME_COUNT];\n  for (uint32_t op = 0; op != SB_TIME_COUNT; ++op) {\n    timeMain[op] = sb_time_count(0, op);\n    timeAll[op] = sb_time_count(1, op);\n    timeDomains[op] = sb_time_count(2, op);\n  }\n  JsonArray timeMainJson, timeAllJson, timeDomainJson;\n  for (uint32_t op = 0; op != SB_TIME_COUNT; ++op) {\n    timeMainJson.append(timeMain[op]);\n    timeAllJson.append(timeAll[op]);\n    timeDomainJson.append(timeDomains[op]);\n  }\n  metadata = metadata.set(\"rustTime\", JsonObject{\n      {\"main\", timeMainJson}, {\"allThreads\", timeAllJson}, {\"unsupportedAllThreads\", timeDomainJson}});\n#endif\n",
         "#ifdef STAR_USE_RUST_WORKER_POOL\n#include \"StarRustWorkerPool.h\"\n#endif\n",
         "#ifdef STAR_USE_RUST_WORKER_POOL\n  uint64_t workerMain[SB_WORKER_POOL_COUNT], workerAll[SB_WORKER_POOL_COUNT];\n  uint64_t workerLeaves[SB_WORKER_POOL_OP_COUNT];\n  for (uint32_t mode = 0; mode != SB_WORKER_POOL_COUNT; ++mode) {\n    workerMain[mode] = sb_worker_pool_count(0, mode);\n    workerAll[mode] = sb_worker_pool_count(1, mode);\n  }\n  for (uint32_t op = 0; op != SB_WORKER_POOL_OP_COUNT; ++op)\n    workerLeaves[op] = sb_worker_pool_count(2, op);\n  JsonArray workerMainJson, workerAllJson, workerLeafJson;\n  for (uint32_t mode = 0; mode != SB_WORKER_POOL_COUNT; ++mode) {\n    workerMainJson.append(workerMain[mode]);\n    workerAllJson.append(workerAll[mode]);\n  }\n  for (uint32_t op = 0; op != SB_WORKER_POOL_OP_COUNT; ++op)\n    workerLeafJson.append(workerLeaves[op]);\n  metadata = metadata.set(\"rustWorkerPool\", JsonObject{\n      {\"main\", workerMainJson}, {\"allThreads\", workerAllJson}, {\"leafAllThreads\", workerLeafJson}});\n#endif\n",
         "#ifdef STAR_USE_RUST_PERIODIC\n#include \"StarRustPeriodic.h\"\n#endif\n",
@@ -264,7 +266,7 @@ class SourceContract(unittest.TestCase):
                        and (p.suffix == '.rs' or p.name in ('Cargo.toml', 'Cargo.lock'))
                        and 'target' not in p.parts)
         digest = hashlib.sha256()
-        for module in ('bimap.rs', 'uuid.rs', 'ordered_set.rs', 'flat_hash_table.rs', 'map.rs', 'periodic.rs', 'worker_pool.rs'):
+        for module in ('bimap.rs', 'uuid.rs', 'ordered_set.rs', 'flat_hash_table.rs', 'map.rs', 'periodic.rs', 'worker_pool.rs', 'time.rs'):
             self.assertIn(ROOT / 'source/rust/ffi/src' / module, paths)
             paths.remove(ROOT / 'source/rust/ffi/src' / module)
         for path in paths:
@@ -272,7 +274,8 @@ class SourceContract(unittest.TestCase):
             if path == ROOT / 'source/rust/ffi/src/lib.rs':
                 # Only the additive BiMap/UUID registrations are outside
                 # scene26's historical Rust input contract.
-                for line in (b'mod worker_pool;\n', b'pub use worker_pool::{sb_worker_pool_count, sb_worker_pool_run};\n',
+                for line in (b'mod time;\n', b'pub use time::{sb_time_convert, sb_time_count};\n',
+                             b'mod worker_pool;\n', b'pub use worker_pool::{sb_worker_pool_count, sb_worker_pool_run};\n',
                              b'mod periodic;\n', b'pub use periodic::{sb_periodic_count, sb_periodic_run, SbPeriodicReply, SbPeriodicState};\n',
                              b'mod map;\n', b'pub use map::{sb_map_count, sb_map_global_count, sb_map_run, sb_map_select, sb_map_select_count};\n',
                              b'mod bimap;\n', b'pub use bimap::{sb_bimap_count, sb_bimap_run, SbBiMapHost, SbBiMapReply, SbBiMapRequest};\n',

@@ -16,6 +16,9 @@
 #ifdef STAR_USE_RUST_SET
 #include "StarRustSet.h"
 #endif
+#ifdef STAR_USE_RUST_TIME
+#include "StarRustTime.h"
+#endif
 #ifdef STAR_USE_RUST_WORKER_POOL
 #include "StarRustWorkerPool.h"
 #endif
@@ -4489,6 +4492,22 @@ void ClientApplication::renderBehaviorScenario() {
   };
 #ifdef STAR_USE_RUST_UUID
   metadata = metadata.set("rustUuidCalls", JsonArray{sb_uuid_count(0), sb_uuid_count(1), sb_uuid_count(2)});
+#endif
+#ifdef STAR_USE_RUST_TIME
+  uint64_t timeMain[SB_TIME_COUNT], timeAll[SB_TIME_COUNT], timeDomains[SB_TIME_COUNT];
+  for (uint32_t op = 0; op != SB_TIME_COUNT; ++op) {
+    timeMain[op] = sb_time_count(0, op);
+    timeAll[op] = sb_time_count(1, op);
+    timeDomains[op] = sb_time_count(2, op);
+  }
+  JsonArray timeMainJson, timeAllJson, timeDomainJson;
+  for (uint32_t op = 0; op != SB_TIME_COUNT; ++op) {
+    timeMainJson.append(timeMain[op]);
+    timeAllJson.append(timeAll[op]);
+    timeDomainJson.append(timeDomains[op]);
+  }
+  metadata = metadata.set("rustTime", JsonObject{
+      {"main", timeMainJson}, {"allThreads", timeAllJson}, {"unsupportedAllThreads", timeDomainJson}});
 #endif
 #ifdef STAR_USE_RUST_WORKER_POOL
   uint64_t workerMain[SB_WORKER_POOL_COUNT], workerAll[SB_WORKER_POOL_COUNT];

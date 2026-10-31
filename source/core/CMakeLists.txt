@@ -134,6 +134,7 @@ SET (star_core_HEADERS
     StarText.hpp
     StarThread.hpp
     StarTickRateMonitor.hpp
+    StarRustTime.h
     StarTime.hpp
     StarTtlCache.hpp
     StarUdp.hpp
