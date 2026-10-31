@@ -4,6 +4,9 @@
 #include "StarDataStreamExtra.hpp"
 #include "StarNetElement.hpp"
 #include "StarStrongTypedef.hpp"
+#ifdef STAR_USE_RUST_NET_GROUP
+#include "StarNetMapHost.hpp"
+#endif
 
 namespace Star {
 
@@ -103,6 +106,9 @@ private:
 
   void addPendingChangeData(ElementChange change, float interpolationTime);
   void applyChange(ElementChange change);
+#ifdef STAR_USE_RUST_NET_GROUP
+  void flushPendingChanges();
+#endif
 
   Deque<pair<uint64_t, ElementChange>> m_changeData;
   Deque<pair<float, ElementChange>> m_pendingChangeData;
@@ -125,12 +131,30 @@ void NetElementMapWrapper<BaseMap>::initNetVersion(NetElementVersion const* vers
   m_changeData.clear();
   m_changeDataLastVersion = 0;
 
+#ifdef STAR_USE_RUST_NET_GROUP
+  NetMapDetail::run(SB_NET_MAP_INIT, [&](uint32_t leaf, uint64_t, SbNetMapReply&) {
+    switch (leaf) {
+    case SB_NET_MAP_FLUSH_PENDING: flushPendingChanges(); break;
+    case SB_NET_MAP_RECORD_CLEAR: addChangeData(ClearChange()); break;
+    case SB_NET_MAP_RECORD_RANGE_OP:
+      NetMapDetail::withRange(SB_NET_MAP_BASE_RECORD, 0, *this,
+          [&](uint32_t item, uint64_t, auto& current, SbNetMapReply&) {
+        if (item != SB_NET_MAP_RECORD_CURRENT_SET) throw std::logic_error("Invalid network-map record leaf");
+        auto const& p = current();
+        addChangeData(SetChange{p.first, p.second});
+      });
+      break;
+    default: throw std::logic_error("Invalid network-map init leaf");
+    }
+  });
+#else
   for (auto& change : Star::take(m_pendingChangeData))
     applyChange(std::move(change.second));
 
   addChangeData(ClearChange());
   for (auto const& p : *this)
     addChangeData(SetChange{p.first, p.second});
+#endif
 }
 
 template <typename BaseMap>
@@ -141,33 +165,107 @@ void NetElementMapWrapper<BaseMap>::enableNetInterpolation(float) {
 template <typename BaseMap>
 void NetElementMapWrapper<BaseMap>::disableNetInterpolation() {
   m_interpolationEnabled = false;
+#ifdef STAR_USE_RUST_NET_GROUP
+  flushPendingChanges();
+#else
   for (auto& change : Star::take(m_pendingChangeData))
     applyChange(std::move(change.second));
+#endif
 }
 
 template <typename BaseMap>
 void NetElementMapWrapper<BaseMap>::tickNetInterpolation(float dt) {
+#ifdef STAR_USE_RUST_NET_GROUP
+  NetMapDetail::run(SB_NET_MAP_TICK, [&](uint32_t leaf, uint64_t, SbNetMapReply& reply) {
+    switch (leaf) {
+    case SB_NET_MAP_DECREMENT_RANGE_OP:
+      NetMapDetail::withRange(SB_NET_MAP_DECREMENT_RANGE, 0, m_pendingChangeData,
+          [&](uint32_t item, uint64_t, auto& current, SbNetMapReply&) {
+        if (item != SB_NET_MAP_DECREMENT_CURRENT) throw std::logic_error("Invalid network-map decrement leaf");
+        auto& p = current();
+        p.first -= dt;
+      });
+      break;
+    case SB_NET_MAP_FRONT_READY:
+      reply.a = !m_pendingChangeData.empty() && m_pendingChangeData.first().first <= 0.0f;
+      break;
+    case SB_NET_MAP_APPLY_FRONT: applyChange(m_pendingChangeData.takeFirst().second); break;
+    default: throw std::logic_error("Invalid network-map tick leaf");
+    }
+  });
+#else
   for (auto& p : m_pendingChangeData)
     p.first -= dt;
 
   while (!m_pendingChangeData.empty() && m_pendingChangeData.first().first <= 0.0f)
     applyChange(m_pendingChangeData.takeFirst().second);
+#endif
 }
 
 template <typename BaseMap>
 void NetElementMapWrapper<BaseMap>::netStore(DataStream& ds, NetCompatibilityRules rules) const {
   if (!checkWithRules(rules)) return;
+#ifdef STAR_USE_RUST_NET_GROUP
+  NetMapDetail::run(SB_NET_MAP_STORE, [&](uint32_t leaf, uint64_t, SbNetMapReply&) {
+    switch (leaf) {
+    case SB_NET_MAP_WRITE_SIZE: ds.writeVlqU(BaseMap::size() + m_pendingChangeData.size()); break;
+    case SB_NET_MAP_STORE_RANGE_OP:
+      NetMapDetail::withRange(SB_NET_MAP_BASE_STORE, 0, *this,
+          [&](uint32_t item, uint64_t, auto& current, SbNetMapReply&) {
+        if (item != SB_NET_MAP_WRITE_CURRENT_SET) throw std::logic_error("Invalid network-map store value leaf");
+        auto const& pair = current();
+        writeChange(ds, SetChange{pair.first, pair.second});
+      });
+      break;
+    case SB_NET_MAP_STORE_PENDING_OP:
+      NetMapDetail::withRange(SB_NET_MAP_STORE_PENDING, 0, m_pendingChangeData,
+          [&](uint32_t item, uint64_t, auto& current, SbNetMapReply&) {
+        if (item != SB_NET_MAP_WRITE_PENDING_CHANGE) throw std::logic_error("Invalid network-map store pending leaf");
+        auto const& p = current();
+        writeChange(ds, p.second);
+      });
+      break;
+    default: throw std::logic_error("Invalid network-map store leaf");
+    }
+  });
+#else
   ds.writeVlqU(BaseMap::size() + m_pendingChangeData.size());
   for (auto const& pair : *this)
     writeChange(ds, SetChange{pair.first, pair.second});
 
   for (auto const& p : m_pendingChangeData)
     writeChange(ds, p.second);
+#endif
 }
 
 template <typename BaseMap>
 void NetElementMapWrapper<BaseMap>::netLoad(DataStream& ds, NetCompatibilityRules rules) {
   if (!checkWithRules(rules)) return;
+#ifdef STAR_USE_RUST_NET_GROUP
+  NetMapDetail::run(SB_NET_MAP_LOAD, [&](uint32_t leaf, uint64_t, SbNetMapReply& reply) {
+    switch (leaf) {
+    case SB_NET_MAP_CLEAR_HISTORY: m_changeData.clear(); break;
+    case SB_NET_MAP_CAPTURE_VERSION: m_changeDataLastVersion = m_netVersion ? m_netVersion->current() : 0; break;
+    case SB_NET_MAP_CLEAR_PENDING: m_pendingChangeData.clear(); break;
+    case SB_NET_MAP_CLEAR_BASE: BaseMap::clear(); break;
+    case SB_NET_MAP_RECORD_CLEAR: addChangeData(ClearChange()); break;
+    case SB_NET_MAP_READ_COUNT: reply.a = ds.readVlqU(); break;
+    case SB_NET_MAP_LOAD_ITEM_OP: {
+      auto change = readChange(ds);
+      NetMapDetail::run(SB_NET_MAP_LOAD_ITEM, [&](uint32_t item, uint64_t, SbNetMapReply&) {
+        switch (item) {
+        case SB_NET_MAP_RECORD_ITEM: addChangeData(change); break;
+        case SB_NET_MAP_APPLY_ITEM_MOVE: applyChange(std::move(change)); break;
+        default: throw std::logic_error("Invalid network-map load item leaf");
+        }
+      });
+      break;
+    }
+    case SB_NET_MAP_MARK_UPDATED: m_updated = true; break;
+    default: throw std::logic_error("Invalid network-map load leaf");
+    }
+  });
+#else
   m_changeData.clear();
   m_changeDataLastVersion = m_netVersion ? m_netVersion->current() : 0;
   m_pendingChangeData.clear();
@@ -183,11 +281,29 @@ void NetElementMapWrapper<BaseMap>::netLoad(DataStream& ds, NetCompatibilityRule
   }
 
   m_updated = true;
+#endif
 }
 
 template <typename BaseMap>
 bool NetElementMapWrapper<BaseMap>::shouldWriteNetDelta(uint64_t fromVersion, NetCompatibilityRules rules) const {
   if (!checkWithRules(rules)) return false;
+#ifdef STAR_USE_RUST_NET_GROUP
+  return NetMapDetail::run(SB_NET_MAP_SHOULD, fromVersion,
+      [&](uint32_t leaf, uint64_t argument, SbNetMapReply& reply) {
+    switch (leaf) {
+    case SB_NET_MAP_HISTORY_FLOOR: reply.a = m_changeDataLastVersion; break;
+    case SB_NET_MAP_SHOULD_SCAN_OP:
+      reply.a = NetMapDetail::withRange(SB_NET_MAP_SHOULD_SCAN, argument, m_changeData,
+          [&](uint32_t item, uint64_t, auto& current, SbNetMapReply& result) {
+        if (item != SB_NET_MAP_ENTRY_VERSION) throw std::logic_error("Invalid network-map should scan leaf");
+        auto const& p = current();
+        result.a = p.first;
+      });
+      break;
+    default: throw std::logic_error("Invalid network-map should leaf");
+    }
+  });
+#else
   if (fromVersion < m_changeDataLastVersion)
     return true;
 
@@ -196,11 +312,39 @@ bool NetElementMapWrapper<BaseMap>::shouldWriteNetDelta(uint64_t fromVersion, Ne
       return true;
 
   return false;
+#endif
 }
 
 template <typename BaseMap>
 bool NetElementMapWrapper<BaseMap>::writeNetDelta(DataStream& ds, uint64_t fromVersion, NetCompatibilityRules rules) const {
   if (!checkWithRules(rules)) return false;
+#ifdef STAR_USE_RUST_NET_GROUP
+  return NetMapDetail::run(SB_NET_MAP_WRITE, fromVersion,
+      [&](uint32_t leaf, uint64_t argument, SbNetMapReply& reply) {
+    switch (leaf) {
+    case SB_NET_MAP_HISTORY_FLOOR: reply.a = m_changeDataLastVersion; break;
+    case SB_NET_MAP_WRITE_FULL_CODE: ds.writeVlqU(1); break;
+    case SB_NET_MAP_STORE_FULL: netStore(ds, rules); break;
+    case SB_NET_MAP_WRITE_SCAN_OP:
+      reply.a = NetMapDetail::withRange(SB_NET_MAP_WRITE_SCAN, argument, m_changeData,
+          [&](uint32_t item, uint64_t, auto& current, SbNetMapReply& result) {
+        switch (item) {
+        case SB_NET_MAP_ENTRY_VERSION: result.a = current().first; break;
+        case SB_NET_MAP_WRITE_CHANGE_CODE: ds.writeVlqU(2); break;
+        case SB_NET_MAP_WRITE_HISTORY_CHANGE: {
+          auto const& p = current();
+          writeChange(ds, p.second);
+          break;
+        }
+        default: throw std::logic_error("Invalid network-map write scan leaf");
+        }
+      });
+      break;
+    case SB_NET_MAP_WRITE_TERMINATOR: ds.writeVlqU(0); break;
+    default: throw std::logic_error("Invalid network-map write leaf");
+    }
+  });
+#else
   bool deltaWritten = false;
 
   if (fromVersion < m_changeDataLastVersion) {
@@ -222,11 +366,35 @@ bool NetElementMapWrapper<BaseMap>::writeNetDelta(DataStream& ds, uint64_t fromV
     ds.writeVlqU(0);
 
   return deltaWritten;
+#endif
 }
 
 template <typename BaseMap>
 void NetElementMapWrapper<BaseMap>::readNetDelta(DataStream& ds, float interpolationTime, NetCompatibilityRules rules) {
   if (!checkWithRules(rules)) return;
+#ifdef STAR_USE_RUST_NET_GROUP
+  NetMapDetail::run(SB_NET_MAP_READ, [&](uint32_t leaf, uint64_t, SbNetMapReply& reply) {
+    switch (leaf) {
+    case SB_NET_MAP_READ_CODE: reply.a = ds.readVlqU(); break;
+    case SB_NET_MAP_LOAD_FULL: netLoad(ds, rules); break;
+    case SB_NET_MAP_READ_ITEM_OP: {
+      auto change = readChange(ds);
+      NetMapDetail::run(SB_NET_MAP_READ_ITEM, [&](uint32_t item, uint64_t, SbNetMapReply& result) {
+        switch (item) {
+        case SB_NET_MAP_RECORD_ITEM: addChangeData(change); break;
+        case SB_NET_MAP_SHOULD_QUEUE: result.a = m_interpolationEnabled && interpolationTime > 0.0f; break;
+        case SB_NET_MAP_QUEUE_ITEM_MOVE: addPendingChangeData(std::move(change), interpolationTime); break;
+        case SB_NET_MAP_APPLY_ITEM_MOVE: applyChange(std::move(change)); break;
+        default: throw std::logic_error("Invalid network-map read item leaf");
+        }
+      });
+      break;
+    }
+    case SB_NET_MAP_THROW_CODE: throw IOException("Improper delta code received in NetElementMapWrapper::readNetDelta");
+    default: throw std::logic_error("Invalid network-map read leaf");
+    }
+  });
+#else
   while (true) {
     uint64_t code = ds.readVlqU();
     if (code == 0) {
@@ -245,6 +413,7 @@ void NetElementMapWrapper<BaseMap>::readNetDelta(DataStream& ds, float interpola
       throw IOException("Improper delta code received in NetElementMapWrapper::readNetDelta");
     }
   }
+#endif
 }
 
 template <typename BaseMap>
@@ -444,24 +613,70 @@ void NetElementMapWrapper<BaseMap>::addChangeData(ElementChange change) {
   uint64_t currentVersion = m_netVersion ? m_netVersion->current() : 0;
   starAssert(m_changeData.empty() || m_changeData.last().first <= currentVersion);
 
+#ifdef STAR_USE_RUST_NET_GROUP
+  NetMapDetail::run(SB_NET_MAP_HISTORY, [&](uint32_t leaf, uint64_t, SbNetMapReply& reply) {
+    switch (leaf) {
+    case SB_NET_MAP_APPEND_HISTORY: m_changeData.append({currentVersion, std::move(change)}); break;
+    // The original signed cast/subtraction and its unsupported domains stay native.
+    case SB_NET_MAP_SET_HISTORY_FLOOR: m_changeDataLastVersion = max<int64_t>((int64_t)currentVersion - MaxChangeDataVersions, 0); break;
+    case SB_NET_MAP_HISTORY_EMPTY: reply.a = m_changeData.empty(); break;
+    case SB_NET_MAP_HISTORY_BOUNDS:
+      reply.a = m_changeData.first().first; reply.b = m_changeDataLastVersion; break;
+    case SB_NET_MAP_POP_HISTORY: m_changeData.removeFirst(); break;
+    default: throw std::logic_error("Invalid network-map history leaf");
+    }
+  });
+#else
   m_changeData.append({currentVersion, std::move(change)});
 
   m_changeDataLastVersion = max<int64_t>((int64_t)currentVersion - MaxChangeDataVersions, 0);
   while (!m_changeData.empty() && m_changeData.first().first < m_changeDataLastVersion)
     m_changeData.removeFirst();
+#endif
 }
 
 template <typename BaseMap>
 void NetElementMapWrapper<BaseMap>::addPendingChangeData(ElementChange change, float interpolationTime) {
+#ifdef STAR_USE_RUST_NET_GROUP
+  NetMapDetail::run(SB_NET_MAP_PENDING, [&](uint32_t leaf, uint64_t, SbNetMapReply& reply) {
+    switch (leaf) {
+    case SB_NET_MAP_PENDING_EARLIER:
+      reply.a = !m_pendingChangeData.empty() && interpolationTime < m_pendingChangeData.last().first;
+      break;
+    case SB_NET_MAP_FLUSH_PENDING: flushPendingChanges(); break;
+    case SB_NET_MAP_APPEND_PENDING: m_pendingChangeData.append({interpolationTime, std::move(change)}); break;
+    default: throw std::logic_error("Invalid network-map pending leaf");
+    }
+  });
+#else
   if (!m_pendingChangeData.empty() && interpolationTime < m_pendingChangeData.last().first) {
     for (auto& change : Star::take(m_pendingChangeData))
       applyChange(std::move(change.second));
   }
   m_pendingChangeData.append({interpolationTime, std::move(change)});
+#endif
 }
 
 template <typename BaseMap>
 void NetElementMapWrapper<BaseMap>::applyChange(ElementChange change) {
+#ifdef STAR_USE_RUST_NET_GROUP
+  SetChange* set = nullptr;
+  RemoveChange* remove = nullptr;
+  NetMapDetail::run(SB_NET_MAP_APPLY, [&](uint32_t leaf, uint64_t, SbNetMapReply& reply) {
+    switch (leaf) {
+    case SB_NET_MAP_CHANGE_KIND:
+      if ((set = change.template ptr<SetChange>())) reply.a = 0;
+      else if ((remove = change.template ptr<RemoveChange>())) reply.a = 1;
+      else reply.a = 2;
+      break;
+    case SB_NET_MAP_APPLY_SET: BaseMap::set(std::move(set->key), std::move(set->value)); break;
+    case SB_NET_MAP_APPLY_REMOVE: BaseMap::remove(std::move(remove->key)); break;
+    case SB_NET_MAP_CLEAR_BASE: BaseMap::clear(); break;
+    case SB_NET_MAP_MARK_UPDATED: m_updated = true; break;
+    default: throw std::logic_error("Invalid network-map apply leaf");
+    }
+  });
+#else
   if (auto set = change.template ptr<SetChange>())
     BaseMap::set(std::move(set->key), std::move(set->value));
   else if (auto remove = change.template ptr<RemoveChange>())
@@ -469,6 +684,20 @@ void NetElementMapWrapper<BaseMap>::applyChange(ElementChange change) {
   else
     BaseMap::clear();
   m_updated = true;
+#endif
 }
 
+#ifdef STAR_USE_RUST_NET_GROUP
+template <typename BaseMap>
+void NetElementMapWrapper<BaseMap>::flushPendingChanges() {
+  // The taken queue, not the newly reentrant member queue, owns this iteration.
+  auto&& pending = Star::take(m_pendingChangeData);
+  NetMapDetail::withRange(SB_NET_MAP_FLUSH, 0, pending,
+      [&](uint32_t leaf, uint64_t, auto& current, SbNetMapReply&) {
+    if (leaf != SB_NET_MAP_APPLY_PENDING_MOVE) throw std::logic_error("Invalid network-map flush leaf");
+    auto& change = current();
+    applyChange(std::move(change.second));
+  });
+}
+#endif
 }

@@ -26,6 +26,9 @@
 #include "StarRustNetDynamic.h"
 #endif
 #ifdef STAR_USE_RUST_NET_GROUP
+#include "StarRustNetMap.h"
+#endif
+#ifdef STAR_USE_RUST_NET_GROUP
 #include "StarRustNetTop.h"
 #endif
 #ifdef STAR_USE_RUST_NET_GROUP
@@ -4563,6 +4566,17 @@ void ClientApplication::renderBehaviorScenario() {
     dynamicLeafJson.append(dynamicLeaves[op]);
   metadata = metadata.set("rustNetDynamic", JsonObject{
       {"main", dynamicMainJson}, {"allThreads", dynamicAllJson}, {"attemptedLeaves", dynamicLeafJson}});
+#endif
+#ifdef STAR_USE_RUST_NET_GROUP
+  JsonArray netMapMain, netMapAll, netMapLeaves;
+  for (uint32_t mode = 0; mode != SB_NET_MAP_COUNT; ++mode) {
+    netMapMain.append(sb_net_map_count(0, mode));
+    netMapAll.append(sb_net_map_count(1, mode));
+  }
+  for (uint32_t op = 0; op != SB_NET_MAP_OP_COUNT; ++op)
+    netMapLeaves.append(sb_net_map_count(2, op));
+  metadata = metadata.set("rustNetMap", JsonObject{
+      {"main", netMapMain}, {"allThreads", netMapAll}, {"attemptedLeaves", netMapLeaves}});
 #endif
 #ifdef STAR_USE_RUST_NET_GROUP
   JsonArray topMain, topAll, topLeaves;

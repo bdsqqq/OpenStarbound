@@ -39,6 +39,8 @@ def replace(text, old, new='', count=1):
 def project_client(text):
     """remove named opt-in seams, projecting old branches back to before DATA."""
     for seam in (
+        "#ifdef STAR_USE_RUST_NET_GROUP\n#include \"StarRustNetMap.h\"\n#endif\n",
+        "#ifdef STAR_USE_RUST_NET_GROUP\n  JsonArray netMapMain, netMapAll, netMapLeaves;\n  for (uint32_t mode = 0; mode != SB_NET_MAP_COUNT; ++mode) {\n    netMapMain.append(sb_net_map_count(0, mode));\n    netMapAll.append(sb_net_map_count(1, mode));\n  }\n  for (uint32_t op = 0; op != SB_NET_MAP_OP_COUNT; ++op)\n    netMapLeaves.append(sb_net_map_count(2, op));\n  metadata = metadata.set(\"rustNetMap\", JsonObject{\n      {\"main\", netMapMain}, {\"allThreads\", netMapAll}, {\"attemptedLeaves\", netMapLeaves}});\n#endif\n",
         "#ifdef STAR_USE_RUST_NET_GROUP\n#include \"StarRustNetTop.h\"\n#endif\n",
         "#ifdef STAR_USE_RUST_NET_GROUP\n  JsonArray topMain, topAll, topLeaves;\n  for (uint32_t mode = 0; mode != SB_NET_TOP_COUNT; ++mode) {\n    topMain.append(sb_net_top_count(0, mode));\n    topAll.append(sb_net_top_count(1, mode));\n  }\n  for (uint32_t op = 0; op != SB_NET_TOP_OP_COUNT; ++op)\n    topLeaves.append(sb_net_top_count(2, op));\n  metadata = metadata.set(\"rustNetTop\", JsonObject{\n      {\"main\", topMain}, {\"allThreads\", topAll}, {\"attemptedLeaves\", topLeaves}});\n#endif\n",
         "#ifdef STAR_USE_RUST_NET_DYNAMIC\n#include \"StarRustNetDynamic.h\"\n#endif\n",
@@ -280,7 +282,7 @@ class SourceContract(unittest.TestCase):
                        and (p.suffix == '.rs' or p.name in ('Cargo.toml', 'Cargo.lock'))
                        and 'target' not in p.parts)
         digest = hashlib.sha256()
-        for module in ('bimap.rs', 'uuid.rs', 'ordered_set.rs', 'flat_hash_table.rs', 'map.rs', 'periodic.rs', 'worker_pool.rs', 'time.rs', 'net_signal.rs', 'net_field.rs', 'net_scalar.rs', 'net_group.rs', 'net_sync.rs', 'net_dynamic.rs', 'net_top.rs'):
+        for module in ('bimap.rs', 'uuid.rs', 'ordered_set.rs', 'flat_hash_table.rs', 'map.rs', 'periodic.rs', 'worker_pool.rs', 'time.rs', 'net_signal.rs', 'net_field.rs', 'net_scalar.rs', 'net_group.rs', 'net_sync.rs', 'net_dynamic.rs', 'net_top.rs', 'net_map.rs'):
             self.assertIn(ROOT / 'source/rust/ffi/src' / module, paths)
             paths.remove(ROOT / 'source/rust/ffi/src' / module)
         for path in paths:
@@ -288,7 +290,8 @@ class SourceContract(unittest.TestCase):
             if path == ROOT / 'source/rust/ffi/src/lib.rs':
                 # Only the additive BiMap/UUID registrations are outside
                 # scene26's historical Rust input contract.
-                for line in (b'mod net_top;\n', b'pub use net_top::{sb_net_top_run, sb_net_top_count};\n',
+                for line in (b'mod net_map;\n', b'pub use net_map::{sb_net_map_run, sb_net_map_count};\n',
+                             b'mod net_top;\n', b'pub use net_top::{sb_net_top_run, sb_net_top_count};\n',
                              b'mod net_dynamic;\n', b'pub use net_dynamic::{sb_net_dynamic_run, sb_net_dynamic_count};\n',
                              b'mod net_sync;\n', b'pub use net_sync::{sb_net_sync_run, sb_net_sync_count};\n',
                              b'mod net_group;\n', b'pub use net_group::{sb_net_group_run, sb_net_group_count};\n',
