@@ -40,7 +40,7 @@ def project_client(text):
     """remove named opt-in seams, projecting old branches back to before DATA."""
     for seam in (
         '#ifdef STAR_USE_RUST_ORDERED_SET\n#include "StarRustOrderedSet.h"\n#endif\n',
-        '#ifdef STAR_USE_RUST_ORDERED_SET\n  JsonArray orderedSetCalls;\n  for (uint32_t mode = 0; mode != SB_ORDERED_SET_COUNT; ++mode)\n    orderedSetCalls.append(sb_ordered_set_count(mode));\n  metadata = metadata.set("rustOrderedSetCalls", orderedSetCalls);\n#endif\n',
+        '#ifdef STAR_USE_RUST_ORDERED_SET\n  JsonArray orderedSetCalls;\n  for (uint32_t mode = 0; mode != SB_ORDERED_SET_COUNT; ++mode)\n    orderedSetCalls.append(sb_ordered_set_count(mode));\n  metadata = metadata.set("rustOrderedSetCalls", orderedSetCalls);\n  JsonArray orderedSetSelections;\n  for (uint32_t mode = 0; mode != SB_ORDERED_SET_SELECT_COUNT; ++mode)\n    orderedSetSelections.append(sb_ordered_set_select_count(mode));\n  metadata = metadata.set("rustOrderedSetSelections", orderedSetSelections);\n#endif\n',
         '#ifdef STAR_USE_RUST_UUID\n#include "StarRustUuid.h"\n#endif\n',
         '#ifdef STAR_USE_RUST_UUID\n  metadata = metadata.set("rustUuidCalls", JsonArray{sb_uuid_count(0), sb_uuid_count(1), sb_uuid_count(2)});\n#endif\n',
         '#ifdef STAR_USE_RUST_BIMAP\n#include "StarRustBiMap.h"\n#endif\n',
@@ -264,7 +264,7 @@ class SourceContract(unittest.TestCase):
                 # scene26's historical Rust input contract.
                 for line in (b'mod bimap;\n', b'pub use bimap::{sb_bimap_count, sb_bimap_run, SbBiMapHost, SbBiMapReply, SbBiMapRequest};\n',
                              b'mod uuid;\n', b'pub use uuid::{sb_uuid_compare, sb_uuid_count, sb_uuid_from_bytes, sb_uuid_hash};\n',
-                             b'mod ordered_set;\n', b'pub use ordered_set::{sb_ordered_set_count, sb_ordered_set_run};\n'):
+                             b'mod ordered_set;\n', b'pub use ordered_set::{sb_ordered_set_count, sb_ordered_set_run, sb_ordered_set_select, sb_ordered_set_select_count};\n'):
                     self.assertEqual(raw.count(line), 1)
                     raw = raw.replace(line, b'', 1)
             digest.update(path.relative_to(ROOT).as_posix().encode() + b'\0' + hashlib.sha256(raw).digest())

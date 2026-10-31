@@ -27,7 +27,7 @@ BIMAP_MEMBER = b" OR STAR_USE_RUST_BIMAP)"
 UUID_OPTION = b'option(STAR_USE_RUST_UUID "Use the Rust Uuid value operations" OFF)\n'
 UUID_DEFINE = b"if(STAR_USE_RUST_UUID)\n  add_compile_definitions(STAR_USE_RUST_UUID)\nendif()\n\n"
 UUID_MEMBER = b" OR STAR_USE_RUST_UUID)"
-ORDERED_SET_OPTION = b'option(STAR_USE_RUST_ORDERED_SET "Use experimental Rust ordered-set loop controllers" OFF)\n'
+ORDERED_SET_OPTION = b'option(STAR_USE_RUST_ORDERED_SET "Use experimental Rust ordered-set controllers/policy" OFF)\n'
 ORDERED_SET_DEFINE = b"if(STAR_USE_RUST_ORDERED_SET)\n  add_compile_definitions(STAR_USE_RUST_ORDERED_SET)\nendif()\n\n"
 ORDERED_SET_MEMBER = b" OR STAR_USE_RUST_ORDERED_SET)"
 

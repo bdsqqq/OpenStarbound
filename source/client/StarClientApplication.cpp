@@ -4480,6 +4480,10 @@ void ClientApplication::renderBehaviorScenario() {
   for (uint32_t mode = 0; mode != SB_ORDERED_SET_COUNT; ++mode)
     orderedSetCalls.append(sb_ordered_set_count(mode));
   metadata = metadata.set("rustOrderedSetCalls", orderedSetCalls);
+  JsonArray orderedSetSelections;
+  for (uint32_t mode = 0; mode != SB_ORDERED_SET_SELECT_COUNT; ++mode)
+    orderedSetSelections.append(sb_ordered_set_select_count(mode));
+  metadata = metadata.set("rustOrderedSetSelections", orderedSetSelections);
 #endif
   if (biMapUniqueIdProbe()) {
     Json proof;

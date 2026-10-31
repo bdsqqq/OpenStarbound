@@ -196,12 +196,14 @@ struct Value {
   int n;
   static Trace* trace;
   static std::function<void()> onDestroy;
+  static std::function<void()> onCopy;
   explicit Value(int n) : n(n) {}
   Value(Value const& v) : n(v.n) {
     if (trace) {
       trace->log("copy" + std::to_string(n));
       if (trace->copy == n) trace->raise();
     }
+    if (onCopy) onCopy();
   }
   Value(Value&& v) noexcept : n(v.n) { if (trace) trace->log("move" + std::to_string(n)); }
   ~Value() {
@@ -221,12 +223,13 @@ struct Value {
 Proxy::operator Value() const { return Value(static_cast<int>(*this)); }
 Trace* Value::trace = nullptr;
 std::function<void()> Value::onDestroy;
+std::function<void()> Value::onCopy;
 struct ValueHash { size_t operator()(Value const& v) const { return std::hash<int>{}(v.n); } };
 // Reset instrumentation before fixture destruction, including on a failed ASSERT.
 struct ValueTrace {
   Trace trace;
   ValueTrace() { Value::trace = &trace; }
-  ~ValueTrace() { Value::trace = nullptr; Value::onDestroy = {}; }
+  ~ValueTrace() { Value::trace = nullptr; Value::onDestroy = {}; Value::onCopy = {}; }
 };
 template <typename Set> void valueLoops(char const* name) {
   Set source, dest; dest.add(Value(99));
@@ -281,7 +284,87 @@ TEST(OrderedSet, LoopFamilyValueLifetimesAndExceptions) {
   EXPECT_EQ(std::count(scope.trace.events.begin(), scope.trace.events.end(), "more3"), 0);
   scope.trace.emit("comparator-throw");
 }
+namespace {
+template <typename Set> void selectionContracts() {
+  Set set;
+  auto inserted = set.insert(2);
+  EXPECT_TRUE(inserted.second);
+  EXPECT_FALSE(set.insert(2).second);
+  EXPECT_EQ(&*inserted.first, &set.first());
+  EXPECT_TRUE(set.addFront(1)); EXPECT_FALSE(set.addFront(2));
+  EXPECT_TRUE(set.addBack(3)); EXPECT_FALSE(set.addBack(2));
+  EXPECT_EQ(set.values(), List<int>({1, 3, 2}));
+  EXPECT_EQ(&set.first(), &*set.begin());
+  EXPECT_EQ(&set.last(), &*std::prev(set.end()));
+  ASSERT_TRUE(set.indexOf(3)); EXPECT_EQ(*set.indexOf(3), 1u);
+  EXPECT_FALSE(set.indexOf(99));
+  EXPECT_TRUE(set.remove(3)); EXPECT_FALSE(set.remove(3));
+  EXPECT_EQ(set.takeFirst(), 1); EXPECT_EQ(set.takeLast(), 2);
+  set.add(4); set.removeFirst(); set.add(5); set.removeLast();
+  EXPECT_TRUE(set.empty());
+  std::function<void()> calls[] = {
+    [&] { (void)set.first(); }, [&] { (void)set.last(); },
+    [&] { set.removeFirst(); }, [&] { set.removeLast(); },
+    [&] { (void)set.takeFirst(); }, [&] { (void)set.takeLast(); }
+  };
+  char const* messages[] = {
+    "(SetException) first() called on empty OrderedSet",
+    "(SetException) last() called on empty OrderedSet",
+    "(SetException) OrderedSet::removeFirst() called on empty OrderedSet",
+    "(SetException) OrderedSet::removeLast() called on empty OrderedSet",
+    "(SetException) OrderedSet::takeFirst() called on empty OrderedSet",
+    "(SetException) OrderedSet::takeLast() called on empty OrderedSet"
+  };
+  for (size_t i = 0; i != 6; ++i) {
+    try { calls[i](); FAIL() << "expected SetException " << i; }
+    catch (SetException const& e) { EXPECT_STREQ(e.what(), messages[i]); }
+  }
+}
+template <typename Set> void takeCopyFailure() {
+  for (bool front : {true, false}) {
+    Set set; set.add(Value(1)); set.add(Value(2));
+    ValueTrace scope; auto& t = scope.trace; t.copy = front ? 1 : 2;
+    sameException(t, [&] { if (front) (void)set.takeFirst(); else (void)set.takeLast(); });
+    // Native take erases the map entry BEFORE copying: the list orphan stays.
+    t.copy = -1;
+    EXPECT_EQ(set.size(), 1u); EXPECT_FALSE(set.contains(Value(front ? 1 : 2)));
+    auto values = set.values(); ASSERT_EQ(values.size(), 2u);
+    EXPECT_EQ(values[0].n, 1); EXPECT_EQ(values[1].n, 2);
+  }
+}
+}
+TEST(OrderedSet, SelectionPublicContracts) {
+  selectionContracts<OrderedSet<int>>();
+  selectionContracts<OrderedHashSet<int>>();
+}
+TEST(OrderedSet, SelectionPreservesNativePartialMutation) {
+  takeCopyFailure<OrderedSet<Value>>();
+  takeCopyFailure<OrderedHashSet<Value, ValueHash>>();
+  for (int operation = 0; operation != 3; ++operation) {
+    OrderedSet<Value> set; set.add(Value(1));
+    ValueTrace scope; auto& t = scope.trace;
+    // find succeeds first; copying the new list node arms map-insert failure.
+    Value::onCopy = [&] { t.compare = true; };
+    sameException(t, [&] {
+      if (operation == 0) set.insert(Value(2));
+      else if (operation == 1) set.addFront(Value(2));
+      else set.addBack(Value(2));
+    });
+    Value::onCopy = {}; t.compare = false;
+    EXPECT_EQ(set.size(), 1u); EXPECT_FALSE(set.contains(Value(2)));
+    auto values = set.values(); ASSERT_EQ(values.size(), 2u);
+    EXPECT_EQ(values[operation == 1 ? 0 : 1].n, 2);
+  }
+}
 #ifdef STAR_USE_RUST_ORDERED_SET
+TEST(OrderedSet, SelectionAllRustModesReachedThroughPublicApis) {
+  uint64_t before[SB_ORDERED_SET_SELECT_COUNT];
+  for (uint32_t i = 0; i != SB_ORDERED_SET_SELECT_COUNT; ++i)
+    before[i] = sb_ordered_set_select_count(i);
+  selectionContracts<OrderedSet<int>>();
+  for (uint32_t i = 0; i != SB_ORDERED_SET_SELECT_COUNT; ++i)
+    EXPECT_GT(sb_ordered_set_select_count(i) - before[i], 0u) << "selection mode " << i;
+}
 TEST(OrderedSet, LoopFamilyAllRustModesReachedThroughPublicApis) {
   uint64_t before[SB_ORDERED_SET_COUNT];
   for (uint32_t i = 0; i != SB_ORDERED_SET_COUNT; ++i) before[i] = sb_ordered_set_count(i);

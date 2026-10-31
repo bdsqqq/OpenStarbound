@@ -230,6 +230,18 @@ bool OrderedSetWrapper<Map, Value, Allocator, Args...>::contains(value_type cons
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
 auto OrderedSetWrapper<Map, Value, Allocator, Args...>::insert(value_type const& v) -> pair<iterator, bool> {
+#ifdef STAR_USE_RUST_ORDERED_SET
+  auto i = m_map.find(v);
+  switch (OrderedSetDetail::selectAction(SB_ORDERED_SET_SELECT_INSERT, (i == m_map.end()) ? false : true)) {
+    case SB_ORDERED_SET_ACTION_NEW: {
+      auto orderIt = m_order.insert(m_order.end(), v);
+      m_map.insert(typename MapType::value_type(std::cref(*orderIt), orderIt));
+      return {orderIt, true};
+    }
+    case SB_ORDERED_SET_ACTION_EXISTING: return {i->second, false};
+    default: OrderedSetDetail::invalidOperation();
+  }
+#else
   auto i = m_map.find(v);
   if (i == m_map.end()) {
     auto orderIt = m_order.insert(m_order.end(), v);
@@ -237,6 +249,7 @@ auto OrderedSetWrapper<Map, Value, Allocator, Args...>::insert(value_type const&
     return {orderIt, true};
   }
   return {i->second, false};
+#endif
 }
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
@@ -253,6 +266,20 @@ bool OrderedSetWrapper<Map, Value, Allocator, Args...>::replace(Value const& v) 
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
 bool OrderedSetWrapper<Map, Value, Allocator, Args...>::addBack(Value const& v) {
+#ifdef STAR_USE_RUST_ORDERED_SET
+  auto i = m_map.find(v);
+  switch (OrderedSetDetail::selectAction(SB_ORDERED_SET_SELECT_INSERT, (i != m_map.end()) ? true : false)) {
+    case SB_ORDERED_SET_ACTION_EXISTING:
+      m_order.splice(m_order.end(), m_order, i->second);
+      return false;
+    case SB_ORDERED_SET_ACTION_NEW: {
+      iterator orderIt = m_order.insert(m_order.end(), v);
+      m_map.insert(typename MapType::value_type(std::cref(*orderIt), orderIt));
+      return true;
+    }
+    default: OrderedSetDetail::invalidOperation();
+  }
+#else
   auto i = m_map.find(v);
   if (i != m_map.end()) {
     m_order.splice(m_order.end(), m_order, i->second);
@@ -262,19 +289,35 @@ bool OrderedSetWrapper<Map, Value, Allocator, Args...>::addBack(Value const& v) 
     m_map.insert(typename MapType::value_type(std::cref(*orderIt), orderIt));
     return true;
   }
+#endif
 }
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
 bool OrderedSetWrapper<Map, Value, Allocator, Args...>::addFront(Value const& v) {
+#ifdef STAR_USE_RUST_ORDERED_SET
+  auto i = m_map.find(v);
+  switch (OrderedSetDetail::selectAction(SB_ORDERED_SET_SELECT_INSERT, (i != m_map.end()) ? true : false)) {
+    case SB_ORDERED_SET_ACTION_EXISTING:
+      m_order.splice(m_order.begin(), m_order, i->second);
+      return false;
+    case SB_ORDERED_SET_ACTION_NEW: {
+      iterator orderIt = m_order.insert(m_order.begin(), v);
+      m_map.insert(typename MapType::value_type(std::cref(*orderIt), orderIt));
+      return true;
+    }
+    default: OrderedSetDetail::invalidOperation();
+  }
+#else
   auto i = m_map.find(v);
   if (i != m_map.end()) {
     m_order.splice(m_order.begin(), m_order, i->second);
     return false;
   } else {
-    iterator orderIt = m_order.insert(m_order.end(), v);
+    iterator orderIt = m_order.insert(m_order.begin(), v);
     m_map.insert(typename MapType::value_type(std::cref(*orderIt), orderIt));
     return true;
   }
+#endif
 }
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
@@ -315,6 +358,19 @@ auto OrderedSetWrapper<Map, Value, Allocator, Args...>::toBack(iterator i) -> it
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
 bool OrderedSetWrapper<Map, Value, Allocator, Args...>::remove(value_type const& v) {
+#ifdef STAR_USE_RUST_ORDERED_SET
+  auto i = m_map.find(v);
+  switch (OrderedSetDetail::selectAction(SB_ORDERED_SET_SELECT_REMOVE, (i != m_map.end()) ? true : false)) {
+    case SB_ORDERED_SET_ACTION_ERASE: {
+      auto orderIt = i->second;
+      m_map.erase(i);
+      m_order.erase(orderIt);
+      return true;
+    }
+    case SB_ORDERED_SET_ACTION_MISS: return false;
+    default: OrderedSetDetail::invalidOperation();
+  }
+#else
   auto i = m_map.find(v);
   if (i != m_map.end()) {
     auto orderIt = i->second;
@@ -323,6 +379,7 @@ bool OrderedSetWrapper<Map, Value, Allocator, Args...>::remove(value_type const&
     return true;
   }
   return false;
+#endif
 }
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
@@ -357,22 +414,34 @@ void OrderedSetWrapper<Map, Value, Allocator, Args...>::clear() {
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
 auto OrderedSetWrapper<Map, Value, Allocator, Args...>::first() const -> value_type const& {
+#ifdef STAR_USE_RUST_ORDERED_SET
+  OrderedSetDetail::requireNonEmpty(empty(), [] { throw SetException("first() called on empty OrderedSet"); });
+#else
   if (empty())
     throw SetException("first() called on empty OrderedSet");
+#endif
   return *begin();
 }
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
 auto OrderedSetWrapper<Map, Value, Allocator, Args...>::last() const -> value_type const& {
+#ifdef STAR_USE_RUST_ORDERED_SET
+  OrderedSetDetail::requireNonEmpty(empty(), [] { throw SetException("last() called on empty OrderedSet"); });
+#else
   if (empty())
     throw SetException("last() called on empty OrderedSet");
+#endif
   return *(prev(end()));
 }
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
 void OrderedSetWrapper<Map, Value, Allocator, Args...>::removeFirst() {
+#ifdef STAR_USE_RUST_ORDERED_SET
+  OrderedSetDetail::requireNonEmpty(empty(), [] { throw SetException("OrderedSet::removeFirst() called on empty OrderedSet"); });
+#else
   if (empty())
     throw SetException("OrderedSet::removeFirst() called on empty OrderedSet");
+#endif
 
   auto i = m_order.begin();
   m_map.erase(*i);
@@ -381,8 +450,12 @@ void OrderedSetWrapper<Map, Value, Allocator, Args...>::removeFirst() {
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
 void OrderedSetWrapper<Map, Value, Allocator, Args...>::removeLast() {
+#ifdef STAR_USE_RUST_ORDERED_SET
+  OrderedSetDetail::requireNonEmpty(empty(), [] { throw SetException("OrderedSet::removeLast() called on empty OrderedSet"); });
+#else
   if (empty())
     throw SetException("OrderedSet::removeLast() called on empty OrderedSet");
+#endif
 
   auto i = m_order.end();
   --i;
@@ -392,8 +465,12 @@ void OrderedSetWrapper<Map, Value, Allocator, Args...>::removeLast() {
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
 auto OrderedSetWrapper<Map, Value, Allocator, Args...>::takeFirst() -> value_type {
+#ifdef STAR_USE_RUST_ORDERED_SET
+  OrderedSetDetail::requireNonEmpty(empty(), [] { throw SetException("OrderedSet::takeFirst() called on empty OrderedSet"); });
+#else
   if (empty())
     throw SetException("OrderedSet::takeFirst() called on empty OrderedSet");
+#endif
 
   auto i = m_order.begin();
   m_map.erase(*i);
@@ -404,8 +481,12 @@ auto OrderedSetWrapper<Map, Value, Allocator, Args...>::takeFirst() -> value_typ
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
 auto OrderedSetWrapper<Map, Value, Allocator, Args...>::takeLast() -> value_type {
+#ifdef STAR_USE_RUST_ORDERED_SET
+  OrderedSetDetail::requireNonEmpty(empty(), [] { throw SetException("OrderedSet::takeLast() called on empty OrderedSet"); });
+#else
   if (empty())
     throw SetException("OrderedSet::takeLast() called on empty OrderedSet");
+#endif
 
   auto i = m_order.end();
   --i;
@@ -458,11 +539,20 @@ auto OrderedSetWrapper<Map, Value, Allocator, Args...>::rend() const -> const_re
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>
 Maybe<size_t> OrderedSetWrapper<Map, Value, Allocator, Args...>::indexOf(value_type const& v) const {
+#ifdef STAR_USE_RUST_ORDERED_SET
+  auto i = m_map.find(v);
+  switch (OrderedSetDetail::selectAction(SB_ORDERED_SET_SELECT_INDEX, (i == m_map.end()) ? false : true)) {
+    case SB_ORDERED_SET_ACTION_EMPTY: return {};
+    case SB_ORDERED_SET_ACTION_DISTANCE: return std::distance(begin(), const_iterator(i->second));
+    default: OrderedSetDetail::invalidOperation();
+  }
+#else
   auto i = m_map.find(v);
   if (i == m_map.end())
     return {};
 
   return std::distance(begin(), const_iterator(i->second));
+#endif
 }
 
 template <template <typename...> class Map, typename Value, typename Allocator, typename... Args>

@@ -30,10 +30,26 @@ const SELF: u32 = 10;
 const CLEAR: u32 = 11;
 const ENTER_ADD_RANGE: u32 = 12;
 
+const SELECT_INSERT: u32 = 0;
+const SELECT_REMOVE: u32 = 1;
+const SELECT_NONEMPTY: u32 = 2;
+const SELECT_INDEX: u32 = 3;
+const SELECT_COUNT: usize = 4;
+
+const ACTION_EXISTING: u32 = 0;
+const ACTION_NEW: u32 = 1;
+const ACTION_ERASE: u32 = 2;
+const ACTION_MISS: u32 = 3;
+const ACTION_THROW: u32 = 4;
+const ACTION_CONTINUE: u32 = 5;
+const ACTION_EMPTY: u32 = 6;
+const ACTION_DISTANCE: u32 = 7;
+
 type Leaf = unsafe extern "C" fn(*mut c_void, u32, *mut u32) -> u32;
 
 thread_local! {
     static COUNTS: Cell<[u64; COUNT]> = const { Cell::new([0; COUNT]) };
+    static SELECT_COUNTS: Cell<[u64; SELECT_COUNT]> = const { Cell::new([0; SELECT_COUNT]) };
 }
 
 // Only raw opaque context crosses a callback: no Rust borrow spans host reentry.
@@ -114,9 +130,115 @@ pub extern "C" fn sb_ordered_set_count(mode: u32) -> u64 {
     catch_unwind(|| COUNTS.with(|cell| cell.get()[mode as usize])).unwrap_or(0)
 }
 
+/// Selects only an action; C++ retains the original comparisons and typed return
+/// scopes. Keeping materialization after this call avoids extra native value slots,
+/// copies, or foreign exception unwinding through Rust.
+///
+/// # Safety
+/// For accepted inputs, out_action must designate live writable aligned u32
+/// storage. Numerical validation cannot establish pointer provenance or liveness.
+#[no_mangle]
+pub unsafe extern "C" fn sb_ordered_set_select(mode: u32, predicate: u32, out_action: *mut u32) -> u32 {
+    if mode as usize >= SELECT_COUNT || predicate > 1 || out_action.is_null()
+        || (out_action as usize) % std::mem::align_of::<u32>() != 0
+    {
+        return INVALID;
+    }
+    catch_unwind(AssertUnwindSafe(|| {
+        SELECT_COUNTS.with(|cell| {
+            let mut counts = cell.get();
+            counts[mode as usize] = counts[mode as usize].wrapping_add(1);
+            cell.set(counts);
+        });
+        let action = match mode {
+            SELECT_INSERT => if predicate != 0 { ACTION_EXISTING } else { ACTION_NEW },
+            SELECT_REMOVE => if predicate != 0 { ACTION_ERASE } else { ACTION_MISS },
+            SELECT_NONEMPTY => if predicate != 0 { ACTION_THROW } else { ACTION_CONTINUE },
+            SELECT_INDEX => if predicate != 0 { ACTION_DISTANCE } else { ACTION_EMPTY },
+            _ => unreachable!(),
+        };
+        out_action.write(action);
+        OK
+    })).unwrap_or(PANIC)
+}
+
+/// Counts accepted selections independently of loop entries on this thread.
+#[no_mangle]
+pub extern "C" fn sb_ordered_set_select_count(mode: u32) -> u64 {
+    if mode as usize >= SELECT_COUNT {
+        return 0;
+    }
+    catch_unwind(|| SELECT_COUNTS.with(|cell| cell.get()[mode as usize])).unwrap_or(0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn selection_truth_table_and_independent_counts() {
+        let loop_before = COUNTS.with(|cell| cell.get());
+        // Explicit ABI literals are independent of the implementation constants.
+        // Inverting any predicate guard must fail an expected-action assertion.
+        for (mode, predicate, expected) in [
+            (0, 0, 1), (0, 1, 0), (1, 0, 3), (1, 1, 2),
+            (2, 0, 5), (2, 1, 4), (3, 0, 6), (3, 1, 7),
+        ] {
+            let before = SELECT_COUNTS.with(|cell| cell.get());
+            let mut action = u32::MAX;
+            assert_eq!(unsafe { sb_ordered_set_select(mode, predicate, &mut action) }, OK);
+            assert_eq!(action, expected, "mode {mode}, predicate {predicate}");
+            let mut expected_counts = before;
+            expected_counts[mode as usize] = expected_counts[mode as usize].wrapping_add(1);
+            assert_eq!(SELECT_COUNTS.with(|cell| cell.get()), expected_counts);
+            assert_eq!(sb_ordered_set_select_count(mode), expected_counts[mode as usize]);
+        }
+        assert_eq!(COUNTS.with(|cell| cell.get()), loop_before);
+    }
+
+    #[test]
+    fn selection_invalid_inputs_preserve_output_and_all_counts() {
+        let before = SELECT_COUNTS.with(|cell| cell.get());
+        let loop_before = COUNTS.with(|cell| cell.get());
+        let mut storage = [0xfeed_beefu32; 2];
+        let aligned = storage.as_mut_ptr();
+        // This points within owned storage but is deliberately not u32-aligned.
+        let misaligned = unsafe { aligned.cast::<u8>().add(1).cast::<u32>() };
+        for mode in [0, 1, 2, 3, 4, u32::MAX] {
+            for predicate in [0, 1, 2, u32::MAX] {
+                for out in [aligned, std::ptr::null_mut(), misaligned] {
+                    if mode < 4 && predicate < 2 && out == aligned { continue; }
+                    assert_eq!(unsafe { sb_ordered_set_select(mode, predicate, out) }, INVALID);
+                    assert_eq!(storage, [0xfeed_beef; 2]);
+                    assert_eq!(SELECT_COUNTS.with(|cell| cell.get()), before);
+                    assert_eq!(COUNTS.with(|cell| cell.get()), loop_before);
+                }
+            }
+        }
+        for mode in [4, u32::MAX] {
+            assert_eq!(sb_ordered_set_select_count(mode), 0);
+        }
+        assert_eq!(SELECT_COUNTS.with(|cell| cell.get()), before);
+    }
+
+    #[test]
+    fn selection_counts_wrap_independently() {
+        let saved = SELECT_COUNTS.with(|cell| cell.get());
+        let loop_before = COUNTS.with(|cell| cell.get());
+        SELECT_COUNTS.with(|cell| {
+            let mut counts = cell.get();
+            counts[SELECT_INSERT as usize] = u64::MAX;
+            cell.set(counts);
+        });
+        let mut action = u32::MAX;
+        let status = unsafe { sb_ordered_set_select(SELECT_INSERT, 1, &mut action) };
+        let count = sb_ordered_set_select_count(SELECT_INSERT);
+        SELECT_COUNTS.with(|cell| cell.set(saved));
+        assert_eq!(status, OK);
+        assert_eq!(action, ACTION_EXISTING);
+        assert_eq!(count, 0);
+        assert_eq!(COUNTS.with(|cell| cell.get()), loop_before);
+    }
 
     // Script steps are an independent finite host contract, not a second loop
     // implementation. Errors are recorded rather than panicking through C ABI.

@@ -64,6 +64,44 @@ uint32_t sb_ordered_set_run(uint32_t mode, void* context, SbOrderedSetLeaf leaf)
  */
 uint64_t sb_ordered_set_count(uint32_t mode);
 
+enum {
+  SB_ORDERED_SET_SELECT_INSERT = 0,
+  SB_ORDERED_SET_SELECT_REMOVE = 1,
+  SB_ORDERED_SET_SELECT_NONEMPTY = 2,
+  SB_ORDERED_SET_SELECT_INDEX = 3,
+  SB_ORDERED_SET_SELECT_COUNT = 4
+};
+
+enum {
+  SB_ORDERED_SET_ACTION_EXISTING = 0,
+  SB_ORDERED_SET_ACTION_NEW = 1,
+  SB_ORDERED_SET_ACTION_ERASE = 2,
+  SB_ORDERED_SET_ACTION_MISS = 3,
+  SB_ORDERED_SET_ACTION_THROW = 4,
+  SB_ORDERED_SET_ACTION_CONTINUE = 5,
+  SB_ORDERED_SET_ACTION_EMPTY = 6,
+  SB_ORDERED_SET_ACTION_DISTANCE = 7
+};
+
+/* Native C++ evaluates the original comparisons with contextual bool conversion:
+ * INSERT/REMOVE/INDEX take FOUND; NONEMPTY takes EMPTY. Only exact 0/1 is valid.
+ * INSERT: found -> EXISTING, else NEW; REMOVE: found -> ERASE, else MISS.
+ * NONEMPTY: empty -> THROW, else CONTINUE; INDEX: found -> DISTANCE, else EMPTY.
+ * The separate action phase lets a native switch dispatch the Rust-chosen action
+ * and materialize the original typed prvalues/references/iterators and exception
+ * prefix in their original return scopes, without extra T slots or Value copies.
+ * No native value, iterator or storage crosses Rust; selection allocates nothing.
+ * out_action must point to live writable aligned uint32_t storage. Invalid mode,
+ * predicate, null or misalignment returns INVALID without writing or counting.
+ * Success returns OK; caught Rust panics return PANIC.
+ */
+uint32_t sb_ordered_set_select(uint32_t mode, uint32_t predicate, uint32_t* out_action);
+
+/* Separate per-thread wrapping accepted-call counts; loop counts are unchanged.
+ * Unknown modes (including SELECT_COUNT) return zero.
+ */
+uint64_t sb_ordered_set_select_count(uint32_t mode);
+
 #ifdef __cplusplus
 }
 #endif

@@ -49,6 +49,24 @@ void run(uint32_t mode, Function&& function) {
   throw std::logic_error("OrderedSet unexpected leaf operation");
 }
 
+inline uint32_t selectAction(uint32_t mode, bool predicate) {
+  uint32_t action = 0;
+  auto status = sb_ordered_set_select(mode, predicate ? 1u : 0u, &action);
+  if (status != SB_ORDERED_SET_OK)
+    throw std::logic_error("OrderedSet Rust selection protocol failure");
+  return action;
+}
+
+template <typename Thrower>
+void requireNonEmpty(bool empty, Thrower&& thrower) {
+  switch (selectAction(SB_ORDERED_SET_SELECT_NONEMPTY, empty)) {
+    case SB_ORDERED_SET_ACTION_CONTINUE: return;
+    case SB_ORDERED_SET_ACTION_THROW: thrower(); break;
+    default: invalidOperation();
+  }
+  invalidOperation();
+}
+
 template <typename Range, typename = void>
 struct HasMemberRange : std::false_type {};
 
