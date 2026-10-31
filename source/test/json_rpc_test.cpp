@@ -372,18 +372,20 @@ TEST(JsonRpc, DuplicateUnknownResponsesAndFailCommandsLogAndContinue) {
   trace.promise(success); trace.promise(nullSuccess); trace.state(logs.sink->messages.size());
 }
 
-TEST(JsonRpc, SafeHandlerReentryInvokesRemoteAndRemovesDifferentCallback) {
+TEST(JsonRpc, SafeHandlerReentryInvokesRemoteAndRemovesDifferentInterfaceCallback) {
   RpcTrace trace("safe-reentry-native-message-order");
-  JsonRpc rpc, peer;
+  JsonRpc rpc, peer, detached;
   auto capture = std::make_shared<int>(31);
   std::weak_ptr<int> weak = capture;
-  rpc.registerHandler("other", [capture](Json const&) { return Json(*capture); });
+  detached.registerHandler("other", [capture](Json const&) { return Json(*capture); });
   capture.reset();
   RpcPromise<Json> nested;
   unsigned calls = 0;
-  rpc.registerHandler("active", [&rpc, &nested, &calls](Json const& argument) {
+  rpc.registerHandler("active", [&rpc, &detached, &nested, &calls](Json const& argument) {
     ++calls;
-    rpc.removeHandler("other"); // Never destroys the executing callable.
+    // Erasing from the active flat map may relocate even a different callable.
+    // Keep that hazardous lifetime domain out of this safe-reentry fixture.
+    detached.removeHandler("other");
     nested = rpc.invokeRemote("echo", argument);
     return Json("outer-result");
   });
