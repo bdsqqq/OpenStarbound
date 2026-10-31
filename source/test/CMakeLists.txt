@@ -24,6 +24,7 @@ SET (star_core_tests_SOURCES
       time_conversion_test.cpp
       net_signal_test.cpp
       net_field_test.cpp
+      net_scalar_test.cpp
       color_test.cpp
       container_test.cpp
       encode_test.cpp

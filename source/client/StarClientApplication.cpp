@@ -17,6 +17,9 @@
 #include "StarRustSet.h"
 #endif
 #ifdef STAR_USE_RUST_NET_FIELD
+#include "StarRustNetScalar.h"
+#endif
+#ifdef STAR_USE_RUST_NET_FIELD
 #include "StarRustNetField.h"
 #endif
 #ifdef STAR_USE_RUST_NET_SIGNAL
@@ -4498,6 +4501,20 @@ void ClientApplication::renderBehaviorScenario() {
   };
 #ifdef STAR_USE_RUST_UUID
   metadata = metadata.set("rustUuidCalls", JsonArray{sb_uuid_count(0), sb_uuid_count(1), sb_uuid_count(2)});
+#endif
+#ifdef STAR_USE_RUST_NET_FIELD
+  uint64_t scalarMain[SB_NET_SCALAR_COUNT], scalarAll[SB_NET_SCALAR_COUNT];
+  for (uint32_t mode = 0; mode != SB_NET_SCALAR_COUNT; ++mode) {
+    scalarMain[mode] = sb_net_scalar_count(0, mode);
+    scalarAll[mode] = sb_net_scalar_count(1, mode);
+  }
+  JsonArray scalarMainJson, scalarAllJson;
+  for (uint32_t mode = 0; mode != SB_NET_SCALAR_COUNT; ++mode) {
+    scalarMainJson.append(scalarMain[mode]);
+    scalarAllJson.append(scalarAll[mode]);
+  }
+  metadata = metadata.set("rustNetScalar", JsonObject{
+      {"main", scalarMainJson}, {"allThreads", scalarAllJson}});
 #endif
 #ifdef STAR_USE_RUST_NET_FIELD
   uint64_t fieldMain[SB_NET_FIELD_COUNT], fieldAll[SB_NET_FIELD_COUNT], fieldLeaves[SB_NET_FIELD_OP_COUNT];
