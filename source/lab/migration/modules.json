@@ -64,6 +64,8 @@
     {"id":"rust-net-scalar-abi","module":"sessions.network","disposition":"ffi-adapter","pattern":"source/core/StarRustNetScalar\\.h"},
     {"id":"rust-net-sync","module":"sessions.network","disposition":"rust-candidate","pattern":"source/rust/ffi/src/net_sync\\.rs"},
     {"id":"rust-net-sync-abi","module":"sessions.network","disposition":"ffi-adapter","pattern":"source/core/StarRustNetSync\\.h"},
+    {"id":"rust-net-top","module":"sessions.network","disposition":"rust-candidate","pattern":"source/rust/ffi/src/net_top\\.rs"},
+    {"id":"rust-net-top-abi","module":"sessions.network","disposition":"ffi-adapter","pattern":"source/core/StarRustNetTop\\.h"},
     {"id":"rust-net-dynamic","module":"sessions.network","disposition":"rust-candidate","pattern":"source/rust/ffi/src/net_dynamic\\.rs"},
     {"id":"rust-net-dynamic-abi","module":"sessions.network","disposition":"ffi-adapter","pattern":"source/core/StarRustNetDynamic\\.h"},
     {"id":"rust-net-dynamic-host","module":"sessions.network","disposition":"ffi-adapter","pattern":"source/core/StarNetDynamicHost\\.hpp"},

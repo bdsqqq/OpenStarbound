@@ -26,6 +26,7 @@ SET (star_core_tests_SOURCES
       net_field_test.cpp
       net_scalar_test.cpp
       net_group_test.cpp
+      net_top_test.cpp
       net_sync_test.cpp
       net_dynamic_test.cpp
       net_dynamic_wire_test.cpp

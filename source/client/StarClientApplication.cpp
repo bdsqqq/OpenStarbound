@@ -26,6 +26,9 @@
 #include "StarRustNetDynamic.h"
 #endif
 #ifdef STAR_USE_RUST_NET_GROUP
+#include "StarRustNetTop.h"
+#endif
+#ifdef STAR_USE_RUST_NET_GROUP
 #include "StarRustNetGroup.h"
 #endif
 #ifdef STAR_USE_RUST_NET_FIELD
@@ -4560,6 +4563,17 @@ void ClientApplication::renderBehaviorScenario() {
     dynamicLeafJson.append(dynamicLeaves[op]);
   metadata = metadata.set("rustNetDynamic", JsonObject{
       {"main", dynamicMainJson}, {"allThreads", dynamicAllJson}, {"attemptedLeaves", dynamicLeafJson}});
+#endif
+#ifdef STAR_USE_RUST_NET_GROUP
+  JsonArray topMain, topAll, topLeaves;
+  for (uint32_t mode = 0; mode != SB_NET_TOP_COUNT; ++mode) {
+    topMain.append(sb_net_top_count(0, mode));
+    topAll.append(sb_net_top_count(1, mode));
+  }
+  for (uint32_t op = 0; op != SB_NET_TOP_OP_COUNT; ++op)
+    topLeaves.append(sb_net_top_count(2, op));
+  metadata = metadata.set("rustNetTop", JsonObject{
+      {"main", topMain}, {"allThreads", topAll}, {"attemptedLeaves", topLeaves}});
 #endif
 #ifdef STAR_USE_RUST_NET_GROUP
   uint64_t groupMain[SB_NET_GROUP_COUNT], groupAll[SB_NET_GROUP_COUNT], groupLeaves[SB_NET_GROUP_OP_COUNT];
