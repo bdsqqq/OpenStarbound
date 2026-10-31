@@ -16,6 +16,9 @@
 #ifdef STAR_USE_RUST_SET
 #include "StarRustSet.h"
 #endif
+#ifdef STAR_USE_RUST_NET_SIGNAL
+#include "StarRustNetSignal.h"
+#endif
 #ifdef STAR_USE_RUST_TIME
 #include "StarRustTime.h"
 #endif
@@ -4492,6 +4495,24 @@ void ClientApplication::renderBehaviorScenario() {
   };
 #ifdef STAR_USE_RUST_UUID
   metadata = metadata.set("rustUuidCalls", JsonArray{sb_uuid_count(0), sb_uuid_count(1), sb_uuid_count(2)});
+#endif
+#ifdef STAR_USE_RUST_NET_SIGNAL
+  uint64_t signalMain[SB_NET_SIGNAL_COUNT], signalAll[SB_NET_SIGNAL_COUNT], signalLeaves[SB_NET_SIGNAL_OP_COUNT];
+  for (uint32_t mode = 0; mode != SB_NET_SIGNAL_COUNT; ++mode) {
+    signalMain[mode] = sb_net_signal_count(0, mode);
+    signalAll[mode] = sb_net_signal_count(1, mode);
+  }
+  for (uint32_t op = 0; op != SB_NET_SIGNAL_OP_COUNT; ++op)
+    signalLeaves[op] = sb_net_signal_count(2, op);
+  JsonArray signalMainJson, signalAllJson, signalLeafJson;
+  for (uint32_t mode = 0; mode != SB_NET_SIGNAL_COUNT; ++mode) {
+    signalMainJson.append(signalMain[mode]);
+    signalAllJson.append(signalAll[mode]);
+  }
+  for (uint32_t op = 0; op != SB_NET_SIGNAL_OP_COUNT; ++op)
+    signalLeafJson.append(signalLeaves[op]);
+  metadata = metadata.set("rustNetSignal", JsonObject{
+      {"main", signalMainJson}, {"allThreads", signalAllJson}, {"attemptedLeaves", signalLeafJson}});
 #endif
 #ifdef STAR_USE_RUST_TIME
   uint64_t timeMain[SB_TIME_COUNT], timeAll[SB_TIME_COUNT], timeDomains[SB_TIME_COUNT];

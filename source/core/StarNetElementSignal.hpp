@@ -1,6 +1,9 @@
 #pragma once
 
 #include "StarNetElement.hpp"
+#ifdef STAR_USE_RUST_NET_SIGNAL
+#include "StarNetSignalHost.hpp"
+#endif
 
 namespace Star {
 
@@ -85,6 +88,28 @@ void NetElementSignal<Signal>::tickNetInterpolation(float dt) {
 template <typename Signal>
 bool NetElementSignal<Signal>::writeNetDelta(DataStream& ds, uint64_t fromVersion, NetCompatibilityRules rules) const {
   if (!checkWithRules(rules)) return false;
+#ifdef STAR_USE_RUST_NET_SIGNAL
+  using Iterator = typename Deque<SignalEntry>::const_iterator;
+  std::optional<std::pair<Iterator, Iterator>> range;
+  return NetSignalDetail::run(SB_NET_SIGNAL_WRITE, fromVersion,
+      [&](uint32_t leaf, uint64_t argument, SbNetSignalReply& reply) {
+    switch (leaf) {
+    case SB_NET_SIGNAL_ENTER_RANGE: {
+      auto begin = m_signals.begin();
+      auto end = m_signals.end();
+      range.emplace(begin, end);
+      break;
+    }
+    case SB_NET_SIGNAL_MORE: reply.a = range->first != range->second; break;
+    case SB_NET_SIGNAL_VERSION: reply.a = range->first->version; break;
+    case SB_NET_SIGNAL_ADVANCE: ++range->first; break;
+    case SB_NET_SIGNAL_LEAVE_RANGE: range.reset(); break;
+    case SB_NET_SIGNAL_WRITE_HEADER: ds.writeVlqU(static_cast<size_t>(argument)); break;
+    case SB_NET_SIGNAL_WRITE_SIGNAL: ds.write(range->first->signal); break;
+    default: throw std::logic_error("Invalid NetElementSignal write leaf");
+    }
+  });
+#else
   size_t numToWrite = 0;
   for (auto const& p : m_signals) {
     if (p.version >= fromVersion)
@@ -101,6 +126,7 @@ bool NetElementSignal<Signal>::writeNetDelta(DataStream& ds, uint64_t fromVersio
   }
 
   return true;
+#endif
 }
 
 template <typename Signal>
@@ -124,20 +150,60 @@ void NetElementSignal<Signal>::readNetDelta(DataStream& ds, float interpolationT
 
 template <typename Signal>
 void NetElementSignal<Signal>::send(Signal signal) {
+#ifdef STAR_USE_RUST_NET_SIGNAL
+  NetSignalDetail::run(SB_NET_SIGNAL_SEND, 0,
+      [&](uint32_t leaf, uint64_t, SbNetSignalReply& reply) {
+    switch (leaf) {
+    case SB_NET_SIGNAL_APPEND_SIGNAL:
+      m_signals.append({m_netVersion ? m_netVersion->current() : 0, signal, false});
+      break;
+    case SB_NET_SIGNAL_QUEUE_LIMIT:
+      reply.a = m_signals.size();
+      reply.b = m_maxSignalQueue;
+      break;
+    case SB_NET_SIGNAL_POP_FRONT: m_signals.removeFirst(); break;
+    default: throw std::logic_error("Invalid NetElementSignal send leaf");
+    }
+  });
+#else
   m_signals.append({m_netVersion ? m_netVersion->current() : 0, signal, false});
   while (m_signals.size() > m_maxSignalQueue)
     m_signals.removeFirst();
+#endif
 }
 
 template <typename Signal>
 List<Signal> NetElementSignal<Signal>::receive() {
   List<Signal> received;
+#ifdef STAR_USE_RUST_NET_SIGNAL
+  using Iterator = typename Deque<SignalEntry>::iterator;
+  std::optional<std::pair<Iterator, Iterator>> range;
+  NetSignalDetail::run(SB_NET_SIGNAL_RECEIVE, 0,
+      [&](uint32_t leaf, uint64_t, SbNetSignalReply& reply) {
+    switch (leaf) {
+    case SB_NET_SIGNAL_ENTER_RANGE: {
+      auto begin = m_signals.begin();
+      auto end = m_signals.end();
+      range.emplace(begin, end);
+      break;
+    }
+    case SB_NET_SIGNAL_MORE: reply.a = range->first != range->second; break;
+    case SB_NET_SIGNAL_RECEIVED: reply.a = range->first->received; break;
+    case SB_NET_SIGNAL_APPEND_RECEIVED: received.append(range->first->signal); break;
+    case SB_NET_SIGNAL_MARK_RECEIVED: range->first->received = true; break;
+    case SB_NET_SIGNAL_ADVANCE: ++range->first; break;
+    case SB_NET_SIGNAL_LEAVE_RANGE: range.reset(); break;
+    default: throw std::logic_error("Invalid NetElementSignal receive leaf");
+    }
+  });
+#else
   for (auto& p : m_signals) {
     if (!p.received) {
       received.append(p.signal);
       p.received = true;
     }
   }
+#endif
   return received;
 }
 

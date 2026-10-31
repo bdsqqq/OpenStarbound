@@ -93,6 +93,8 @@ SET (star_core_HEADERS
     StarNetElementExt.hpp
     StarNetElementFloatFields.hpp
     StarNetElementGroup.hpp
+    StarRustNetSignal.h
+    StarNetSignalHost.hpp
     StarNetElementSignal.hpp
     StarNetElementSyncGroup.hpp
     StarNetElementSystem.hpp

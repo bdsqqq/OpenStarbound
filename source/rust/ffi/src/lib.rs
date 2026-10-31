@@ -10,6 +10,8 @@ mod id_map;
 pub use id_map::{sb_idmap_count, sb_idmap_run, SbIdMapHost, SbIdMapReply, SbIdMapRequest};
 mod bimap;
 pub use bimap::{sb_bimap_count, sb_bimap_run, SbBiMapHost, SbBiMapReply, SbBiMapRequest};
+mod net_signal;
+pub use net_signal::{sb_net_signal_run, sb_net_signal_count};
 mod time;
 pub use time::{sb_time_convert, sb_time_count};
 mod worker_pool;
