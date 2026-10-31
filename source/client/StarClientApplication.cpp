@@ -7,6 +7,9 @@
 #include <functional>
 #include <thread>
 #include "StarBehaviorLab.hpp"
+#ifdef STAR_USE_RUST_BIMAP
+#include "StarRustBiMap.h"
+#endif
 #include "StarTileSectorArrayObserver.hpp"
 #include "StarTextProcessLab.hpp"
 #include "StarStringViewLab.hpp"
@@ -1874,6 +1877,7 @@ Json BehaviorLab::weightedPoolProof() {
 
 #include "../lab/behavior/id_map_scene.hpp"
 #include "../lab/behavior/static_vector_scene.hpp"
+#include "../lab/behavior/bimap_scene.hpp"
 
 void ClientApplication::validateBehaviorStorage() {
   auto const& config = BehaviorLab::configuration();
@@ -2014,6 +2018,7 @@ void ClientApplication::updateBehaviorScenario() {
       auto lamp = objects->createForPlacement(server, name, Vec2I(fixtureX(52), 33), Direction::Right);
       if (!lamp)
         throw StarException("BehaviorLab: constant-light fixture cannot anchor at (52,33)");
+      if (biMapUniqueIdProbe()) lamp->setUniqueId(biMapLampId(0));
       server->addEntity(lamp);
       if (lamp->lightSources().size() != 1)
         throw StarException("BehaviorLab: constant-light fixture must emit exactly one light");
@@ -2044,7 +2049,7 @@ void ClientApplication::updateBehaviorScenario() {
     if (staticVector) staticVectorSceneState().owned = true;
     auto material = m_behaviorStage == 1 ? m_behaviorMaterial : EmptyMaterialId;
     bool changed = false;
-    m_universeServer->executeForClient(world->connection(), [&](WorldServer* server, PlayerPtr) {
+    m_universeServer->executeForClient(world->connection(), [&](WorldServer* server, PlayerPtr player) {
       if (server->worldId() != printWorldId(fixtureId))
         return;
       DungeonGeneratorWorld writer(server, false);
@@ -2055,6 +2060,7 @@ void ClientApplication::updateBehaviorScenario() {
         for (int y = 33; y <= 59; ++y)
           writer.setForegroundMaterial(Vec2I(column, y), material, 0, DefaultMaterialColorVariant);
       }
+      renameBiMapLamp(server, player, m_behaviorLightId, m_behaviorStage);
       changed = true;
     });
     if (!changed)
@@ -4460,6 +4466,13 @@ void ClientApplication::renderBehaviorScenario() {
       {"replicatedSettledUpdates", m_behaviorSettledFrames}, {"updateIndex", m_behaviorFrames},
       {"seed", BehaviorLab::configuration().getUInt("seed", 42)}
   };
+  if (biMapUniqueIdProbe()) {
+    Json proof;
+    if (!m_universeServer->executeForClient(world->connection(), [&](WorldServer* server, PlayerPtr player) {
+      proof = observeBiMapLamp(server, player, m_behaviorLightId, m_behaviorStage);
+    })) throw StarException("BehaviorLab: lost BiMap fixture world before observation");
+    metadata = metadata.set("biMapProof", proof);
+  }
   if (m_behaviorStringViewRoom) {
     if (m_behaviorStringViewProof.isNull())
       throw StarException("BehaviorLab: StringView frame has no completed consumer proof");

@@ -1,5 +1,5 @@
 # One archive owns all Rust C exports and the runtime. Kernel crates are rlibs.
-# Keep Cargo output isolated per CMake build, with an explicit native target.
+# Isolate by default; callers may share a Cargo cache across compatible native builds.
 include_guard(GLOBAL)
 find_program(STAR_CARGO_EXECUTABLE cargo REQUIRED)
 find_program(STAR_RUSTC_EXECUTABLE rustc REQUIRED)
@@ -29,7 +29,8 @@ elseif(STAR_ARCHITECTURE STREQUAL "x86_64" AND NOT STAR_RUST_HOST MATCHES "^x86_
 endif()
 
 set(STAR_RUST_SOURCE "${PROJECT_SOURCE_DIR}/rust")
-set(STAR_RUST_TARGET_DIR "${CMAKE_BINARY_DIR}/rust-engine-ffi")
+set(STAR_RUST_TARGET_DIR "${CMAKE_BINARY_DIR}/rust-engine-ffi" CACHE PATH
+  "Cargo target directory for the single Rust engine archive")
 if(MSVC)
   set(STAR_RUST_ARCHIVE "${STAR_RUST_TARGET_DIR}/${STAR_RUST_HOST}/release/star_engine_ffi.lib")
 else()

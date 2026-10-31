@@ -78,7 +78,16 @@ object identity, unwind ordering and partial state. exception linkage uses an
 exact-body projection of the native Unix TU excluding unused logger/fatal
 entrypoints, not a substitute exception implementation or full-TU claim.
 
+the actual client now configures and links with BiMap OFF and ON. opt-in
+`biMapUniqueIdProbe: true` in the existing `lighting-room` configuration seeds
+the lamp's unique id, renames/restores it through normal world Lua callbacks,
+and checks the settled EntityMap index. candidate lookups enter Rust twice per
+observation; native reference/repeat enter it zero times. three 1000×600 drawable
+states (nine captures) matched full RGBA and world state; restored pixels equal
+the baseline and the occluded state differs. these artifacts were inspected.
+normal non-lab worlds do not run this probe.
+
 remaining: debug-assert runtime behavior, custom iterator/return-proxy domains,
-full platform configuration/linking and actual running-game behavior. finite
+broader platform/game/combined-backend qualification. finite
 lab traces do not establish universal equivalence, game adoption or a future
 aggregate allocation bound. archived providers are never restored as current.

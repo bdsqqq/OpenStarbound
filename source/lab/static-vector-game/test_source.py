@@ -37,7 +37,24 @@ def replace(text, old, new='', count=1):
 
 
 def project_client(text):
-    """remove the named seam, projecting all old branches back to before DATA."""
+    """remove named opt-in seams, projecting old branches back to before DATA."""
+    for seam in (
+        '#ifdef STAR_USE_RUST_BIMAP\n#include "StarRustBiMap.h"\n#endif\n',
+        '#include "../lab/behavior/bimap_scene.hpp"\n',
+        '      if (biMapUniqueIdProbe()) lamp->setUniqueId(biMapLampId(0));\n',
+        '      renameBiMapLamp(server, player, m_behaviorLightId, m_behaviorStage);\n',
+        '''  if (biMapUniqueIdProbe()) {
+    Json proof;
+    if (!m_universeServer->executeForClient(world->connection(), [&](WorldServer* server, PlayerPtr player) {
+      proof = observeBiMapLamp(server, player, m_behaviorLightId, m_behaviorStage);
+    })) throw StarException("BehaviorLab: lost BiMap fixture world before observation");
+    metadata = metadata.set("biMapProof", proof);
+  }
+'''):
+        text = replace(text, seam)
+    text = replace(text,
+        '    bool changed = false;\n    m_universeServer->executeForClient(world->connection(), [&](WorldServer* server, PlayerPtr player) {',
+        '    bool changed = false;\n    m_universeServer->executeForClient(world->connection(), [&](WorldServer* server, PlayerPtr) {')
     for include in ['#include <functional>\n', '#include <thread>\n', '#include "StarTileSectorArrayObserver.hpp"\n',
                     '#include "../lab/behavior/static_vector_scene.hpp"\n']:
         text = replace(text, include)

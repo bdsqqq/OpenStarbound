@@ -71,8 +71,13 @@ def main():
         raise ValueError('frozen known-failure source pin')
     old = historical.read_text()
     insertion = '"CARGO_TARGET_DIR=${STAR_RUST_TARGET_DIR}"'
-    if old.count(insertion) != 1 or old.replace(insertion, insertion+'\n    "RUSTC=${STAR_RUSTC_EXECUTABLE}"') != current.read_text():
-        raise ValueError('sole compiler-environment recipe delta')
+    expected = old.replace(insertion, insertion+'\n    "RUSTC=${STAR_RUSTC_EXECUTABLE}"')
+    expected = expected.replace('# Keep Cargo output isolated per CMake build, with an explicit native target.',
+        '# Isolate by default; callers may share a Cargo cache across compatible native builds.')
+    expected = expected.replace('set(STAR_RUST_TARGET_DIR "${CMAKE_BINARY_DIR}/rust-engine-ffi")',
+        'set(STAR_RUST_TARGET_DIR "${CMAKE_BINARY_DIR}/rust-engine-ffi" CACHE PATH\n  "Cargo target directory for the single Rust engine archive")')
+    if old.count(insertion) != 1 or expected != current.read_text():
+        raise ValueError('compiler-environment and optional target-cache recipe delta')
     tools = {name: str(Path(getattr(a, name)).resolve(strict=True)) for name in ['cmake', 'ninja', 'rustc']}
     pins = {p: sha(p) for p in [*tools.values(), str(current), str(historical), str(Path(__file__).resolve())]}
     dump(out/'admission.json', dict(tools=tools, pins=pins, scope='actual CMake; diagnostic Cargo observer, NO Rust compilation/archive/game'))
@@ -102,11 +107,18 @@ def main():
             configure = [tools['cmake'], '-G', 'Ninja', '-S', str(fixture), '-B', str(binary),
                          '-DCMAKE_MAKE_PROGRAM='+tools['ninja'], '-DSTAR_CARGO_EXECUTABLE='+str(probe),
                          '-DSTAR_RUSTC_EXECUTABLE='+tools['rustc']]
+            # Default stays per-build. Also exercise an explicit path containing
+            # spaces while the ambient compiler is poisoned.
+            target = case/'shared target' if not old_recipe and poisoned else binary/'rust-engine-ffi'
+            if not old_recipe and poisoned:
+                configure.append('-DSTAR_RUST_TARGET_DIR='+str(target))
             command(case/'configure', configure, env, True)
             command(case/'build', [tools['cmake'], '--build', str(binary), '--target', 'star_rust_engine_ffi_build'], env, not old_recipe)
             observed = json.loads((case/'observer.json').read_bytes())
             if observed['argv'][:len(expected_args)] != expected_args or observed['argv'][-3:] != ['--release', '--locked', '--offline']:
                 raise ValueError('unchanged Cargo graph arguments')
+            if observed['target'] != str(target):
+                raise ValueError('default or explicit Cargo target directory not respected')
             if (observed['rustc'] == tools['rustc']) != (not old_recipe):
                 raise ValueError('compiler observer contract')
             if list(binary.rglob('*.a')) or list(binary.rglob('*.lib')):

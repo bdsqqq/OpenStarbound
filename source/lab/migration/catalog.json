@@ -1,7 +1,7 @@
 {
   "cmake_extraction_limits": [
     {
-      "line": 38,
+      "line": 39,
       "path": "cmake/Rust.cmake",
       "reason": "glob not expanded; filesystem registry still covers files"
     },
@@ -20584,6 +20584,16 @@
     {
       "cmake_membership": [],
       "disposition": "oracle/harness",
+      "language": "c/c++",
+      "line": 1,
+      "membership_status": "no-direct-target-found",
+      "module": "validation.oracles-harness",
+      "path": "source/lab/behavior/bimap_scene.hpp",
+      "rule": "laboratories"
+    },
+    {
+      "cmake_membership": [],
+      "disposition": "oracle/harness",
       "language": "harness/tool script",
       "line": 1,
       "membership_status": "no-direct-target-found",
@@ -31198,7 +31208,7 @@
     },
     {
       "path": "cmake/Rust.cmake",
-      "sha256": "0a7717138f1f8778746e54c1beeba2112ec4605e9f3791aea8b10ba625dcc0d8"
+      "sha256": "202fdb63b558ccc04a99e697c4fcc92284f9a59a3bc1903f839547e1e3db5386"
     },
     {
       "path": "cmake/RustLighting.cmake",
@@ -32354,7 +32364,7 @@
     },
     {
       "path": "source/client/StarClientApplication.cpp",
-      "sha256": "b45f3cff4d95511e419dbb2e16e42baa6c800d43f1fec22d4c17c9d3f7553a3b"
+      "sha256": "7fed70bc3631fa4a96179cdeaabcbf3a3cbffcf0325a888a4ddfddc25638f00b"
     },
     {
       "path": "source/client/StarClientApplication.hpp",
@@ -36317,6 +36327,10 @@
       "sha256": "87be489582d2fbd2126ebcabd10c02848b00df4fe29404eed375bb69123732aa"
     },
     {
+      "path": "source/lab/behavior/bimap_scene.hpp",
+      "sha256": "df3c52ade781892230994ed05bf3f955aca16282363e0af91095cc889cc3abbd"
+    },
+    {
       "path": "source/lab/behavior/btree_padding.py",
       "sha256": "6044fb861554c04da2f7eaa92a4f4a887bfe5ebbeab179d871158e40da93d981"
     },
@@ -38142,7 +38156,7 @@
     },
     {
       "path": "source/lab/rust-cmake/run.py",
-      "sha256": "e4a987db94348ec48c1c32f986954f3797a9dd81f3baa6c16716509c08e0fb4b"
+      "sha256": "af23cfdbf750ae600384e6be2d3d5098129f08ef8840b2d6fac3d00ad6bcab62"
     },
     {
       "path": "source/lab/sha256/StarSha256.original.cpp",
@@ -38298,7 +38312,7 @@
     },
     {
       "path": "source/lab/static-vector-game/test_source.py",
-      "sha256": "46d1284809655dddcddf2b6ed394f675f0fb6c7aa936d1d151537f3965c6c1e8"
+      "sha256": "d4d1e57153a28a568b1320ec880fa0068bd6fc71679b653b1d8cb23efd6eecdc"
     },
     {
       "path": "source/lab/static-vector-game/test_tls_chained_fixups.py",
@@ -40155,7 +40169,7 @@
       "inactive-review": 21,
       "migrate": 960,
       "migrate-adapter": 24,
-      "oracle/harness": 700,
+      "oracle/harness": 701,
       "retain-tooling": 35,
       "retained-third-party": 296,
       "rust-candidate": 31,
@@ -40196,14 +40210,14 @@
       "sessions.persistence": 6,
       "tools.inactive": 21,
       "tools.release": 50,
-      "validation.oracles-harness": 729,
+      "validation.oracles-harness": 730,
       "validation.tests": 57,
       "world.celestial": 18,
       "world.environment": 24,
       "world.terrain-tiles": 68
     },
-    "files": 2202,
+    "files": 2203,
     "modules": 39,
-    "no_direct_target": 1094
+    "no_direct_target": 1095
   }
 }
