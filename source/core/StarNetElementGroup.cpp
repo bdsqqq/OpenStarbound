@@ -6,7 +6,11 @@
 namespace Star {
 
 void NetElementGroup::addNetElement(NetElement* element, bool propagateInterpolation) {
+#ifdef STAR_NET_GROUP_RUST_STORAGE
+  starAssert(!m_elements.contains(element));
+#else
   starAssert(!m_elements.any([element](auto p) { return p.first == element; }));
+#endif
 
 #ifdef STAR_USE_RUST_NET_GROUP
   NetGroupDetail::run(SB_NET_GROUP_ADD, CurrentStreamVersion + 1,

@@ -3,6 +3,9 @@
 #include "StarSet.hpp"
 #include "StarNetElement.hpp"
 #include "StarDataStreamDevices.hpp"
+#ifdef STAR_USE_RUST_NET_GROUP
+#include "StarNetGroupStorage.hpp"
+#endif
 
 namespace Star {
 
@@ -40,7 +43,11 @@ public:
   float netExtrapolationHint() const;
 
 private:
+#ifdef STAR_NET_GROUP_RUST_STORAGE
+  NetGroupSlots m_elements;
+#else
   List<pair<NetElement*, bool>> m_elements;
+#endif
   NetElementVersion const* m_version = nullptr;
   bool m_interpolationEnabled = false;
   float m_extrapolationHint = 0.0f;

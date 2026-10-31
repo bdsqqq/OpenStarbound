@@ -26,6 +26,7 @@ SET (star_core_tests_SOURCES
       net_field_test.cpp
       net_scalar_test.cpp
       net_group_test.cpp
+      net_group_storage_test.cpp
       net_rules_test.cpp
       net_compat_test.cpp
       net_version_test.cpp
@@ -74,9 +75,20 @@ SET (star_core_tests_SOURCES
       variant_test.cpp
       vlq_test.cpp
     )
+# The slot-storage probe observes regular new/delete without interposing on the
+# application. Recompile only this memory object for tests; retain all native
+# Star allocation backends and the other global allocation overloads.
 ADD_EXECUTABLE (core_tests
-  $<TARGET_OBJECTS:star_extern> $<TARGET_OBJECTS:star_core>
+  $<TARGET_OBJECTS:star_extern>
+  "$<FILTER:$<TARGET_OBJECTS:star_core>,EXCLUDE,StarMemory[.]cpp[.](o|obj)$>"
+  ../core/StarMemory.cpp
   ${star_core_tests_SOURCES})
+TARGET_COMPILE_DEFINITIONS(core_tests PRIVATE STAR_MEMORY_INTERCEPT_SCALAR_NEW_DELETE)
+GET_SOURCE_FILE_PROPERTY(star_core_memory_definitions ../core/StarMemory.cpp
+  DIRECTORY ../core COMPILE_DEFINITIONS)
+IF(star_core_memory_definitions)
+  TARGET_COMPILE_DEFINITIONS(core_tests PRIVATE ${star_core_memory_definitions})
+ENDIF()
 TARGET_LINK_LIBRARIES (core_tests ${STAR_EXT_LIBS})
 ADD_TEST (NAME core_tests WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/core_tests)
 

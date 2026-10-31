@@ -108,12 +108,14 @@ namespace Star {
 #ifndef  STAR_USE_RPMALLOC
 
 
+#if !(defined(STAR_MEMORY_INTERCEPT_SCALAR_NEW_DELETE) && defined(__APPLE__) && _LIBCPP_VERSION == 220106)
 void* operator new(std::size_t size) {
   auto ptr = Star::malloc(size);
   if (!ptr)
     throw std::bad_alloc();
   return ptr;
 }
+#endif
 
 void* operator new[](std::size_t size) {
   auto ptr = Star::malloc(size);
@@ -133,9 +135,11 @@ void* operator new[](std::size_t size, std::nothrow_t const&) noexcept {
   return Star::malloc(size);
 }
 
+#if !(defined(STAR_MEMORY_INTERCEPT_SCALAR_NEW_DELETE) && defined(__APPLE__) && _LIBCPP_VERSION == 220106)
 void operator delete(void* ptr) noexcept {
   Star::free(ptr);
 }
+#endif
 
 void operator delete[](void* ptr) noexcept {
   Star::free(ptr);
@@ -149,9 +153,11 @@ void operator delete[](void* ptr, std::nothrow_t const&) noexcept {
   Star::free(ptr);
 }
 
+#if !(defined(STAR_MEMORY_INTERCEPT_SCALAR_NEW_DELETE) && defined(__APPLE__) && _LIBCPP_VERSION == 220106)
 void operator delete(void* ptr, std::size_t size) noexcept {
   Star::free(ptr, size);
 }
+#endif
 
 void operator delete[](void* ptr, std::size_t size) noexcept {
   Star::free(ptr, size);

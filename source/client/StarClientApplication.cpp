@@ -29,6 +29,9 @@
 #include "StarRustNetDynamic.h"
 #endif
 #ifdef STAR_USE_RUST_NET_GROUP
+#include "StarNetGroupStorage.hpp"
+#endif
+#ifdef STAR_USE_RUST_NET_GROUP
 #include "StarRustNetRules.h"
 #endif
 #ifdef STAR_USE_RUST_NET_GROUP
@@ -4592,6 +4595,15 @@ void ClientApplication::renderBehaviorScenario() {
     dynamicLeafJson.append(dynamicLeaves[op]);
   metadata = metadata.set("rustNetDynamic", JsonObject{
       {"main", dynamicMainJson}, {"allThreads", dynamicAllJson}, {"attemptedLeaves", dynamicLeafJson}});
+#endif
+#ifdef STAR_NET_GROUP_RUST_STORAGE
+  JsonArray groupStorageMain, groupStorageAll;
+  for (uint32_t mode = 0; mode != SB_NET_GROUP_STORAGE_COUNT; ++mode) {
+    groupStorageMain.append(sb_net_group_storage_count(0, mode));
+    groupStorageAll.append(sb_net_group_storage_count(1, mode));
+  }
+  metadata = metadata.set("rustNetGroupStorage", JsonObject{
+      {"main", groupStorageMain}, {"allThreads", groupStorageAll}});
 #endif
 #ifdef STAR_USE_RUST_NET_GROUP
   JsonArray rulesMain, rulesAll;
