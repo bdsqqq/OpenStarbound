@@ -29,6 +29,7 @@ SET (star_core_tests_SOURCES
       json_rpc_test.cpp
       rpc_promise_test.cpp
       net_group_storage_test.cpp
+      net_group_count_cache_test.cpp
       net_rules_test.cpp
       net_compat_test.cpp
       net_version_test.cpp

@@ -21,7 +21,13 @@ void NetElementGroup::addNetElement(NetElement* element, bool propagateInterpola
     case SB_NET_GROUP_ENABLE_NEW: element->enableNetInterpolation(m_extrapolationHint); break;
     case SB_NET_GROUP_APPEND_NEW: m_elements.append(pair<NetElement*, bool>(element, propagateInterpolation)); break;
     case SB_NET_GROUP_NEW_COMPAT: reply.a = element->checkWithRules(NetCompatibilityRules(static_cast<VersionNumber>(argument))); break;
-    case SB_NET_GROUP_INCREMENT_COUNT: m_elementCounts[static_cast<VersionNumber>(argument)]++; break;
+    case SB_NET_GROUP_INCREMENT_COUNT:
+#ifdef STAR_NET_GROUP_RUST_COUNT_CACHE
+      m_elementCounts.increment(static_cast<VersionNumber>(argument));
+#else
+      m_elementCounts[static_cast<VersionNumber>(argument)]++;
+#endif
+      break;
     default: throw std::logic_error("Invalid NetElementGroup add leaf");
     }
   });

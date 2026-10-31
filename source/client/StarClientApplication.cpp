@@ -38,6 +38,9 @@
 #include "StarNetGroupStorage.hpp"
 #endif
 #ifdef STAR_USE_RUST_NET_GROUP
+#include "StarNetGroupCountCache.hpp"
+#endif
+#ifdef STAR_USE_RUST_NET_GROUP
 #include "StarRustNetRules.h"
 #endif
 #ifdef STAR_USE_RUST_NET_GROUP
@@ -4632,6 +4635,15 @@ void ClientApplication::renderBehaviorScenario() {
   }
   metadata = metadata.set("rustNetGroupStorage", JsonObject{
       {"main", groupStorageMain}, {"allThreads", groupStorageAll}});
+#endif
+#ifdef STAR_NET_GROUP_RUST_COUNT_CACHE
+  JsonArray countCacheMain, countCacheAll;
+  for (uint32_t mode = 0; mode != SB_NET_GROUP_COUNT_CACHE_COUNT; ++mode) {
+    countCacheMain.append(sb_net_group_count_cache_count(0, mode));
+    countCacheAll.append(sb_net_group_count_cache_count(1, mode));
+  }
+  metadata = metadata.set("rustNetGroupCountCache", JsonObject{
+      {"main", countCacheMain}, {"allThreads", countCacheAll}});
 #endif
 #ifdef STAR_USE_RUST_NET_GROUP
   JsonArray rulesMain, rulesAll;

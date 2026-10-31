@@ -102,6 +102,8 @@ SET (star_core_HEADERS
     StarRustRpcPromise.h
     StarNetGroupStorage.hpp
     StarRustNetGroupStorage.h
+    StarNetGroupCountCache.hpp
+    StarRustNetGroupCountCache.h
     StarRustNetRules.h
     StarRustNetCompat.h
     StarRustNetVersion.h

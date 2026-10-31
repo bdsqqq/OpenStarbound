@@ -39,6 +39,8 @@ def replace(text, old, new='', count=1):
 def project_client(text):
     """remove named opt-in seams, projecting old branches back to before DATA."""
     for seam in (
+        "#ifdef STAR_USE_RUST_NET_GROUP\n#include \"StarNetGroupCountCache.hpp\"\n#endif\n",
+        "#ifdef STAR_NET_GROUP_RUST_COUNT_CACHE\n  JsonArray countCacheMain, countCacheAll;\n  for (uint32_t mode = 0; mode != SB_NET_GROUP_COUNT_CACHE_COUNT; ++mode) {\n    countCacheMain.append(sb_net_group_count_cache_count(0, mode));\n    countCacheAll.append(sb_net_group_count_cache_count(1, mode));\n  }\n  metadata = metadata.set(\"rustNetGroupCountCache\", JsonObject{\n      {\"main\", countCacheMain}, {\"allThreads\", countCacheAll}});\n#endif\n",
         "#ifdef STAR_USE_RUST_JSON_RPC\n#include \"StarRustRpcPromise.h\"\n#endif\n",
         "#ifdef STAR_USE_RUST_JSON_RPC\n  JsonArray promiseMain, promiseAll, promiseLeaves;\n  for (uint32_t mode = 0; mode != SB_RPC_PROMISE_COUNT; ++mode) {\n    promiseMain.append(sb_rpc_promise_count(0, mode));\n    promiseAll.append(sb_rpc_promise_count(1, mode));\n  }\n  for (uint32_t leaf = 0; leaf != SB_RPC_PROMISE_OP_COUNT; ++leaf)\n    promiseLeaves.append(sb_rpc_promise_count(3, leaf));\n  metadata = metadata.set(\"rustRpcPromise\", JsonObject{\n      {\"main\", promiseMain}, {\"allThreads\", promiseAll}, {\"attemptedLeaves\", promiseLeaves}});\n#endif\n",
         "#ifdef STAR_USE_RUST_JSON_RPC\n#include \"StarRustJsonRpc.h\"\n#endif\n",
@@ -298,7 +300,7 @@ class SourceContract(unittest.TestCase):
                        and (p.suffix == '.rs' or p.name in ('Cargo.toml', 'Cargo.lock'))
                        and 'target' not in p.parts)
         digest = hashlib.sha256()
-        for module in ('bimap.rs', 'uuid.rs', 'ordered_set.rs', 'flat_hash_table.rs', 'map.rs', 'periodic.rs', 'worker_pool.rs', 'time.rs', 'net_signal.rs', 'net_field.rs', 'net_scalar.rs', 'net_group.rs', 'net_sync.rs', 'net_dynamic.rs', 'net_top.rs', 'net_map.rs', 'net_override.rs', 'net_float.rs', 'net_version.rs', 'net_compat.rs', 'net_rules.rs', 'net_group_storage.rs', 'json_rpc.rs', 'rpc_promise.rs'):
+        for module in ('bimap.rs', 'uuid.rs', 'ordered_set.rs', 'flat_hash_table.rs', 'map.rs', 'periodic.rs', 'worker_pool.rs', 'time.rs', 'net_signal.rs', 'net_field.rs', 'net_scalar.rs', 'net_group.rs', 'net_sync.rs', 'net_dynamic.rs', 'net_top.rs', 'net_map.rs', 'net_override.rs', 'net_float.rs', 'net_version.rs', 'net_compat.rs', 'net_rules.rs', 'net_group_storage.rs', 'json_rpc.rs', 'rpc_promise.rs', 'net_group_count_cache.rs'):
             self.assertIn(ROOT / 'source/rust/ffi/src' / module, paths)
             paths.remove(ROOT / 'source/rust/ffi/src' / module)
         for path in paths:
@@ -306,7 +308,8 @@ class SourceContract(unittest.TestCase):
             if path == ROOT / 'source/rust/ffi/src/lib.rs':
                 # Only the additive BiMap/UUID registrations are outside
                 # scene26's historical Rust input contract.
-                for line in (b'mod rpc_promise;\n', b'pub use rpc_promise::{sb_rpc_promise_run, sb_rpc_promise_count};\n',
+                for line in (b'mod net_group_count_cache;\n', b'pub use net_group_count_cache::{sb_net_group_count_cache_run, sb_net_group_count_cache_count};\n',
+                             b'mod rpc_promise;\n', b'pub use rpc_promise::{sb_rpc_promise_run, sb_rpc_promise_count};\n',
                              b'mod json_rpc;\n', b'pub use json_rpc::{sb_json_rpc_run, sb_json_rpc_count};\n',
                              b'mod net_group_storage;\n', b'pub use net_group_storage::{sb_net_group_storage_run, sb_net_group_storage_count};\n',
                              b'mod net_rules;\n', b'pub use net_rules::{sb_net_rules_run, sb_net_rules_count};\n',

@@ -18,25 +18,6 @@
 // OFF runs exercise the actual List/std::vector, under the identical hook.
 #if defined(__APPLE__) && defined(_LIBCPP_VERSION) && _LIBCPP_VERSION == 220106 && !defined(STAR_USE_RPMALLOC)
 namespace NetGroupStorageHook {
-struct Event { void* pointer; size_t bytes; bool allocation; };
-struct State {
-  Event events[128]{};
-  size_t count = 0;
-  bool overflow = false;
-  size_t failBytes = 0;
-  bool failAny = false;
-  unsigned failures = 0;
-  void const* lastRaised = nullptr;
-  void* watched = nullptr;
-  void* owner = nullptr;
-  void (*observe)(State&) noexcept = nullptr;
-  unsigned observations = 0;
-  void* observedData = nullptr;
-  size_t observedSize = 0;
-  size_t observedCapacity = 0;
-  Star::NetElement* observedChild = nullptr;
-  bool observedFlag = false;
-};
 thread_local State* armed = nullptr;
 struct AllocationFailure : std::bad_alloc {
   AllocationFailure() noexcept { if (armed) armed->lastRaised = this; }

@@ -5,10 +5,16 @@
 #include "StarDataStreamDevices.hpp"
 #ifdef STAR_USE_RUST_NET_GROUP
 #include "StarNetGroupStorage.hpp"
+#include "StarNetGroupCountCache.hpp"
 #endif
 
 namespace Star {
 
+#ifdef STAR_NET_GROUP_RUST_COUNT_CACHE
+static_assert(sizeof(NetGroupCountCache) == sizeof(HashMap<VersionNumber, size_t>), "native group count cache footprint");
+static_assert(alignof(NetGroupCountCache) == alignof(HashMap<VersionNumber, size_t>), "native group count cache alignment");
+
+#endif
 // A static group of NetElements that itself is a NetElement and serializes
 // changes based on the order in which elements are added.  All participants
 // must externally add elements of the correct type in the correct order.
@@ -52,7 +58,11 @@ private:
   bool m_interpolationEnabled = false;
   float m_extrapolationHint = 0.0f;
 
+#ifdef STAR_NET_GROUP_RUST_COUNT_CACHE
+  NetGroupCountCache m_elementCounts;
+#else
   HashMap<VersionNumber, size_t> m_elementCounts;
+#endif
 
   mutable DataStreamBuffer m_buffer;
 };
