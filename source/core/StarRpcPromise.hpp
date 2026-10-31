@@ -3,6 +3,9 @@
 #include "StarEither.hpp"
 #include "StarString.hpp"
 #include "StarThread.hpp"
+#ifdef STAR_USE_RUST_JSON_RPC
+#include "StarRpcPromiseHost.hpp"
+#endif
 
 // TODO: improve this
 
@@ -109,20 +112,32 @@ void RpcPromiseKeeper<Result, Error>::fail(Error error) {
 
 template <typename Result, typename Error>
 void AutoFailRpcPromiseKeeper<Result, Error>::chain(RpcPromise<Result,Error> promise) {
+#ifdef STAR_USE_RUST_JSON_RPC
+  RpcPromiseDetail::forward(m_done, [&] { m_keeper.chain(std::move(promise)); });
+#else
   m_done = true;
   m_keeper.chain(std::move(promise));
+#endif
 }
 
 template <typename Result, typename Error>
 void AutoFailRpcPromiseKeeper<Result, Error>::fulfill(Result result) {
+#ifdef STAR_USE_RUST_JSON_RPC
+  RpcPromiseDetail::forward(m_done, [&] { m_keeper.fulfill(std::move(result)); });
+#else
   m_done = true;
   m_keeper.fulfill(std::move(result));
+#endif
 }
 
 template <typename Result, typename Error>
 void AutoFailRpcPromiseKeeper<Result, Error>::fail(Error error) {
+#ifdef STAR_USE_RUST_JSON_RPC
+  RpcPromiseDetail::forward(m_done, [&] { m_keeper.fail(std::move(error)); });
+#else
   m_done = true;
   m_keeper.fail(std::move(error));
+#endif
 }
 
 template <typename Result, typename Error>
@@ -130,9 +145,13 @@ AutoFailRpcPromiseKeeper<Result, Error>::AutoFailRpcPromiseKeeper(RpcPromiseKeep
 
 template <typename Result, typename Error>
 AutoFailRpcPromiseKeeper<Result, Error>::~AutoFailRpcPromiseKeeper() {
+#ifdef STAR_USE_RUST_JSON_RPC
+  RpcPromiseDetail::drop(m_done, [&] { m_keeper.fail("Keeper destroyed"); });
+#else
   if (!m_done) {
     m_keeper.fail("Keeper destroyed");
   }
+#endif
 }
 
 template <typename Result, typename Error>
@@ -147,15 +166,43 @@ pair<RpcPromise<Result, Error>, RpcPromiseKeeper<Result, Error>> RpcPromise<Resu
   RpcPromiseKeeper<Result, Error> keeper;
   keeper.m_fulfill = [valuePtr](Variant<Result,RpcPromise<Result,Error>> result) {
     MutexLocker lock(valuePtr->mutex);
+#ifdef STAR_USE_RUST_JSON_RPC
+    RpcPromiseDetail::run(SB_RPC_PROMISE_STORE_VALUE, [&](uint32_t leaf, SbNetGroupReply& reply) {
+      switch (leaf) {
+        case SB_RPC_PROMISE_DONE:
+          if (valuePtr->result || valuePtr->error) reply.a = 1;
+          break;
+        case SB_RPC_PROMISE_THROW_FINISHED:
+          throw RpcPromiseException("fulfill called on already finished RpcPromise");
+        case SB_RPC_PROMISE_ASSIGN: valuePtr->result = std::move(result); break;
+        default: RpcPromiseDetail::invalidLeaf();
+      }
+    });
+#else
     if (valuePtr->result || valuePtr->error)
       throw RpcPromiseException("fulfill called on already finished RpcPromise");
     valuePtr->result = std::move(result);
+#endif
   };
   keeper.m_fail = [valuePtr](Error error) {
     MutexLocker lock(valuePtr->mutex);
+#ifdef STAR_USE_RUST_JSON_RPC
+    RpcPromiseDetail::run(SB_RPC_PROMISE_STORE_ERROR, [&](uint32_t leaf, SbNetGroupReply& reply) {
+      switch (leaf) {
+        case SB_RPC_PROMISE_DONE:
+          if (valuePtr->result || valuePtr->error) reply.a = 1;
+          break;
+        case SB_RPC_PROMISE_THROW_FINISHED:
+          throw RpcPromiseException("fail called on already finished RpcPromise");
+        case SB_RPC_PROMISE_ASSIGN: valuePtr->error = std::move(error); break;
+        default: RpcPromiseDetail::invalidLeaf();
+      }
+    });
+#else
     if (valuePtr->result || valuePtr->error)
       throw RpcPromiseException("fail called on already finished RpcPromise");
     valuePtr->error = std::move(error);
+#endif
   };
 
   return {std::move(promise), std::move(keeper)};
@@ -189,37 +236,65 @@ template <typename Result, typename Error>
 bool RpcPromise<Result, Error>::finished() const {
   auto val = m_getValue();
   MutexLocker lock(val->mutex);
+#ifdef STAR_USE_RUST_JSON_RPC
+  return RpcPromiseDetail::query(SB_RPC_PROMISE_FINISHED,
+      [&] { return val->result.template is<RpcPromise<Result,Error>>(); },
+      [&] { return val->result.template get<RpcPromise<Result,Error>>().finished(); },
+      // Keep implicit return conversion, not a contextual if or explicit cast.
+      [&]() -> bool { return val->result || val->error; });
+#else
   if (val->result.template is<RpcPromise<Result,Error>>()) {
     return val->result.template get<RpcPromise<Result,Error>>().finished();
   }
   return val->result || val->error;
+#endif
 }
 
 template <typename Result, typename Error>
 bool RpcPromise<Result, Error>::succeeded() const {
   auto val = m_getValue();
   MutexLocker lock(val->mutex);
+#ifdef STAR_USE_RUST_JSON_RPC
+  return RpcPromiseDetail::query(SB_RPC_PROMISE_SUCCEEDED,
+      [&] { return val->result.template is<RpcPromise<Result,Error>>(); },
+      [&] { return val->result.template get<RpcPromise<Result,Error>>().succeeded(); },
+      [&] { return !val->result.empty(); });
+#else
   if (val->result.template is<RpcPromise<Result,Error>>()) {
     return val->result.template get<RpcPromise<Result,Error>>().succeeded();
   }
   return !val->result.empty();
+#endif
 }
 
 template <typename Result, typename Error>
 bool RpcPromise<Result, Error>::failed() const {
   auto val = m_getValue();
   MutexLocker lock(val->mutex);
+#ifdef STAR_USE_RUST_JSON_RPC
+  return RpcPromiseDetail::query(SB_RPC_PROMISE_FAILED,
+      [&] { return val->result.template is<RpcPromise<Result,Error>>(); },
+      [&] { return val->result.template get<RpcPromise<Result,Error>>().failed(); },
+      [&] { return val->error.isValid(); });
+#else
   if (val->result.template is<RpcPromise<Result,Error>>()) {
     return val->result.template get<RpcPromise<Result,Error>>().failed();
   }
   return val->error.isValid();
+#endif
 }
 
 template <typename Result, typename Error>
 Maybe<Result> RpcPromise<Result, Error>::result() const {
   auto val = m_getValue();
   MutexLocker lock(val->mutex);
+#ifdef STAR_USE_RUST_JSON_RPC
+  // Only route the branch through Rust; both typed native return expressions stay.
+  if (RpcPromiseDetail::isChain(SB_RPC_PROMISE_RESULT_ROUTE,
+      [&] { return val->result.template is<RpcPromise<Result,Error>>(); })) {
+#else
   if (val->result.template is<RpcPromise<Result,Error>>()) {
+#endif
     return val->result.template get<RpcPromise<Result,Error>>().result();
   }
   return val->result.template maybe<Result>();
@@ -229,7 +304,12 @@ template <typename Result, typename Error>
 Maybe<Error> RpcPromise<Result, Error>::error() const {
   auto val = m_getValue();
   MutexLocker lock(val->mutex);
+#ifdef STAR_USE_RUST_JSON_RPC
+  if (RpcPromiseDetail::isChain(SB_RPC_PROMISE_ERROR_ROUTE,
+      [&] { return val->result.template is<RpcPromise<Result,Error>>(); })) {
+#else
   if (val->result.template is<RpcPromise<Result,Error>>()) {
+#endif
     return val->result.template get<RpcPromise<Result,Error>>().error();
   }
   return val->error;
@@ -242,6 +322,20 @@ decltype(auto) RpcPromise<Result, Error>::wrap(Function function) {
   WrappedPromise wrappedPromise;
   wrappedPromise.m_getValue = [wrapper = std::move(function), valuePtr = std::make_shared<typename WrappedPromise::Value>(), other = *this]() {
     MutexLocker lock(valuePtr->mutex);
+#ifdef STAR_USE_RUST_JSON_RPC
+    RpcPromiseDetail::run(SB_RPC_PROMISE_WRAP, [&](uint32_t leaf, SbNetGroupReply& reply) {
+      switch (leaf) {
+        case SB_RPC_PROMISE_NEEDS_EVALUATION:
+          if (!valuePtr->result && !valuePtr->error) reply.a = 1;
+          break;
+        case SB_RPC_PROMISE_OTHER_SUCCEEDED: reply.a = other.succeeded(); break;
+        case SB_RPC_PROMISE_WRAP_RESULT: valuePtr->result = wrapper(*other.result()); break;
+        case SB_RPC_PROMISE_OTHER_FAILED: reply.a = other.failed(); break;
+        case SB_RPC_PROMISE_COPY_ERROR: valuePtr->error = other.error(); break;
+        default: RpcPromiseDetail::invalidLeaf();
+      }
+    });
+#else
     if (!valuePtr->result && !valuePtr->error) {
       if (other.succeeded())
         valuePtr->result = wrapper(*other.result());
@@ -249,6 +343,7 @@ decltype(auto) RpcPromise<Result, Error>::wrap(Function function) {
         valuePtr->error = other.error();
       }
     }
+#endif
     return valuePtr.get();
   };
   return wrappedPromise;

@@ -98,6 +98,8 @@ SET (star_core_HEADERS
     StarRustNetSync.h
     StarJsonRpcHost.hpp
     StarRustJsonRpc.h
+    StarRpcPromiseHost.hpp
+    StarRustRpcPromise.h
     StarNetGroupStorage.hpp
     StarRustNetGroupStorage.h
     StarRustNetRules.h

@@ -31,6 +31,9 @@
 #ifdef STAR_USE_RUST_JSON_RPC
 #include "StarRustJsonRpc.h"
 #endif
+#ifdef STAR_USE_RUST_JSON_RPC
+#include "StarRustRpcPromise.h"
+#endif
 #ifdef STAR_USE_RUST_NET_GROUP
 #include "StarNetGroupStorage.hpp"
 #endif
@@ -4609,6 +4612,17 @@ void ClientApplication::renderBehaviorScenario() {
     rpcLeaves.append(sb_json_rpc_count(3, leaf));
   metadata = metadata.set("rustJsonRpc", JsonObject{
       {"main", rpcMain}, {"allThreads", rpcAll}, {"attemptedLeaves", rpcLeaves}});
+#endif
+#ifdef STAR_USE_RUST_JSON_RPC
+  JsonArray promiseMain, promiseAll, promiseLeaves;
+  for (uint32_t mode = 0; mode != SB_RPC_PROMISE_COUNT; ++mode) {
+    promiseMain.append(sb_rpc_promise_count(0, mode));
+    promiseAll.append(sb_rpc_promise_count(1, mode));
+  }
+  for (uint32_t leaf = 0; leaf != SB_RPC_PROMISE_OP_COUNT; ++leaf)
+    promiseLeaves.append(sb_rpc_promise_count(3, leaf));
+  metadata = metadata.set("rustRpcPromise", JsonObject{
+      {"main", promiseMain}, {"allThreads", promiseAll}, {"attemptedLeaves", promiseLeaves}});
 #endif
 #ifdef STAR_NET_GROUP_RUST_STORAGE
   JsonArray groupStorageMain, groupStorageAll;

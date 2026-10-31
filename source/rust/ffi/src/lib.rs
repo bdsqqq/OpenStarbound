@@ -14,6 +14,8 @@ mod net_dynamic;
 pub use net_dynamic::{sb_net_dynamic_run, sb_net_dynamic_count};
 mod json_rpc;
 pub use json_rpc::{sb_json_rpc_run, sb_json_rpc_count};
+mod rpc_promise;
+pub use rpc_promise::{sb_rpc_promise_run, sb_rpc_promise_count};
 mod net_group_storage;
 pub use net_group_storage::{sb_net_group_storage_run, sb_net_group_storage_count};
 mod net_rules;

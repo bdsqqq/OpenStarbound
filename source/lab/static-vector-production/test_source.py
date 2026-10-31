@@ -60,7 +60,7 @@ NET_GROUP_MEMBER = b" OR STAR_USE_RUST_NET_GROUP)"
 NET_DYNAMIC_OPTION = b'option(STAR_USE_RUST_NET_DYNAMIC "Use Rust dynamic network-group policy" OFF)\n'
 NET_DYNAMIC_DEFINE = b"if(STAR_USE_RUST_NET_DYNAMIC)\n  add_compile_definitions(STAR_USE_RUST_NET_DYNAMIC)\nendif()\n\n"
 NET_DYNAMIC_MEMBER = b" OR STAR_USE_RUST_NET_DYNAMIC)"
-JSON_RPC_OPTION = b'option(STAR_USE_RUST_JSON_RPC "Use Rust JSON-RPC dispatch and request sequencing" OFF)\n'
+JSON_RPC_OPTION = b'option(STAR_USE_RUST_JSON_RPC "Use Rust RPC dispatch, promise policy and request sequencing" OFF)\n'
 JSON_RPC_DEFINE = b"if(STAR_USE_RUST_JSON_RPC)\n  add_compile_definitions(STAR_USE_RUST_JSON_RPC)\nendif()\n\n"
 JSON_RPC_MEMBER = b" OR STAR_USE_RUST_JSON_RPC)"
 
