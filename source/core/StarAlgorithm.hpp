@@ -154,6 +154,35 @@ bool mapMerge(MapType1& targetMap, MapType2 const& sourceMap, bool overwrite = f
 
 template <typename MapType1, typename MapType2>
 bool mapsEqual(MapType1 const& m1, MapType2 const& m2) {
+#ifdef STAR_USE_RUST_MAP
+  return MapDetail::run(SB_MAP_EQUAL, [&](uint32_t operation) -> uint32_t {
+    switch (operation) {
+      case SB_MAP_SELF: return &m1 == &m2 ? 1u : 0u;
+      case SB_MAP_SIZE_MISMATCH: return m1.size() != m2.size() ? 1u : 0u;
+      case SB_MAP_ENTER_COMPARE: {
+        uint32_t result = 0;
+        MapDetail::withNativeRange(m1, [&](auto& i, auto& end) {
+          result = MapDetail::run(SB_MAP_COMPARE, [&](uint32_t operation) -> uint32_t {
+            switch (operation) {
+              case SB_MAP_MORE: return i != end ? 1u : 0u;
+              case SB_MAP_ADVANCE: ++i; return 0;
+              case SB_MAP_PAIR_MATCH: {
+                auto const& m1pair = *i;
+                auto m2it = m2.find(m1pair.first);
+                // Keep the whole condition: overloaded || and its end/equality
+                // temporaries may not be split into separate foreign calls.
+                return (m2it == m2.end() || !(m2it->second == m1pair.second)) ? 0u : 1u;
+              }
+              default: MapDetail::invalidOperation();
+            }
+          });
+        });
+        return result;
+      }
+      default: MapDetail::invalidOperation();
+    }
+  }) != 0;
+#else
   if (&m1 == &m2)
     return true;
 
@@ -167,6 +196,7 @@ bool mapsEqual(MapType1 const& m1, MapType2 const& m2) {
   }
 
   return true;
+#endif
 }
 
 template <typename Container, typename Filter>

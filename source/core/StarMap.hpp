@@ -108,7 +108,7 @@ template <typename Key, typename Value, typename Hash = hash<Key>, typename Equa
 using StableHashMap = MapMixin<std::unordered_map<Key, Value, Hash, Equals, Allocator>>;
 
 // Constructors/storage and from/insert/contains/remove primitives stay native.
-// Merge shares the Rust helper policy; equality still delegates to native code.
+// Merge and equality share Rust control with native typed expression scopes.
 template <typename BaseMap>
 template <typename MapType>
 auto MapMixin<BaseMap>::from(MapType const& m) -> MapMixin {

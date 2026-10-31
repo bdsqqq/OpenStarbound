@@ -22,7 +22,9 @@ enum {
   SB_MAP_PRINT = 4,
   SB_MAP_MERGE = 5,
   SB_MAP_MERGE_ITEM = 6,
-  SB_MAP_COUNT = 7
+  SB_MAP_EQUAL = 7,
+  SB_MAP_COMPARE = 8,
+  SB_MAP_COUNT = 9
 };
 
 enum {
@@ -38,7 +40,11 @@ enum {
   SB_MAP_MERGE_ITEM_OP = 9,
   SB_MAP_INSERTED = 10,
   SB_MAP_OVERWRITE = 11,
-  SB_MAP_UPDATE = 12
+  SB_MAP_UPDATE = 12,
+  SB_MAP_SELF = 13,
+  SB_MAP_SIZE_MISMATCH = 14,
+  SB_MAP_ENTER_COMPARE = 15,
+  SB_MAP_PAIR_MATCH = 16
 };
 
 /* The host owns values, storage, iterator lifetimes and native expression scopes.
@@ -49,8 +55,9 @@ enum {
  * than adding value slots/copies or extending native lifetimes across the ABI.
  *
  * Every invocation gets a fresh zero-initialized response. MORE, MATCH,
- * FIRST_ELEMENT, MERGE_ITEM_OP, INSERTED and OVERWRITE must respond with exact
- * 0/1; all other operations (including UPDATE) require 0.
+ * FIRST_ELEMENT, MERGE_ITEM_OP, INSERTED, OVERWRITE, SELF, SIZE_MISMATCH,
+ * ENTER_COMPARE and PAIR_MATCH must respond with exact 0/1; all other operations
+ * (including UPDATE) require 0.
  * A nonzero host status takes precedence over malformed response, returning
  * HOST_ERROR. A malformed response with host status 0 returns INVALID. Both
  * stop immediately: no later callback is invoked. Host exceptions must be caught
@@ -77,8 +84,22 @@ enum {
  * destroys res BEFORE root ADVANCE; neither res nor Value crosses into Rust.
  * INSERTED preserves native !res.second ? 0u : 1u (including operator!). MORE
  * evaluates sourceMap.end() anew each iteration, not a cached end iterator.
- * COLLECT, FILTER and PRINT return 0; FIRST, REMOVE, MERGE and MERGE_ITEM return
- * exact boolean results on success.
+ * EQUAL: SELF once; true returns 1 WITHOUT SIZE_MISMATCH or range creation.
+ * Otherwise SIZE_MISMATCH; true returns 0 WITHOUT range creation. Otherwise
+ * ENTER_COMPARE returns its exact boolean result. That native leaf initializes
+ * the range-for begin/end ONLY after both guards, preserving native member/ADL
+ * selection, then reenters COMPARE. Cached end/begin remain native and are
+ * destroyed after the nested loop, including early exit or error.
+ * COMPARE: MORE -> PAIR_MATCH; false returns 0 WITHOUT ADVANCE or further MORE;
+ * true calls ADVANCE. Exhaustion returns 1. The native PAIR_MATCH leaf owns
+ * auto const& m1pair = *iterator; auto m2it = m2.find(m1pair.first); followed by
+ * the WHOLE (m2it == m2.end() || !(m2it->second == m1pair.second)) ? 0u : 1u.
+ * Never split the OR operands: overloaded ||, end/boolean-proxy temporaries and
+ * full-expression lifetimes stay C++. Rust sees one boolean match; pair/lookup
+ * scopes end BEFORE ADVANCE. No Value crosses the ABI. Nested host exceptions
+ * must be caught and preserved in the original frame for outer rethrow.
+ * COLLECT, FILTER and PRINT return 0; FIRST, REMOVE, MERGE, MERGE_ITEM, EQUAL
+ * and COMPARE return exact boolean results on success.
  *
  * out_result must designate live writable aligned uint32_t storage. Invalid
  * mode, null context/function/output or output misalignment returns INVALID
@@ -129,7 +150,7 @@ uint32_t sb_map_select(uint32_t mode, uint32_t predicate, uint32_t* out_action);
 
 /* Per-thread wrapping accepted-entry totals, separate for loops and selections.
  * Count host errors, malformed callback replies, panics and each reentrant entry.
- * Rejected calls do not count. Loop modes are 0..6; selection modes remain 0..4.
+ * Rejected calls do not count. Loop modes are 0..8; selection modes remain 0..4.
  * Invalid mode queries return zero. These counters
  * are independent of Set/OrderedSet/FlatHashTable and do not count consumers.
  */
@@ -137,7 +158,7 @@ uint64_t sb_map_count(uint32_t mode);
 uint64_t sb_map_select_count(uint32_t mode);
 
 /* Process-wide wrapping accepted totals: kind 0 loops, kind 1 selections.
- * Bounds are family-specific: kind 0 accepts 0..6, kind 1 accepts only 0..4.
+ * Bounds are family-specific: kind 0 accepts 0..8, kind 1 accepts only 0..4.
  * Invalid kind/mode queries return zero. Relaxed atomics are diagnostics only,
  * not synchronized snapshots, program-state barriers or distinct-container counts.
  */

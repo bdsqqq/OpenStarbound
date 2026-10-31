@@ -15,7 +15,9 @@ const REMOVE: u32 = 3;
 const PRINT: u32 = 4;
 const MERGE: u32 = 5;
 const MERGE_ITEM: u32 = 6;
-const COUNT: usize = 7;
+const EQUAL: u32 = 7;
+const COMPARE: u32 = 8;
+const COUNT: usize = 9;
 const SELECT_COUNT: usize = 5;
 const MORE: u32 = 0;
 const ADVANCE: u32 = 1;
@@ -30,6 +32,10 @@ const MERGE_ITEM_OP: u32 = 9;
 const INSERTED: u32 = 10;
 const OVERWRITE: u32 = 11;
 const UPDATE: u32 = 12;
+const SELF: u32 = 13;
+const SIZE_MISMATCH: u32 = 14;
+const ENTER_COMPARE: u32 = 15;
+const PAIR_MATCH: u32 = 16;
 const REQUIRED: u32 = 0;
 const OPTIONAL: u32 = 1;
 const DEFAULT: u32 = 2;
@@ -60,7 +66,8 @@ unsafe fn invoke(ctx: *mut c_void, leaf: Leaf, operation: u32) -> Result<u32, u3
     if leaf(ctx, operation, &mut response) != 0 {
         return Err(HOST_ERROR);
     }
-    let boolean = matches!(operation, MORE | MATCH | FIRST_ELEMENT | MERGE_ITEM_OP | INSERTED | OVERWRITE);
+    let boolean = matches!(operation, MORE | MATCH | FIRST_ELEMENT | MERGE_ITEM_OP | INSERTED | OVERWRITE
+        | SELF | SIZE_MISMATCH | ENTER_COMPARE | PAIR_MATCH);
     if response > u32::from(boolean) {
         return Err(INVALID);
     }
@@ -73,7 +80,13 @@ unsafe fn run(mode: u32, ctx: *mut c_void, leaf: Leaf) -> Result<u32, u32> {
         if invoke(ctx, leaf, OVERWRITE)? != 0 { invoke(ctx, leaf, UPDATE)?; }
         return Ok(0);
     }
-    let mut result = u32::from(mode == MERGE);
+    if mode == EQUAL {
+        if invoke(ctx, leaf, SELF)? != 0 { return Ok(1); }
+        if invoke(ctx, leaf, SIZE_MISMATCH)? != 0 { return Ok(0); }
+        // Native range initialization occurs only after both guards finish.
+        return invoke(ctx, leaf, ENTER_COMPARE);
+    }
+    let mut result = u32::from(matches!(mode, MERGE | COMPARE));
     while invoke(ctx, leaf, MORE)? != 0 {
         match mode {
             COLLECT => { invoke(ctx, leaf, APPEND)?; }
@@ -99,6 +112,9 @@ unsafe fn run(mode: u32, ctx: *mut c_void, leaf: Leaf) -> Result<u32, u32> {
             MERGE => {
                 // A duplicate changes the result, never visitation of later items.
                 if invoke(ctx, leaf, MERGE_ITEM_OP)? == 0 { result = 0; }
+            }
+            COMPARE => {
+                if invoke(ctx, leaf, PAIR_MATCH)? == 0 { return Ok(0); }
             }
             _ => unreachable!(),
         }
@@ -237,6 +253,15 @@ mod tests {
             (MERGE_ITEM, vec![s(INSERTED,1)], 1),
             (MERGE_ITEM, vec![s(INSERTED,0), s(OVERWRITE,0)], 0),
             (MERGE_ITEM, vec![s(INSERTED,0), s(OVERWRITE,1), s(UPDATE,0)], 0),
+            (EQUAL, vec![s(SELF,1)], 1),
+            (EQUAL, vec![s(SELF,0), s(SIZE_MISMATCH,1)], 0),
+            (EQUAL, vec![s(SELF,0), s(SIZE_MISMATCH,0), s(ENTER_COMPARE,1)], 1),
+            (EQUAL, vec![s(SELF,0), s(SIZE_MISMATCH,0), s(ENTER_COMPARE,0)], 0),
+            (COMPARE, vec![s(MORE,0)], 1),
+            (COMPARE, vec![s(MORE,1), s(PAIR_MATCH,0)], 0),
+            (COMPARE, vec![s(MORE,1), s(PAIR_MATCH,1), s(ADVANCE,0), s(MORE,1),
+                s(PAIR_MATCH,1), s(ADVANCE,0), s(MORE,0)], 1),
+            (COMPARE, vec![s(MORE,1), s(PAIR_MATCH,1), s(ADVANCE,0), s(MORE,1), s(PAIR_MATCH,0)], 0),
         ]
     }
 
@@ -263,7 +288,8 @@ mod tests {
                     execute(mode, &prefix, HOST_ERROR, 0);
                 }
                 let op = steps[i].0;
-                let minimum = if matches!(op, MORE | MATCH | FIRST_ELEMENT | MERGE_ITEM_OP | INSERTED | OVERWRITE) { 2 } else { 1 };
+                let minimum = if matches!(op, MORE | MATCH | FIRST_ELEMENT | MERGE_ITEM_OP | INSERTED | OVERWRITE
+                    | SELF | SIZE_MISMATCH | ENTER_COMPARE | PAIR_MATCH) { 2 } else { 1 };
                 for reply in [minimum, u32::MAX] {
                     let mut prefix = steps[..=i].to_vec();
                     prefix[i].1 = reply;
@@ -380,11 +406,12 @@ mod tests {
     }
 
     #[test]
-    fn merge_modes_do_not_extend_selection_bounds() {
-        for mode in [MERGE, MERGE_ITEM] {
+    fn extra_loop_modes_do_not_extend_selection_bounds() {
+        for mode in [MERGE, MERGE_ITEM, EQUAL, COMPARE] {
             let loops = sb_map_count(mode);
             let before = sb_map_global_count(0, mode);
-            execute(mode, if mode == MERGE { &[Step(MORE,0,0)] } else { &[Step(INSERTED,1,0)] }, OK, 1);
+            let op = match mode { MERGE | COMPARE => MORE, MERGE_ITEM => INSERTED, _ => SELF };
+            execute(mode, &[s(op, u32::from(op != MORE))], OK, 1);
             assert_eq!(sb_map_count(mode), loops.wrapping_add(1));
             assert!(sb_map_global_count(0, mode).wrapping_sub(before) >= 1);
             let mut out = 91;
@@ -442,6 +469,57 @@ mod tests {
             assert_eq!((host.index,host.updates,host.saved_error,host.active), if fail { (1,1,42,false) } else { (3,1,0,false) });
             assert_eq!(sb_map_count(MERGE), before[0].wrapping_add(1));
             assert_eq!(sb_map_count(MERGE_ITEM), before[1].wrapping_add(if fail { 2 } else { 3 }));
+        }
+    }
+
+    // Models saved native exceptions and range scope, not typed C++ operators.
+    struct EqualHost { remaining: usize, active: bool, fail: bool, saved_error: u32, trace: Vec<u32> }
+    unsafe extern "C" fn equal_host(ctx: *mut c_void, op: u32, out: *mut u32) -> u32 {
+        let host = ctx.cast::<EqualHost>();
+        (*host).trace.push(op);
+        match op {
+            SELF | SIZE_MISMATCH => { assert!(!(*host).active); }
+            ENTER_COMPARE => {
+                assert!(!(*host).active);
+                (*host).active = true; // Models native withRange after the guards.
+                let mut nested = 91;
+                let status = sb_map_run(COMPARE, ctx, Some(equal_host), &mut nested);
+                (*host).active = false; // Range ends even on nested failure.
+                if status != OK { assert_eq!(nested, 91); return 7; }
+                *out = nested;
+            }
+            MORE => { assert!((*host).active); *out = u32::from((*host).remaining != 0); }
+            PAIR_MATCH => {
+                assert!((*host).active);
+                if (*host).fail { (*host).saved_error = 42; return 7; }
+                *out = 1;
+            }
+            ADVANCE => { assert!((*host).active); (*host).remaining -= 1; }
+            _ => return 99,
+        }
+        0
+    }
+    #[test]
+    fn nested_compare_empty_matches_counts_and_saved_host_error() {
+        for (remaining, fail) in [(0,false), (2,false), (2,true)] {
+            let before = [sb_map_count(EQUAL), sb_map_count(COMPARE)];
+            let global = [sb_map_global_count(0,EQUAL), sb_map_global_count(0,COMPARE)];
+            let mut host = EqualHost { remaining, active: false, fail, saved_error: 0, trace: vec![] };
+            let mut out = 91;
+            let status = unsafe { sb_map_run(EQUAL, (&mut host as *mut EqualHost).cast(), Some(equal_host), &mut out) };
+            let mut expected = vec![SELF,SIZE_MISMATCH,ENTER_COMPARE];
+            if fail { expected.extend([MORE,PAIR_MATCH]); }
+            else {
+                for _ in 0..remaining { expected.extend([MORE,PAIR_MATCH,ADVANCE]); }
+                expected.push(MORE);
+            }
+            assert_eq!(host.trace, expected);
+            assert_eq!((status,out), if fail { (HOST_ERROR,91) } else { (OK,1) });
+            assert_eq!((host.remaining,host.saved_error,host.active), if fail { (remaining,42,false) } else { (0,0,false) });
+            for (i, mode) in [EQUAL,COMPARE].into_iter().enumerate() {
+                assert_eq!(sb_map_count(mode), before[i].wrapping_add(1));
+                assert!(sb_map_global_count(0,mode).wrapping_sub(global[i]) >= 1);
+            }
         }
     }
 

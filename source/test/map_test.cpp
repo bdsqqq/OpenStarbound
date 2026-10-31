@@ -557,3 +557,221 @@ TEST(MapMerge, RustMergeCountersAreLoopsNotSelections) {
   EXPECT_EQ(sb_map_select_count(5), 0u); EXPECT_EQ(sb_map_select_count(6), 0u);
 }
 #endif
+
+namespace {
+template <typename M> void equalConcrete(char const* name) {
+  M a, b;
+  EXPECT_TRUE(mapsEqual(a, b)); EXPECT_TRUE(a == b);
+  a.insert(1, 11); a.insert(2, 22); a.insert(3, 33);
+  b.insert(3, 33); b.insert(2, 22); b.insert(1, 11);
+  EXPECT_TRUE(mapsEqual(a, b)); EXPECT_TRUE(a == b); EXPECT_TRUE(b == a);
+  b.set(2, 99); EXPECT_FALSE(mapsEqual(a, b)); EXPECT_FALSE(a == b);
+  b.set(2, 22); b.remove(3); b.insert(4, 33);
+  EXPECT_FALSE(mapsEqual(a, b)); EXPECT_FALSE(a == b);
+  std::cout << "FLAT_MAP_TRACE equal-" << name << " empty,same-members,value,key,\n";
+}
+struct EqualState {
+  MapTrace trace;
+  int pairs = 0, lookups = 0, ends = 0;
+  std::string failure;
+  void step(char const* name) { trace.log(name); if (failure == name) trace.raise(); }
+};
+struct EqualBool {
+  bool value;
+  EqualState* s;
+  explicit operator bool() const { EXPECT_EQ(s->ends, 1); s->step("bool"); return value; }
+  ~EqualBool() { s->trace.log("bool-destroy"); }
+};
+struct EqualValue {
+  int n;
+  EqualState* s;
+  friend EqualBool operator==(EqualValue const& a, EqualValue const& b) {
+    EXPECT_EQ(a.s->pairs, 1); EXPECT_EQ(a.s->lookups, 1); EXPECT_EQ(a.s->ends, 1);
+    a.s->step("equal"); return {a.n == b.n, a.s};
+  }
+};
+struct EqualPair {
+  int first;
+  EqualValue second;
+  EqualState* s;
+  EqualPair(int k, int n, EqualState* s) : first(k), second{n, s}, s(s) {
+    ++s->pairs; s->trace.log("pair");
+  }
+  EqualPair(EqualPair const&) = delete;
+  ~EqualPair() { EXPECT_EQ(s->lookups, 0); --s->pairs; s->trace.log("pair-destroy"); }
+};
+struct EqualRangeIterator {
+  int index;
+  EqualState* s;
+  EqualPair operator*() const { return EqualPair(index, index * 11, s); }
+  EqualRangeIterator& operator++() {
+    EXPECT_EQ(s->pairs, 0); EXPECT_EQ(s->lookups, 0); s->step("advance"); ++index; return *this;
+  }
+};
+struct EqualLookup {
+  struct Entry { int first; EqualValue second; } entry;
+  EqualState* s;
+  bool missing, end;
+  EqualLookup(int k, int n, EqualState* s, bool missing, bool end)
+    : entry{k, {n, s}}, s(s), missing(missing), end(end) {
+    if (end) ++s->ends; else ++s->lookups;
+  }
+  EqualLookup(EqualLookup const&) = delete;
+  ~EqualLookup() {
+    if (end) { --s->ends; s->trace.log("end-destroy"); }
+    else { EXPECT_EQ(s->pairs, 1); --s->lookups; s->trace.log("lookup-destroy"); }
+  }
+  Entry const* operator->() const { EXPECT_EQ(s->pairs, 1); s->step("arrow"); return &entry; }
+  bool operator==(EqualLookup const&) const { s->step("missing"); return missing; }
+};
+struct EqualRoot {
+  EqualState* s;
+  int count = 2, missingKey = -1, wrongKey = -1;
+  size_t size() const { s->step("size"); return count; }
+  EqualLookup find(int k) const {
+    EXPECT_EQ(s->pairs, 1); s->step("find");
+    return EqualLookup(k, k == wrongKey ? 99 : k * 11, s, k == missingKey, false);
+  }
+  EqualLookup end() const { s->step("lookup-end"); return EqualLookup(0, 0, s, true, true); }
+};
+// A map's end serves both traversal and lookup. This range sentinel owns the
+// lookup-end temporary only when compared; the cached range end stays inert.
+struct EqualEnd {
+  int stop;
+  EqualState* s;
+  mutable bool compared = false;
+  ~EqualEnd() { if (compared) { --s->ends; s->trace.log("end-destroy"); } }
+  friend bool operator!=(EqualRangeIterator const& i, EqualEnd const& e) {
+    i.s->step("more"); return i.index != e.stop;
+  }
+  friend bool operator==(EqualLookup const& i, EqualEnd const& e) {
+    e.compared = true; ++e.s->ends; e.s->step("missing"); return i.missing;
+  }
+};
+// Both member names win over ADL; the free functions deliberately yield no data.
+// Final and heterogeneous-sentinel ranges exclude inheritance/iterator rewrites.
+struct EqualMap final : EqualRoot {
+  EqualRangeIterator begin() const { s->step("begin"); return {1, s}; }
+  EqualEnd end() const { s->step("end"); return {count + 1, s}; }
+};
+EqualRangeIterator begin(EqualMap const& m) { m.s->step("wrong-adl-begin"); return {99, m.s}; }
+EqualEnd end(EqualMap const& m) { m.s->step("wrong-adl-end"); return {99, m.s}; }
+struct EqualAdl final : EqualRoot {};
+EqualRangeIterator begin(EqualAdl const& m) { m.s->step("adl-begin"); return {1, m.s}; }
+// A member end alone does not select member traversal: begin is ADL-only.
+EqualEnd end(EqualAdl const& m) { m.s->step("adl-end"); return {m.count + 1, m.s}; }
+struct EqualOr {
+  bool value;
+  EqualState* s;
+  friend bool operator||(EqualOr const& a, bool b) {
+    EXPECT_EQ(a.s->ends, 1); a.s->step("or"); return a.value || b;
+  }
+};
+struct EqualOrEnd : EqualEnd {
+  friend bool operator!=(EqualRangeIterator const& i, EqualOrEnd const& e) {
+    return i != static_cast<EqualEnd const&>(e);
+  }
+  friend EqualOr operator==(EqualLookup const& i, EqualOrEnd const& e) {
+    e.compared = true; ++e.s->ends; e.s->step("missing"); return {i.missing, e.s};
+  }
+};
+struct EqualOrMap final : EqualRoot {
+  EqualRangeIterator begin() const { s->step("begin"); return {1, s}; }
+  EqualOrEnd end() const { s->step("end"); return {{count + 1, s}}; }
+};
+}
+
+TEST(MapEqual, ConcreteMapsUseMembershipNotStorageOrder) {
+  equalConcrete<Map<int, int>>("sorted");
+  equalConcrete<HashMap<int, int, MapCollision>>("collision-flat");
+  equalConcrete<StableHashMap<int, int, MapCollision>>("collision-stable");
+  equalConcrete<OrderedMap<int, int>>("ordered");
+}
+
+TEST(MapEqual, SelfAndSizeGuardsPrecedeRangeInitialization) {
+  EqualState s; EqualMap a, b; a.s = b.s = &s;
+  s.failure = "size"; EXPECT_TRUE(mapsEqual(a, a)); EXPECT_TRUE(s.trace.events.empty());
+  s.failure.clear(); b.count = 3;
+  EXPECT_FALSE(mapsEqual(a, b)); EXPECT_EQ(s.trace.events, "size,size,");
+  s.trace.emit("equal-size-guard"); s.trace.events.clear();
+  a.count = b.count = 0; EXPECT_TRUE(mapsEqual(a, b));
+  EXPECT_EQ(s.trace.events, "size,size,begin,end,more,"); s.trace.emit("equal-empty");
+}
+
+TEST(MapEqual, CachedNativeMemberRangeAndPrvalueLifetime) {
+  EqualState s; EqualMap a, b; a.s = b.s = &s;
+  EXPECT_TRUE(mapsEqual(a, b));
+  std::string item = "more,pair,find,end,missing,arrow,equal,bool,bool-destroy,end-destroy,lookup-destroy,pair-destroy,advance,";
+  EXPECT_EQ(s.trace.events, "size,size,begin,end," + item + item + "more,");
+  EXPECT_EQ(s.pairs, 0); EXPECT_EQ(s.lookups, 0); EXPECT_EQ(s.ends, 0);
+  s.trace.emit("equal-member-proxy");
+}
+
+TEST(MapEqual, AdlBeginWithOnlyMemberLookupEndRemainsValid) {
+  EqualState s; EqualAdl a, b; a.s = b.s = &s;
+  EXPECT_TRUE(mapsEqual(a, b));
+  EXPECT_EQ(s.trace.events.substr(0, 28), "size,size,adl-begin,adl-end,");
+  EXPECT_EQ(s.trace.events.find("wrong-adl"), std::string::npos);
+  s.trace.emit("equal-adl");
+}
+
+TEST(MapEqual, MissingKeyAndValueMismatchStopWithoutAdvance) {
+  for (bool missing : {false, true}) {
+    EqualState s; EqualMap a, b; a.s = b.s = &s;
+    if (missing) b.missingKey = 1; else b.wrongKey = 1;
+    EXPECT_FALSE(mapsEqual(a, b));
+    std::string expected = "size,size,begin,end,more,pair,find,end,missing,";
+    if (!missing) expected += "arrow,equal,bool,bool-destroy,";
+    expected += "end-destroy,lookup-destroy,pair-destroy,";
+    EXPECT_EQ(s.trace.events, expected);
+    EXPECT_EQ(s.pairs, 0); EXPECT_EQ(s.lookups, 0); EXPECT_EQ(s.ends, 0);
+    s.trace.emit(missing ? "equal-missing-key" : "equal-wrong-value");
+  }
+}
+
+TEST(MapEqual, OverloadedOrStillEvaluatesValueForMissingLookup) {
+  EqualState s; EqualOrMap a, b; a.s = b.s = &s; b.missingKey = 1;
+  // The custom missing iterator owns a valid dummy entry: evaluating RHS is
+  // required by overloaded ||, not an attempt to dereference a real STL end.
+  EXPECT_FALSE(mapsEqual(a, b));
+  EXPECT_EQ(s.trace.events, "size,size,begin,end,more,pair,find,end,missing,arrow,equal,bool,or,bool-destroy,end-destroy,lookup-destroy,pair-destroy,");
+  EXPECT_EQ(s.pairs, 0); EXPECT_EQ(s.lookups, 0); EXPECT_EQ(s.ends, 0);
+  s.trace.emit("equal-overloaded-or");
+}
+
+TEST(MapEqual, NativeExceptionsRetainIdentityAndDestroyActiveScopes) {
+  for (char const* phase : {"find", "arrow", "equal", "bool"}) {
+    EqualState s; EqualMap a, b; a.s = b.s = &s; s.failure = phase;
+    mapFailure(s.trace, [&] { mapsEqual(a, b); });
+    EXPECT_EQ(s.pairs, 0); EXPECT_EQ(s.lookups, 0); EXPECT_EQ(s.ends, 0);
+    EXPECT_EQ(s.trace.events.find("advance,"), std::string::npos);
+    EXPECT_EQ(s.trace.events.find("find,"), s.trace.events.rfind("find,"));
+    EXPECT_NE(s.trace.events.find("pair-destroy,caught,"), std::string::npos);
+    std::string name = std::string("equal-throw-") + phase; s.trace.emit(name.c_str());
+  }
+}
+
+#ifdef STAR_USE_RUST_MAP
+TEST(MapEqual, RustEqualityModesAreLoopsNotSelections) {
+  auto equal = sb_map_count(7), compare = sb_map_count(8);
+  Map<int, int> a{{1, 11}, {2, 22}}, b{{1, 11}, {2, 22}};
+  EXPECT_TRUE(mapsEqual(a, b));
+  EXPECT_GT(sb_map_count(7), equal); EXPECT_GT(sb_map_count(8), compare);
+  EXPECT_EQ(sb_map_select_count(7), 0u); EXPECT_EQ(sb_map_select_count(8), 0u);
+}
+#endif
+
+#ifdef STAR_MAP_RANGE_NEGATIVE
+namespace {
+struct EqualInvalidRange : EqualRoot {
+  int begin = 0, end = 0;
+};
+EqualRangeIterator begin(EqualInvalidRange const& m) { return {1, m.s}; }
+EqualEnd end(EqualInvalidRange const& m) { return {m.count + 1, m.s}; }
+// Native range-for MUST reject both noncallable member names, even though ADL
+// offers usable functions. Keep this opt-in compile failure out of normal tests.
+bool equalInvalidRangeMustNotCompile(EqualInvalidRange const& a, EqualRoot const& b) {
+  return Star::mapsEqual(a, b);
+}
+}
+#endif

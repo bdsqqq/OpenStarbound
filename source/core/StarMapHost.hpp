@@ -5,9 +5,24 @@
 #include <type_traits>
 
 #include "StarRustMap.h"
+#include "StarSetHost.hpp"
 
 namespace Star {
 namespace MapDetail {
+
+// Taking this specialization's address forces the compiler to check the exact
+// range-for domain without executing it. A callable-only begin/end detector
+// alone would wrongly accept noncallable member names through an ADL fallback.
+template <typename Range>
+void requireNativeRange(Range& range) {
+  for (auto const& item : range) { (void)item; }
+}
+
+template <typename Range, typename Function>
+void withNativeRange(Range& range, Function&& function) {
+  (void)&requireNativeRange<Range>;
+  SetDetail::withRange(range, std::forward<Function>(function));
+}
 
 // Reference-held leaves preserve native iterator scopes and exception identity.
 template <typename Function>
