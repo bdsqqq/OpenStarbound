@@ -95,8 +95,8 @@ def main():
     for role in ('reference', 'candidate'):
         path = inputs[role].parent.parent / 'CMakeCache.txt'
         rows = re.findall(r'^(STAR_USE_RUST_\w+):BOOL=(ON|OFF)$', path.read_text(), re.M)
-        if len(rows) != len(dict(rows)) or len(rows) != 31 or set(dict(rows)) != names:
-            raise ValueError('31 unique current build selectors required')
+        if len(rows) != len(dict(rows)) or len(rows) != len(names) or set(dict(rows)) != names:
+            raise ValueError('all unique current build selectors required')
         values = dict(rows)
         expected = {key: 'ON' if role == 'candidate' and key != 'STAR_USE_RUST_LINE_QUERY' else 'OFF' for key in values}
         if values != expected:

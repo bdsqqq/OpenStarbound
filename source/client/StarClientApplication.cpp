@@ -7,6 +7,9 @@
 #include <functional>
 #include <thread>
 #include "StarBehaviorLab.hpp"
+#ifdef STAR_USE_RUST_UUID
+#include "StarRustUuid.h"
+#endif
 #ifdef STAR_USE_RUST_BIMAP
 #include "StarRustBiMap.h"
 #endif
@@ -4466,6 +4469,9 @@ void ClientApplication::renderBehaviorScenario() {
       {"replicatedSettledUpdates", m_behaviorSettledFrames}, {"updateIndex", m_behaviorFrames},
       {"seed", BehaviorLab::configuration().getUInt("seed", 42)}
   };
+#ifdef STAR_USE_RUST_UUID
+  metadata = metadata.set("rustUuidCalls", JsonArray{sb_uuid_count(0), sb_uuid_count(1), sb_uuid_count(2)});
+#endif
   if (biMapUniqueIdProbe()) {
     Json proof;
     if (!m_universeServer->executeForClient(world->connection(), [&](WorldServer* server, PlayerPtr player) {

@@ -24,6 +24,9 @@ ID_DEFINE = b"if(STAR_USE_RUST_ID_MAP)\n  add_compile_definitions(STAR_USE_RUST_
 BIMAP_OPTION = b'option(STAR_USE_RUST_BIMAP "Use experimental Rust BiMap controllers/policy" OFF)\n'
 BIMAP_DEFINE = b"if(STAR_USE_RUST_BIMAP)\n  add_compile_definitions(STAR_USE_RUST_BIMAP)\nendif()\n\n"
 BIMAP_MEMBER = b" OR STAR_USE_RUST_BIMAP)"
+UUID_OPTION = b'option(STAR_USE_RUST_UUID "Use the Rust Uuid value operations" OFF)\n'
+UUID_DEFINE = b"if(STAR_USE_RUST_UUID)\n  add_compile_definitions(STAR_USE_RUST_UUID)\nendif()\n\n"
+UUID_MEMBER = b" OR STAR_USE_RUST_UUID)"
 
 
 def require(condition, label):
@@ -99,8 +102,15 @@ def check_define(cmake):
 
 
 def normalize_current_cmake(cmake):
-    # Exclude only the new default-off BiMap integration from this historical
-    # StaticVector contract; neither the snapshot nor its pinned hash changes.
+    # Reverse only UUID's exact three integration edits before the existing
+    # BiMap projection; neither historical snapshot nor pinned hash changes.
+    require(cmake.count(UUID_OPTION) == 1 and cmake.count(UUID_DEFINE) == 1 and
+            cmake.count(UUID_MEMBER) == 1 and
+            aggregate_gate(cmake).count(b"STAR_USE_RUST_UUID") == 1,
+            "UUID integration shape")
+    cmake = cmake.replace(UUID_OPTION, b"", 1).replace(UUID_DEFINE, b"", 1)
+    cmake = cmake.replace(UUID_MEMBER, b")", 1)
+    require(b"STAR_USE_RUST_UUID" not in cmake, "UUID integration shape")
     require(cmake.count(BIMAP_OPTION) == 1 and cmake.count(BIMAP_DEFINE) == 1 and
             cmake.count(BIMAP_MEMBER) == 1 and
             aggregate_gate(cmake).count(b"STAR_USE_RUST_BIMAP") == 1,
@@ -226,11 +236,22 @@ class SourceContract(unittest.TestCase):
         bad = [self.current_cmake.replace(BIMAP_OPTION, BIMAP_OPTION.replace(b" OFF)", b" ON)"), 1),
                self.current_cmake.replace(BIMAP_OPTION, b"", 1),
                self.current_cmake + BIMAP_OPTION,
-               self.current_cmake.replace(BIMAP_MEMBER, b")", 1),
+               self.current_cmake.replace(b" OR STAR_USE_RUST_BIMAP", b"", 1),
                self.current_cmake.replace(BIMAP_DEFINE, b"add_compile_definitions(STAR_USE_RUST_BIMAP)\n\n", 1)]
         for mutant in bad:
             with self.subTest(size=len(mutant)):
                 self.reject("BiMap integration shape", normalize_current_cmake, mutant)
+
+    def test_bad_uuid_integration(self):
+        bad = [self.current_cmake.replace(UUID_OPTION, UUID_OPTION.replace(b" OFF)", b" ON)"), 1),
+               self.current_cmake.replace(UUID_OPTION, b"", 1),
+               self.current_cmake + UUID_OPTION,
+               self.current_cmake.replace(UUID_MEMBER, b")", 1),
+               self.current_cmake.replace(UUID_DEFINE, b"add_compile_definitions(STAR_USE_RUST_UUID)\n\n", 1),
+               self.current_cmake + b"\nset(STAR_USE_RUST_UUID ON)\n"]
+        for mutant in bad:
+            with self.subTest(size=len(mutant)):
+                self.reject("UUID integration shape", normalize_current_cmake, mutant)
 
     def test_bad_extra_runtime_configuration(self):
         mutant = self.cmake + b"\nset(STAR_RUST_TARGET_DIR unexpected)\n"

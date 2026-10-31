@@ -39,6 +39,8 @@ def replace(text, old, new='', count=1):
 def project_client(text):
     """remove named opt-in seams, projecting old branches back to before DATA."""
     for seam in (
+        '#ifdef STAR_USE_RUST_UUID\n#include "StarRustUuid.h"\n#endif\n',
+        '#ifdef STAR_USE_RUST_UUID\n  metadata = metadata.set("rustUuidCalls", JsonArray{sb_uuid_count(0), sb_uuid_count(1), sb_uuid_count(2)});\n#endif\n',
         '#ifdef STAR_USE_RUST_BIMAP\n#include "StarRustBiMap.h"\n#endif\n',
         '#include "../lab/behavior/bimap_scene.hpp"\n',
         '      if (biMapUniqueIdProbe()) lamp->setUniqueId(biMapLampId(0));\n',
@@ -241,7 +243,7 @@ class SourceContract(unittest.TestCase):
             raw = (ROOT / path).read_bytes()
             if path == 'source/CMakeLists.txt':
                 # Check the old scene's bytes after ONLY the exact separately
-                # tested default-OFF BiMap integration, not a renewed epoch.
+                # tested default-OFF UUID/BiMap integrations, not a renewed epoch.
                 raw = production.normalize_current_cmake(raw)
             self.assertEqual(hashlib.sha256(raw).hexdigest(), digest, path)
 
@@ -250,14 +252,16 @@ class SourceContract(unittest.TestCase):
                        and (p.suffix == '.rs' or p.name in ('Cargo.toml', 'Cargo.lock'))
                        and 'target' not in p.parts)
         digest = hashlib.sha256()
-        self.assertIn(ROOT / 'source/rust/ffi/src/bimap.rs', paths)
-        paths.remove(ROOT / 'source/rust/ffi/src/bimap.rs')
+        for module in ('bimap.rs', 'uuid.rs'):
+            self.assertIn(ROOT / 'source/rust/ffi/src' / module, paths)
+            paths.remove(ROOT / 'source/rust/ffi/src' / module)
         for path in paths:
             raw = path.read_bytes()
             if path == ROOT / 'source/rust/ffi/src/lib.rs':
-                # Only the additive BiMap registration is outside scene26's
-                # historical Rust input contract; its policy has its own tests.
-                for line in (b'mod bimap;\n', b'pub use bimap::{sb_bimap_count, sb_bimap_run, SbBiMapHost, SbBiMapReply, SbBiMapRequest};\n'):
+                # Only the additive BiMap/UUID registrations are outside
+                # scene26's historical Rust input contract.
+                for line in (b'mod bimap;\n', b'pub use bimap::{sb_bimap_count, sb_bimap_run, SbBiMapHost, SbBiMapReply, SbBiMapRequest};\n',
+                             b'mod uuid;\n', b'pub use uuid::{sb_uuid_compare, sb_uuid_count, sb_uuid_from_bytes, sb_uuid_hash};\n'):
                     self.assertEqual(raw.count(line), 1)
                     raw = raw.replace(line, b'', 1)
             digest.update(path.relative_to(ROOT).as_posix().encode() + b'\0' + hashlib.sha256(raw).digest())

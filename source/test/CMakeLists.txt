@@ -52,6 +52,7 @@ SET (star_core_tests_SOURCES
       strong_typedef_test.cpp
       thread_test.cpp
       worker_pool_test.cpp
+      uuid_test.cpp
       variant_test.cpp
       vlq_test.cpp
     )

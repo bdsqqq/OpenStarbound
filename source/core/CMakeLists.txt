@@ -16,6 +16,7 @@ SET (star_core_HEADERS
     StarBiMap.hpp
     StarBiMapHost.hpp
     StarRustBiMap.h
+    StarRustUuid.h
     StarBlockAllocator.hpp
     StarBuffer.hpp
     StarByteArray.hpp

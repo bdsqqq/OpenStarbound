@@ -10,6 +10,8 @@ mod id_map;
 pub use id_map::{sb_idmap_count, sb_idmap_run, SbIdMapHost, SbIdMapReply, SbIdMapRequest};
 mod bimap;
 pub use bimap::{sb_bimap_count, sb_bimap_run, SbBiMapHost, SbBiMapReply, SbBiMapRequest};
+mod uuid;
+pub use uuid::{sb_uuid_compare, sb_uuid_count, sb_uuid_from_bytes, sb_uuid_hash};
 mod static_vector;
 pub use static_vector::{
     sb_static_vector_count, sb_static_vector_run, SbStaticVectorHost,
