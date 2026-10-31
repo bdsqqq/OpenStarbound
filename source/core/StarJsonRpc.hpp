@@ -42,6 +42,9 @@ public:
   void receive(ByteArray const& inbuffer);
 
 private:
+#ifdef STAR_USE_RUST_JSON_RPC
+  void receiveItem(Json& request);
+#endif
   JsonRpcHandlers m_handlers;
   Map<uint64_t, RpcPromiseKeeper<Json>> m_pendingResponse;
   List<Json> m_pending;

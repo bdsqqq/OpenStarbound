@@ -1,5 +1,6 @@
 #include "StarList.hpp"
 #include "StarMemory.hpp"
+#include "StarAllocationProbe.hpp"
 #include "StarNetGroupStorage.hpp"
 #include "StarNetElementGroup.hpp"
 #include "gtest/gtest.h"
@@ -23,6 +24,7 @@ struct State {
   size_t count = 0;
   bool overflow = false;
   size_t failBytes = 0;
+  bool failAny = false;
   unsigned failures = 0;
   void const* lastRaised = nullptr;
   void* watched = nullptr;
@@ -53,7 +55,8 @@ struct Arm {
 
 void* operator new(std::size_t bytes) {
   using namespace NetGroupStorageHook;
-  if (armed && armed->failBytes && bytes == armed->failBytes) {
+  if (armed && (armed->failAny || (armed->failBytes && bytes == armed->failBytes))) {
+    armed->failAny = false;
     ++armed->failures;
     throw AllocationFailure();
   }
@@ -79,6 +82,23 @@ void operator delete(void* pointer, std::size_t bytes) noexcept {
     record(*armed, pointer, 0, false);
   }
   Star::free(pointer, bytes);
+}
+
+namespace StarTest {
+AllocationProbeResult failNextAllocation(void* context, void (*operation)(void*)) {
+  NetGroupStorageHook::State state;
+  state.failAny = true;
+  AllocationProbeResult result;
+  try {
+    NetGroupStorageHook::Arm arm(state);
+    operation(context);
+  } catch (NetGroupStorageHook::AllocationFailure const& error) {
+    result.caught = true;
+    result.originalIdentity = &error == state.lastRaised;
+  }
+  result.failures = state.failures;
+  return result;
+}
 }
 
 namespace {

@@ -60,6 +60,9 @@ NET_GROUP_MEMBER = b" OR STAR_USE_RUST_NET_GROUP)"
 NET_DYNAMIC_OPTION = b'option(STAR_USE_RUST_NET_DYNAMIC "Use Rust dynamic network-group policy" OFF)\n'
 NET_DYNAMIC_DEFINE = b"if(STAR_USE_RUST_NET_DYNAMIC)\n  add_compile_definitions(STAR_USE_RUST_NET_DYNAMIC)\nendif()\n\n"
 NET_DYNAMIC_MEMBER = b" OR STAR_USE_RUST_NET_DYNAMIC)"
+JSON_RPC_OPTION = b'option(STAR_USE_RUST_JSON_RPC "Use Rust JSON-RPC dispatch and request sequencing" OFF)\n'
+JSON_RPC_DEFINE = b"if(STAR_USE_RUST_JSON_RPC)\n  add_compile_definitions(STAR_USE_RUST_JSON_RPC)\nendif()\n\n"
+JSON_RPC_MEMBER = b" OR STAR_USE_RUST_JSON_RPC)"
 
 
 def require(condition, label):
@@ -135,6 +138,11 @@ def check_define(cmake):
 
 
 def normalize_current_cmake(cmake):
+    require(cmake.count(JSON_RPC_OPTION) == 1 and cmake.count(JSON_RPC_DEFINE) == 1 and
+            cmake.count(JSON_RPC_MEMBER) == 1 and aggregate_gate(cmake).count(b"STAR_USE_RUST_JSON_RPC") == 1,
+            "JsonRpc integration shape")
+    cmake = cmake.replace(JSON_RPC_OPTION, b"").replace(JSON_RPC_DEFINE, b"").replace(JSON_RPC_MEMBER, b")")
+    require(b"STAR_USE_RUST_JSON_RPC" not in cmake, "JsonRpc integration shape")
     require(cmake.count(NET_DYNAMIC_OPTION) == 1 and cmake.count(NET_DYNAMIC_DEFINE) == 1 and
             cmake.count(NET_DYNAMIC_MEMBER) == 1 and aggregate_gate(cmake).count(b"STAR_USE_RUST_NET_DYNAMIC") == 1,
             "NetDynamic integration shape")
@@ -452,6 +460,16 @@ class SourceContract(unittest.TestCase):
         for mutant in bad:
             with self.subTest(size=len(mutant)):
                 self.reject("NetDynamic integration shape", normalize_current_cmake, mutant)
+
+    def test_bad_json_rpc_integration(self):
+        bad = [self.current_cmake.replace(JSON_RPC_OPTION, JSON_RPC_OPTION.replace(b" OFF)", b" ON)"), 1),
+               self.current_cmake.replace(JSON_RPC_OPTION, b"", 1), self.current_cmake + JSON_RPC_OPTION,
+               self.current_cmake.replace(b" OR STAR_USE_RUST_JSON_RPC", b"", 1),
+               self.current_cmake.replace(JSON_RPC_DEFINE, b"add_compile_definitions(STAR_USE_RUST_JSON_RPC)\n\n", 1),
+               self.current_cmake + b"\nset(STAR_USE_RUST_JSON_RPC ON)\n"]
+        for mutant in bad:
+            with self.subTest(size=len(mutant)):
+                self.reject("JsonRpc integration shape", normalize_current_cmake, mutant)
 
     def test_bad_extra_runtime_configuration(self):
         mutant = self.cmake + b"\nset(STAR_RUST_TARGET_DIR unexpected)\n"
