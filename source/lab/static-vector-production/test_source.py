@@ -42,6 +42,9 @@ MAP_MEMBER = b" OR STAR_USE_RUST_MAP)"
 PERIODIC_OPTION = b'option(STAR_USE_RUST_PERIODIC "Use the Rust unsigned Periodic state machine" OFF)\n'
 PERIODIC_DEFINE = b"if(STAR_USE_RUST_PERIODIC)\n  add_compile_definitions(STAR_USE_RUST_PERIODIC)\nendif()\n\n"
 PERIODIC_MEMBER = b" OR STAR_USE_RUST_PERIODIC)"
+WORKER_OPTION = b'option(STAR_USE_RUST_WORKER_POOL "Use experimental Rust worker-pool control policy" OFF)\n'
+WORKER_DEFINE = b"if(STAR_USE_RUST_WORKER_POOL)\n  add_compile_definitions(STAR_USE_RUST_WORKER_POOL)\nendif()\n\n"
+WORKER_MEMBER = b" OR STAR_USE_RUST_WORKER_POOL)"
 
 
 def require(condition, label):
@@ -117,6 +120,11 @@ def check_define(cmake):
 
 
 def normalize_current_cmake(cmake):
+    require(cmake.count(WORKER_OPTION) == 1 and cmake.count(WORKER_DEFINE) == 1 and
+            cmake.count(WORKER_MEMBER) == 1 and aggregate_gate(cmake).count(b"STAR_USE_RUST_WORKER_POOL") == 1,
+            "WorkerPool integration shape")
+    cmake = cmake.replace(WORKER_OPTION, b"").replace(WORKER_DEFINE, b"").replace(WORKER_MEMBER, b")")
+    require(b"STAR_USE_RUST_WORKER_POOL" not in cmake, "WorkerPool integration shape")
     require(cmake.count(PERIODIC_OPTION) == 1 and cmake.count(PERIODIC_DEFINE) == 1 and
             cmake.count(PERIODIC_MEMBER) == 1 and aggregate_gate(cmake).count(b"STAR_USE_RUST_PERIODIC") == 1,
             "Periodic integration shape")
@@ -344,6 +352,16 @@ class SourceContract(unittest.TestCase):
         for mutant in bad:
             with self.subTest(size=len(mutant)):
                 self.reject("Periodic integration shape", normalize_current_cmake, mutant)
+
+    def test_bad_worker_pool_integration(self):
+        bad = [self.current_cmake.replace(WORKER_OPTION, WORKER_OPTION.replace(b" OFF)", b" ON)"), 1),
+               self.current_cmake.replace(WORKER_OPTION, b"", 1), self.current_cmake + WORKER_OPTION,
+               self.current_cmake.replace(b" OR STAR_USE_RUST_WORKER_POOL", b"", 1),
+               self.current_cmake.replace(WORKER_DEFINE, b"add_compile_definitions(STAR_USE_RUST_WORKER_POOL)\n\n", 1),
+               self.current_cmake + b"\nset(STAR_USE_RUST_WORKER_POOL ON)\n"]
+        for mutant in bad:
+            with self.subTest(size=len(mutant)):
+                self.reject("WorkerPool integration shape", normalize_current_cmake, mutant)
 
     def test_bad_extra_runtime_configuration(self):
         mutant = self.cmake + b"\nset(STAR_RUST_TARGET_DIR unexpected)\n"

@@ -16,6 +16,9 @@
 #ifdef STAR_USE_RUST_SET
 #include "StarRustSet.h"
 #endif
+#ifdef STAR_USE_RUST_WORKER_POOL
+#include "StarRustWorkerPool.h"
+#endif
 #ifdef STAR_USE_RUST_PERIODIC
 #include "StarRustPeriodic.h"
 #endif
@@ -4486,6 +4489,25 @@ void ClientApplication::renderBehaviorScenario() {
   };
 #ifdef STAR_USE_RUST_UUID
   metadata = metadata.set("rustUuidCalls", JsonArray{sb_uuid_count(0), sb_uuid_count(1), sb_uuid_count(2)});
+#endif
+#ifdef STAR_USE_RUST_WORKER_POOL
+  uint64_t workerMain[SB_WORKER_POOL_COUNT], workerAll[SB_WORKER_POOL_COUNT];
+  uint64_t workerLeaves[SB_WORKER_POOL_OP_COUNT];
+  for (uint32_t mode = 0; mode != SB_WORKER_POOL_COUNT; ++mode) {
+    workerMain[mode] = sb_worker_pool_count(0, mode);
+    workerAll[mode] = sb_worker_pool_count(1, mode);
+  }
+  for (uint32_t op = 0; op != SB_WORKER_POOL_OP_COUNT; ++op)
+    workerLeaves[op] = sb_worker_pool_count(2, op);
+  JsonArray workerMainJson, workerAllJson, workerLeafJson;
+  for (uint32_t mode = 0; mode != SB_WORKER_POOL_COUNT; ++mode) {
+    workerMainJson.append(workerMain[mode]);
+    workerAllJson.append(workerAll[mode]);
+  }
+  for (uint32_t op = 0; op != SB_WORKER_POOL_OP_COUNT; ++op)
+    workerLeafJson.append(workerLeaves[op]);
+  metadata = metadata.set("rustWorkerPool", JsonObject{
+      {"main", workerMainJson}, {"allThreads", workerAllJson}, {"leafAllThreads", workerLeafJson}});
 #endif
 #ifdef STAR_USE_RUST_PERIODIC
   uint64_t periodicCalls[2][SB_PERIODIC_COUNT];

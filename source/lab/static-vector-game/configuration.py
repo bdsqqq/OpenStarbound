@@ -19,7 +19,8 @@ SET = 'STAR_USE_RUST_SET'
 FLAT_HASH_TABLE = 'STAR_USE_RUST_FLAT_HASH_TABLE'
 MAP = 'STAR_USE_RUST_MAP'
 PERIODIC = 'STAR_USE_RUST_PERIODIC'
-CURRENT_SELECTORS = (*SELECTORS, BIMAP, UUID, ORDERED_SET, SET, FLAT_HASH_TABLE, MAP, PERIODIC)
+WORKER_POOL = 'STAR_USE_RUST_WORKER_POOL'
+CURRENT_SELECTORS = (*SELECTORS, BIMAP, UUID, ORDERED_SET, SET, FLAT_HASH_TABLE, MAP, PERIODIC, WORKER_POOL)
 
 
 def need(ok, why):
@@ -54,7 +55,7 @@ def validate_profile(role, values):
 def configure_options(role):
     validate_source()
     need(role in profiles(), 'exact reference/candidate role required')
-    values = dict(profiles()[role], **{BIMAP: 'OFF', UUID: 'OFF', ORDERED_SET: 'OFF', SET: 'OFF', FLAT_HASH_TABLE: 'OFF', MAP: 'OFF', PERIODIC: 'OFF'})
+    values = dict(profiles()[role], **{BIMAP: 'OFF', UUID: 'OFF', ORDERED_SET: 'OFF', SET: 'OFF', FLAT_HASH_TABLE: 'OFF', MAP: 'OFF', PERIODIC: 'OFF', WORKER_POOL: 'OFF'})
     return ['-D' + key + '=' + value for key, value in sorted(values.items())]
 
 
@@ -72,6 +73,7 @@ def validate_cache(role, text):
     need(rows.pop(FLAT_HASH_TABLE) == 'OFF', 'FlatHashTable must remain OFF')
     need(rows.pop(MAP) == 'OFF', 'Map must remain OFF')
     need(rows.pop(PERIODIC) == 'OFF', 'Periodic must remain OFF')
+    need(rows.pop(WORKER_POOL) == 'OFF', 'WorkerPool must remain OFF')
     validate_profile(role, rows)
 
 

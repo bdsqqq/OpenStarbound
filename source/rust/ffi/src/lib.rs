@@ -10,6 +10,8 @@ mod id_map;
 pub use id_map::{sb_idmap_count, sb_idmap_run, SbIdMapHost, SbIdMapReply, SbIdMapRequest};
 mod bimap;
 pub use bimap::{sb_bimap_count, sb_bimap_run, SbBiMapHost, SbBiMapReply, SbBiMapRequest};
+mod worker_pool;
+pub use worker_pool::{sb_worker_pool_count, sb_worker_pool_run};
 mod periodic;
 pub use periodic::{sb_periodic_count, sb_periodic_run, SbPeriodicReply, SbPeriodicState};
 mod map;

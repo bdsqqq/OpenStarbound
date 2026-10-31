@@ -1,6 +1,9 @@
 #pragma once
 
 #include "StarThread.hpp"
+#ifdef STAR_USE_RUST_WORKER_POOL
+#include "StarWorkerPoolHost.hpp"
+#endif
 
 namespace Star {
 
@@ -158,6 +161,20 @@ bool WorkerPoolPromise<ResultType>::done() const {
 template <typename ResultType>
 bool WorkerPoolPromise<ResultType>::wait(unsigned millis) const {
   MutexLocker locker(m_impl->mutex);
+#ifdef STAR_USE_RUST_WORKER_POOL
+  return WorkerPoolDetail::run(SB_WORKER_POOL_HANDLE_WAIT, [&](uint32_t operation) -> uint32_t {
+    switch (operation) {
+      case SB_WORKER_POOL_DONE: return !m_impl->result && !m_impl->exception ? 0u : 1u;
+      case SB_WORKER_POOL_NONZERO_TIMEOUT: return millis != 0 ? 1u : 0u;
+      case SB_WORKER_POOL_TIMED_WAIT: m_impl->condition.wait(m_impl->mutex, millis); return 0;
+      case SB_WORKER_POOL_RETHROW:
+        if (m_impl->exception)
+          std::rethrow_exception(m_impl->exception);
+        return 0;
+      default: WorkerPoolDetail::invalidOperation();
+    }
+  }) != 0;
+#else
 
   if (!m_impl->result && !m_impl->exception && millis != 0)
     m_impl->condition.wait(m_impl->mutex, millis);
@@ -169,6 +186,7 @@ bool WorkerPoolPromise<ResultType>::wait(unsigned millis) const {
     return true;
 
   return false;
+#endif
 }
 
 template <typename ResultType>
@@ -179,6 +197,19 @@ bool WorkerPoolPromise<ResultType>::poll() const {
 template <typename ResultType>
 ResultType& WorkerPoolPromise<ResultType>::get() {
   MutexLocker locker(m_impl->mutex);
+#ifdef STAR_USE_RUST_WORKER_POOL
+  WorkerPoolDetail::run(SB_WORKER_POOL_HANDLE_FINISH, [&](uint32_t operation) -> uint32_t {
+    switch (operation) {
+      case SB_WORKER_POOL_DONE: return !m_impl->result && !m_impl->exception ? 0u : 1u;
+      case SB_WORKER_POOL_WAIT: m_impl->condition.wait(m_impl->mutex); return 0;
+      case SB_WORKER_POOL_RETHROW:
+        if (m_impl->exception)
+          std::rethrow_exception(m_impl->exception);
+        return 0;
+      default: WorkerPoolDetail::invalidOperation();
+    }
+  });
+#else
 
   if (!m_impl->result && !m_impl->exception)
     m_impl->condition.wait(m_impl->mutex);
@@ -186,6 +217,7 @@ ResultType& WorkerPoolPromise<ResultType>::get() {
   if (m_impl->exception)
     std::rethrow_exception(m_impl->exception);
 
+#endif
   return *m_impl->result;
 }
 

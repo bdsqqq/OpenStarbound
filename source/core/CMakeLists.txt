@@ -143,6 +143,8 @@ SET (star_core_HEADERS
     StarVersion.hpp
     StarVlqEncoding.hpp
     StarWeightedPool.hpp
+    StarRustWorkerPool.h
+    StarWorkerPoolHost.hpp
     StarWorkerPool.hpp
     StarXXHash.hpp
     StarZSTDCompression.hpp
