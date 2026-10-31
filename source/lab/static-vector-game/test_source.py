@@ -39,6 +39,8 @@ def replace(text, old, new='', count=1):
 def project_client(text):
     """remove named opt-in seams, projecting old branches back to before DATA."""
     for seam in (
+        "#ifdef STAR_USE_RUST_NET_GROUP\n#include \"StarRustNetGroup.h\"\n#endif\n",
+        "#ifdef STAR_USE_RUST_NET_GROUP\n  uint64_t groupMain[SB_NET_GROUP_COUNT], groupAll[SB_NET_GROUP_COUNT], groupLeaves[SB_NET_GROUP_OP_COUNT];\n  for (uint32_t mode = 0; mode != SB_NET_GROUP_COUNT; ++mode) {\n    groupMain[mode] = sb_net_group_count(0, mode);\n    groupAll[mode] = sb_net_group_count(1, mode);\n  }\n  for (uint32_t op = 0; op != SB_NET_GROUP_OP_COUNT; ++op)\n    groupLeaves[op] = sb_net_group_count(2, op);\n  JsonArray groupMainJson, groupAllJson, groupLeafJson;\n  for (uint32_t mode = 0; mode != SB_NET_GROUP_COUNT; ++mode) {\n    groupMainJson.append(groupMain[mode]);\n    groupAllJson.append(groupAll[mode]);\n  }\n  for (uint32_t op = 0; op != SB_NET_GROUP_OP_COUNT; ++op)\n    groupLeafJson.append(groupLeaves[op]);\n  metadata = metadata.set(\"rustNetGroup\", JsonObject{\n      {\"main\", groupMainJson}, {\"allThreads\", groupAllJson}, {\"attemptedLeaves\", groupLeafJson}});\n#endif\n",
         "#ifdef STAR_USE_RUST_NET_FIELD\n#include \"StarRustNetScalar.h\"\n#endif\n",
         "#ifdef STAR_USE_RUST_NET_FIELD\n  uint64_t scalarMain[SB_NET_SCALAR_COUNT], scalarAll[SB_NET_SCALAR_COUNT];\n  for (uint32_t mode = 0; mode != SB_NET_SCALAR_COUNT; ++mode) {\n    scalarMain[mode] = sb_net_scalar_count(0, mode);\n    scalarAll[mode] = sb_net_scalar_count(1, mode);\n  }\n  JsonArray scalarMainJson, scalarAllJson;\n  for (uint32_t mode = 0; mode != SB_NET_SCALAR_COUNT; ++mode) {\n    scalarMainJson.append(scalarMain[mode]);\n    scalarAllJson.append(scalarAll[mode]);\n  }\n  metadata = metadata.set(\"rustNetScalar\", JsonObject{\n      {\"main\", scalarMainJson}, {\"allThreads\", scalarAllJson}});\n#endif\n",
         "#ifdef STAR_USE_RUST_NET_FIELD\n#include \"StarRustNetField.h\"\n#endif\n",
@@ -272,7 +274,7 @@ class SourceContract(unittest.TestCase):
                        and (p.suffix == '.rs' or p.name in ('Cargo.toml', 'Cargo.lock'))
                        and 'target' not in p.parts)
         digest = hashlib.sha256()
-        for module in ('bimap.rs', 'uuid.rs', 'ordered_set.rs', 'flat_hash_table.rs', 'map.rs', 'periodic.rs', 'worker_pool.rs', 'time.rs', 'net_signal.rs', 'net_field.rs', 'net_scalar.rs'):
+        for module in ('bimap.rs', 'uuid.rs', 'ordered_set.rs', 'flat_hash_table.rs', 'map.rs', 'periodic.rs', 'worker_pool.rs', 'time.rs', 'net_signal.rs', 'net_field.rs', 'net_scalar.rs', 'net_group.rs'):
             self.assertIn(ROOT / 'source/rust/ffi/src' / module, paths)
             paths.remove(ROOT / 'source/rust/ffi/src' / module)
         for path in paths:
@@ -280,7 +282,8 @@ class SourceContract(unittest.TestCase):
             if path == ROOT / 'source/rust/ffi/src/lib.rs':
                 # Only the additive BiMap/UUID registrations are outside
                 # scene26's historical Rust input contract.
-                for line in (b'mod net_scalar;\n', b'pub use net_scalar::{sb_net_scalar_run, sb_net_scalar_count};\n',
+                for line in (b'mod net_group;\n', b'pub use net_group::{sb_net_group_run, sb_net_group_count};\n',
+                             b'mod net_scalar;\n', b'pub use net_scalar::{sb_net_scalar_run, sb_net_scalar_count};\n',
                              b'mod net_field;\n', b'pub use net_field::{sb_net_field_run, sb_net_field_count};\n',
                              b'mod net_signal;\n', b'pub use net_signal::{sb_net_signal_run, sb_net_signal_count};\n',
                              b'mod time;\n', b'pub use time::{sb_time_convert, sb_time_count};\n',

@@ -23,7 +23,8 @@ WORKER_POOL = 'STAR_USE_RUST_WORKER_POOL'
 TIME = 'STAR_USE_RUST_TIME'
 NET_SIGNAL = 'STAR_USE_RUST_NET_SIGNAL'
 NET_FIELD = 'STAR_USE_RUST_NET_FIELD'
-CURRENT_SELECTORS = (*SELECTORS, BIMAP, UUID, ORDERED_SET, SET, FLAT_HASH_TABLE, MAP, PERIODIC, WORKER_POOL, TIME, NET_SIGNAL, NET_FIELD)
+NET_GROUP = 'STAR_USE_RUST_NET_GROUP'
+CURRENT_SELECTORS = (*SELECTORS, BIMAP, UUID, ORDERED_SET, SET, FLAT_HASH_TABLE, MAP, PERIODIC, WORKER_POOL, TIME, NET_SIGNAL, NET_FIELD, NET_GROUP)
 
 
 def need(ok, why):
@@ -58,7 +59,7 @@ def validate_profile(role, values):
 def configure_options(role):
     validate_source()
     need(role in profiles(), 'exact reference/candidate role required')
-    values = dict(profiles()[role], **{BIMAP: 'OFF', UUID: 'OFF', ORDERED_SET: 'OFF', SET: 'OFF', FLAT_HASH_TABLE: 'OFF', MAP: 'OFF', PERIODIC: 'OFF', WORKER_POOL: 'OFF', TIME: 'OFF', NET_SIGNAL: 'OFF', NET_FIELD: 'OFF'})
+    values = dict(profiles()[role], **{BIMAP: 'OFF', UUID: 'OFF', ORDERED_SET: 'OFF', SET: 'OFF', FLAT_HASH_TABLE: 'OFF', MAP: 'OFF', PERIODIC: 'OFF', WORKER_POOL: 'OFF', TIME: 'OFF', NET_SIGNAL: 'OFF', NET_FIELD: 'OFF', NET_GROUP: 'OFF'})
     return ['-D' + key + '=' + value for key, value in sorted(values.items())]
 
 
@@ -80,6 +81,7 @@ def validate_cache(role, text):
     need(rows.pop(TIME) == 'OFF', 'Time must remain OFF')
     need(rows.pop(NET_SIGNAL) == 'OFF', 'NetSignal must remain OFF')
     need(rows.pop(NET_FIELD) == 'OFF', 'NetField must remain OFF')
+    need(rows.pop(NET_GROUP) == 'OFF', 'NetGroup must remain OFF')
     validate_profile(role, rows)
 
 
