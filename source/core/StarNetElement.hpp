@@ -2,7 +2,7 @@
 
 #include "StarDataStream.hpp"
 #ifdef STAR_USE_RUST_NET_GROUP
-#include "StarRustNetScalar.h"
+#include "StarRustNetCompat.h"
 #include "StarRustNetVersion.h"
 #include <stdexcept>
 #endif
@@ -10,12 +10,12 @@
 namespace Star {
 #ifdef STAR_USE_RUST_NET_GROUP
 namespace NetElementDetail {
-inline uint64_t scalar(uint32_t mode, uint32_t bits, uint64_t value, uint64_t previous) {
-  SbNetScalarReply reply{};
-  if (sb_net_scalar_run(mode, bits, value, previous, &reply) != SB_NET_SCALAR_OK ||
-      reply.pulled != 0 || (mode == SB_NET_SCALAR_COMPAT && reply.value > 1))
-    throw std::logic_error("Invalid network element scalar result");
-  return reply.value;
+inline uint32_t compat(uint32_t mode, void const* storage, uint32_t argument = 0) {
+  uint32_t result = 0;
+  if (sb_net_compat_run(mode, storage, argument, &result) != SB_NET_COMPAT_OK ||
+      (mode == SB_NET_COMPAT_CHECK && result > 1))
+    throw std::logic_error("Invalid opaque network compatibility result");
+  return result;
 }
 inline uint64_t version(uint32_t mode, void const* storage) {
   uint64_t result = 0;
@@ -87,23 +87,36 @@ public:
   void setCompatibilityVersion(VersionNumber version);
   bool checkWithRules(NetCompatibilityRules const& rules) const;
 private:
+#ifdef STAR_USE_RUST_NET_GROUP
+  // Constant opaque initialization preserves native construction and copying.
+  // Rust defines ALL-FF as AnyVersion; no FFI constructor or destructor is needed.
+  SbNetCompatStorage m_compatState = SB_NET_COMPAT_ANY_INITIALIZER;
+#else
   VersionNumber m_netCompatibilityVersion = AnyVersion;
+#endif
 };
 
 inline VersionNumber NetElement::compatibilityVersion() const {
+#ifdef STAR_USE_RUST_NET_GROUP
+  return NetElementDetail::compat(SB_NET_COMPAT_VALUE, &m_compatState);
+#else
   return m_netCompatibilityVersion;
+#endif
 }
 
 inline void NetElement::setCompatibilityVersion(VersionNumber version) {
+#ifdef STAR_USE_RUST_NET_GROUP
+  NetElementDetail::compat(SB_NET_COMPAT_SET, &m_compatState, version);
+#else
   m_netCompatibilityVersion = version;
+#endif
 }
 
 inline bool NetElement::checkWithRules(NetCompatibilityRules const& rules) const {
 #ifdef STAR_USE_RUST_NET_GROUP
   // Keep the native no-read case: AnyVersion must not inspect rules.version().
-  if (m_netCompatibilityVersion != AnyVersion)
-    return NetElementDetail::scalar(SB_NET_SCALAR_COMPAT, 32,
-        m_netCompatibilityVersion, rules.version()) != 0;
+  if (compatibilityVersion() != AnyVersion)
+    return NetElementDetail::compat(SB_NET_COMPAT_CHECK, &m_compatState, rules.version()) != 0;
   return true;
 #else
   if (m_netCompatibilityVersion != AnyVersion)

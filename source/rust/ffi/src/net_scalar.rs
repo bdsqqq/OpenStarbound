@@ -71,6 +71,13 @@ pub(crate) fn counted_version_next(value: u64) -> u64 {
     scalar(VERSION_NEXT, 0, value, 0).value
 }
 
+/// Shares the existing compatibility arithmetic and exactly one accepted-entry
+/// diagnostic with opaque state, inside its caller's panic barrier.
+pub(crate) fn counted_compat(value: u32, rules: u32) -> u32 {
+    count_entry(COMPAT as usize);
+    scalar(COMPAT, 32, value as u64, rules as u64).value as u32
+}
+
 /// # Safety
 /// `out` must denote a live writable 16-byte object aligned to 8; see StarRustNetScalar.h.
 #[no_mangle]
