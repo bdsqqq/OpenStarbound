@@ -4,13 +4,16 @@
 namespace Star {
 
 uint64_t NetElementVersion::current() const {
+#ifdef STAR_USE_RUST_NET_GROUP
+  return NetElementDetail::version(SB_NET_VERSION_CURRENT, &m_state);
+#else
   return m_version;
+#endif
 }
 
 uint64_t NetElementVersion::increment() {
 #ifdef STAR_USE_RUST_NET_GROUP
-  m_version = NetElementDetail::scalar(SB_NET_SCALAR_VERSION_NEXT, 0, m_version, 0);
-  return m_version;
+  return NetElementDetail::version(SB_NET_VERSION_ADVANCE, &m_state);
 #else
   return ++m_version;
 #endif

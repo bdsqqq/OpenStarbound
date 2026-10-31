@@ -64,6 +64,13 @@ fn count_entry(mode: usize) {
     });
 }
 
+/// Shares the existing version arithmetic and accepted-entry diagnostic with
+/// the in-place version ABI, without entering a second extern panic barrier.
+pub(crate) fn counted_version_next(value: u64) -> u64 {
+    count_entry(VERSION_NEXT as usize);
+    scalar(VERSION_NEXT, 0, value, 0).value
+}
+
 /// # Safety
 /// `out` must denote a live writable 16-byte object aligned to 8; see StarRustNetScalar.h.
 #[no_mangle]

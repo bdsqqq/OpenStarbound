@@ -29,6 +29,9 @@
 #include "StarRustNetDynamic.h"
 #endif
 #ifdef STAR_USE_RUST_NET_GROUP
+#include "StarRustNetVersion.h"
+#endif
+#ifdef STAR_USE_RUST_NET_GROUP
 #include "StarRustNetOverride.h"
 #endif
 #ifdef STAR_USE_RUST_NET_GROUP
@@ -4583,6 +4586,15 @@ void ClientApplication::renderBehaviorScenario() {
     dynamicLeafJson.append(dynamicLeaves[op]);
   metadata = metadata.set("rustNetDynamic", JsonObject{
       {"main", dynamicMainJson}, {"allThreads", dynamicAllJson}, {"attemptedLeaves", dynamicLeafJson}});
+#endif
+#ifdef STAR_USE_RUST_NET_GROUP
+  JsonArray versionMain, versionAll;
+  for (uint32_t mode = 0; mode != SB_NET_VERSION_COUNT; ++mode) {
+    versionMain.append(sb_net_version_count(0, mode));
+    versionAll.append(sb_net_version_count(1, mode));
+  }
+  metadata = metadata.set("rustNetVersion", JsonObject{
+      {"main", versionMain}, {"allThreads", versionAll}});
 #endif
 #ifdef STAR_USE_RUST_NET_GROUP
   JsonArray overrideMain, overrideAll, overrideLeaves;

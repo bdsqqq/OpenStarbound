@@ -3,6 +3,7 @@
 #include "StarDataStream.hpp"
 #ifdef STAR_USE_RUST_NET_GROUP
 #include "StarRustNetScalar.h"
+#include "StarRustNetVersion.h"
 #include <stdexcept>
 #endif
 
@@ -16,6 +17,12 @@ inline uint64_t scalar(uint32_t mode, uint32_t bits, uint64_t value, uint64_t pr
     throw std::logic_error("Invalid network element scalar result");
   return reply.value;
 }
+inline uint64_t version(uint32_t mode, void const* storage) {
+  uint64_t result = 0;
+  if (sb_net_version_run(mode, storage, &result) != SB_NET_VERSION_OK)
+    throw std::logic_error("Invalid opaque network version result");
+  return result;
+}
 }
 #endif
 
@@ -27,7 +34,13 @@ public:
   uint64_t increment();
 
 private:
+#ifdef STAR_USE_RUST_NET_GROUP
+  // Rust defines the POD representation. Zero bytes preserve native constexpr
+  // construction; trivial C++ byte copies are part of the foreign-state ABI.
+  SbNetVersionStorage m_state{};
+#else
   uint64_t m_version = 0;
+#endif
 };
 
 // Primary interface for the composable network synchronizable element system.
