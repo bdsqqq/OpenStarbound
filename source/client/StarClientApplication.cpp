@@ -20,6 +20,9 @@
 #include "StarRustNetScalar.h"
 #endif
 #ifdef STAR_USE_RUST_NET_GROUP
+#include "StarRustNetSync.h"
+#endif
+#ifdef STAR_USE_RUST_NET_GROUP
 #include "StarRustNetGroup.h"
 #endif
 #ifdef STAR_USE_RUST_NET_FIELD
@@ -4518,6 +4521,24 @@ void ClientApplication::renderBehaviorScenario() {
   }
   metadata = metadata.set("rustNetScalar", JsonObject{
       {"main", scalarMainJson}, {"allThreads", scalarAllJson}});
+#endif
+#ifdef STAR_USE_RUST_NET_GROUP
+  uint64_t syncMain[SB_NET_SYNC_COUNT], syncAll[SB_NET_SYNC_COUNT], syncLeaves[SB_NET_SYNC_OP_COUNT];
+  for (uint32_t mode = 0; mode != SB_NET_SYNC_COUNT; ++mode) {
+    syncMain[mode] = sb_net_sync_count(0, mode);
+    syncAll[mode] = sb_net_sync_count(1, mode);
+  }
+  for (uint32_t op = 0; op != SB_NET_SYNC_OP_COUNT; ++op)
+    syncLeaves[op] = sb_net_sync_count(2, op);
+  JsonArray syncMainJson, syncAllJson, syncLeafJson;
+  for (uint32_t mode = 0; mode != SB_NET_SYNC_COUNT; ++mode) {
+    syncMainJson.append(syncMain[mode]);
+    syncAllJson.append(syncAll[mode]);
+  }
+  for (uint32_t op = 0; op != SB_NET_SYNC_OP_COUNT; ++op)
+    syncLeafJson.append(syncLeaves[op]);
+  metadata = metadata.set("rustNetSync", JsonObject{
+      {"main", syncMainJson}, {"allThreads", syncAllJson}, {"attemptedLeaves", syncLeafJson}});
 #endif
 #ifdef STAR_USE_RUST_NET_GROUP
   uint64_t groupMain[SB_NET_GROUP_COUNT], groupAll[SB_NET_GROUP_COUNT], groupLeaves[SB_NET_GROUP_OP_COUNT];

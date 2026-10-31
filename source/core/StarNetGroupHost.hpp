@@ -10,7 +10,8 @@ namespace Star { namespace NetGroupDetail {
 // Capture typed failures while their native expressions unwind, then rethrow
 // only after the Rust controller has returned. Never unwind C++ through Rust.
 template <typename Function>
-bool run(uint32_t mode, uint64_t fromVersion, Function&& function) {
+bool run(uint32_t mode, uint64_t fromVersion, Function&& function,
+    uint32_t (*entry)(uint32_t, void*, SbNetGroupHost, uint64_t, uint32_t*) = sb_net_group_run) {
   using F = typename std::remove_reference<Function>::type;
   struct Frame {
     F& function;
@@ -27,7 +28,7 @@ bool run(uint32_t mode, uint64_t fromVersion, Function&& function) {
     }
   } frame{function, {}};
   uint32_t written = 0;
-  auto status = sb_net_group_run(mode, &frame, &Frame::call, fromVersion, &written);
+  auto status = entry(mode, &frame, &Frame::call, fromVersion, &written);
   if (frame.error)
     std::rethrow_exception(frame.error);
   if (status != SB_NET_GROUP_OK || written > 1)
