@@ -4,6 +4,10 @@
 
 #include "StarConfig.hpp"
 
+#ifdef STAR_USE_RUST_FLAT_HASH_TABLE
+#include "StarFlatHashTableHost.hpp"
+#endif
+
 namespace Star {
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
@@ -422,6 +426,31 @@ auto FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::find(Key const&
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
 auto FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::find(Key const& key) -> iterator {
+#ifdef STAR_USE_RUST_FLAT_HASH_TABLE
+  Bucket* active = nullptr;
+  Value* activeValue = nullptr;
+  auto reply = FlatHashTableDetail::run(SB_FLAT_HASH_FIND, [&](uint32_t operation, size_t argument) -> size_t {
+    switch (operation) {
+      case SB_FLAT_HASH_SIZE: return m_buckets.size();
+      case SB_FLAT_HASH_HASH: return m_hash(key);
+      case SB_FLAT_HASH_LOAD:
+        active = &m_buckets[argument];
+        activeValue = active->valuePtr();
+        return activeValue ? 1 : 0;
+      case SB_FLAT_HASH_EQUALS:
+        return m_equals(m_getKey(*activeValue), key) ? 1 : 0;
+      // Keep the selected native bucket across equality callbacks, including
+      // reentry; do not reconstruct it from a potentially changed vector.
+      case SB_FLAT_HASH_ACTIVE_HASH: return active->hash;
+      default: FlatHashTableDetail::invalidOperation();
+    }
+  });
+  if (reply.found > 1)
+    FlatHashTableDetail::invalidOperation();
+  if (reply.found)
+    return iterator{m_buckets.data() + reply.index};
+  return end();
+#else
   if (m_buckets.empty())
     return end();
 
@@ -446,6 +475,7 @@ auto FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::find(Key const&
       return end();
     }
   }
+#endif
 }
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
@@ -491,16 +521,24 @@ constexpr double FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::Max
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
 auto FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::scan(Bucket* p) -> Bucket* {
+#ifdef STAR_USE_RUST_FLAT_HASH_TABLE
+  return FlatHashTableDetail::scan(p);
+#else
   while (p->isEmpty())
     ++p;
   return p;
+#endif
 }
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
 auto FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::scan(Bucket const* p) -> Bucket const* {
+#ifdef STAR_USE_RUST_FLAT_HASH_TABLE
+  return FlatHashTableDetail::scan(p);
+#else
   while (p->isEmpty())
     ++p;
   return p;
+#endif
 }
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>

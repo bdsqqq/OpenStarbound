@@ -10,6 +10,8 @@ mod id_map;
 pub use id_map::{sb_idmap_count, sb_idmap_run, SbIdMapHost, SbIdMapReply, SbIdMapRequest};
 mod bimap;
 pub use bimap::{sb_bimap_count, sb_bimap_run, SbBiMapHost, SbBiMapReply, SbBiMapRequest};
+mod flat_hash_table;
+pub use flat_hash_table::{sb_flat_hash_count, sb_flat_hash_run, SbFlatHashReply};
 mod uuid;
 pub use uuid::{sb_uuid_compare, sb_uuid_count, sb_uuid_from_bytes, sb_uuid_hash};
 mod ordered_set;

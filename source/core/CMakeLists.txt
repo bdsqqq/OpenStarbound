@@ -21,6 +21,8 @@ SET (star_core_HEADERS
     StarOrderedSetHost.hpp
     StarSetHost.hpp
     StarRustSet.h
+    StarRustFlatHashTable.h
+    StarFlatHashTableHost.hpp
     StarBlockAllocator.hpp
     StarBuffer.hpp
     StarByteArray.hpp

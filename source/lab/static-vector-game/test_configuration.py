@@ -13,19 +13,20 @@ class ConfigurationTests(unittest.TestCase):
         return ['-D' + key for key, value in config.profiles()['candidate'].items() if value == 'ON']
 
     def cache(self, role):
-        values = dict(config.profiles()[role], **{config.BIMAP: 'OFF', config.UUID: 'OFF', config.ORDERED_SET: 'OFF', config.SET: 'OFF'})
+        values = dict(config.profiles()[role], **{config.BIMAP: 'OFF', config.UUID: 'OFF', config.ORDERED_SET: 'OFF', config.SET: 'OFF', config.FLAT_HASH_TABLE: 'OFF'})
         return '\n'.join(key + ':BOOL=' + value for key, value in values.items())
 
     def test_current_source_defaults(self):
         config.validate_source()
         self.assertEqual(len(config.SELECTORS), 30)
         for role in config.profiles():
-            self.assertEqual(len(config.CURRENT_SELECTORS), 34)
+            self.assertEqual(len(config.CURRENT_SELECTORS), 35)
             self.assertEqual(len(config.configure_options(role)), len(config.CURRENT_SELECTORS))
             self.assertIn('-DSTAR_USE_RUST_BIMAP=OFF', config.configure_options(role))
             self.assertIn('-DSTAR_USE_RUST_UUID=OFF', config.configure_options(role))
             self.assertIn('-DSTAR_USE_RUST_ORDERED_SET=OFF', config.configure_options(role))
             self.assertIn('-DSTAR_USE_RUST_SET=OFF', config.configure_options(role))
+            self.assertIn('-DSTAR_USE_RUST_FLAT_HASH_TABLE=OFF', config.configure_options(role))
 
     def test_profiles_extend_existing_policy(self):
         profiles = config.profiles()
@@ -58,6 +59,7 @@ class ConfigurationTests(unittest.TestCase):
         bad = [self.flags()[:-1], self.flags() + self.flags()[:1],
                self.flags() + ['-DSTAR_USE_RUST_FAKE'],
                self.flags() + ['-DSTAR_USE_RUST_BIMAP'],
+               self.flags() + ['-DSTAR_USE_RUST_FLAT_HASH_TABLE'],
                self.flags() + ['-DSTAR_USE_RUST_SET'],
                self.flags() + ['-DSTAR_USE_RUST_ORDERED_SET'],
                self.flags() + ['-DSTAR_USE_RUST_UUID'],
@@ -70,7 +72,7 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_zero_definition_is_not_off(self):
         for flags in [['-DSTAR_USE_RUST_LINE_QUERY=0'], ['-D', 'STAR_USE_RUST_LINE_QUERY=0'],
-                      ['-DSTAR_USE_RUST_STATIC_VECTOR=0'], ['-DSTAR_USE_RUST_SET=0'], ['-DSTAR_USE_RUST_ORDERED_SET=0'], ['-DSTAR_USE_RUST_UUID=0']]:
+                      ['-DSTAR_USE_RUST_STATIC_VECTOR=0'], ['-DSTAR_USE_RUST_FLAT_HASH_TABLE=0'], ['-DSTAR_USE_RUST_SET=0'], ['-DSTAR_USE_RUST_ORDERED_SET=0'], ['-DSTAR_USE_RUST_UUID=0']]:
             with self.subTest(flags=flags), self.assertRaisesRegex(ValueError, 'bare positive'):
                 config.validate_flags('reference', flags)
 
@@ -88,6 +90,9 @@ class ConfigurationTests(unittest.TestCase):
                      candidate + '\nSTAR_USE_RUST_BIMAP:BOOL=OFF',
                      candidate.replace('STAR_USE_RUST_STATIC_VECTOR:BOOL=ON', 'STAR_USE_RUST_BIMAP:BOOL=OFF'),
                      candidate.replace('STAR_USE_RUST_BIMAP', 'STAR_USE_RUST_FAKE'),
+                     candidate.replace('STAR_USE_RUST_FLAT_HASH_TABLE:BOOL=OFF', 'STAR_USE_RUST_FLAT_HASH_TABLE:BOOL=ON'),
+                     candidate.replace('STAR_USE_RUST_FLAT_HASH_TABLE:BOOL=OFF', ''),
+                     candidate + '\nSTAR_USE_RUST_FLAT_HASH_TABLE:BOOL=OFF',
                      candidate.replace('STAR_USE_RUST_SET:BOOL=OFF', 'STAR_USE_RUST_SET:BOOL=ON'),
                      candidate.replace('STAR_USE_RUST_SET:BOOL=OFF', ''),
                      candidate + '\nSTAR_USE_RUST_SET:BOOL=OFF',
@@ -114,7 +119,7 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_source_default_duplicate_missing_or_unknown_mutants_rejected(self):
         text = (config.ROOT / 'source/CMakeLists.txt').read_text()
-        for selector in (config.STATIC_VECTOR, config.BIMAP, config.UUID, config.ORDERED_SET, config.SET):
+        for selector in (config.STATIC_VECTOR, config.BIMAP, config.UUID, config.ORDERED_SET, config.SET, config.FLAT_HASH_TABLE):
             line = next(line for line in text.splitlines(True) if line.startswith('option(' + selector + ' '))
             bad = [text.replace(line, line.replace('OFF)', 'ON)')), text + line,
                    text.replace(line, ''), text.replace(line, line.replace(selector, 'STAR_USE_RUST_FAKE'))]

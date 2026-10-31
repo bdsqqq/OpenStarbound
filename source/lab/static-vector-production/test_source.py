@@ -33,6 +33,9 @@ ORDERED_SET_MEMBER = b" OR STAR_USE_RUST_ORDERED_SET)"
 SET_OPTION = b'option(STAR_USE_RUST_SET "Use experimental Rust set/hash-set controllers/policy" OFF)\n'
 SET_DEFINE = b"if(STAR_USE_RUST_SET)\n  add_compile_definitions(STAR_USE_RUST_SET)\nendif()\n\n"
 SET_MEMBER = b" OR STAR_USE_RUST_SET)"
+FLAT_HASH_OPTION = b'option(STAR_USE_RUST_FLAT_HASH_TABLE "Use experimental Rust flat-hash probe controllers" OFF)\n'
+FLAT_HASH_DEFINE = b"if(STAR_USE_RUST_FLAT_HASH_TABLE)\n  add_compile_definitions(STAR_USE_RUST_FLAT_HASH_TABLE)\nendif()\n\n"
+FLAT_HASH_MEMBER = b" OR STAR_USE_RUST_FLAT_HASH_TABLE)"
 
 
 def require(condition, label):
@@ -108,6 +111,11 @@ def check_define(cmake):
 
 
 def normalize_current_cmake(cmake):
+    require(cmake.count(FLAT_HASH_OPTION) == 1 and cmake.count(FLAT_HASH_DEFINE) == 1 and
+            cmake.count(FLAT_HASH_MEMBER) == 1 and aggregate_gate(cmake).count(b"STAR_USE_RUST_FLAT_HASH_TABLE") == 1,
+            "FlatHashTable integration shape")
+    cmake = cmake.replace(FLAT_HASH_OPTION, b"").replace(FLAT_HASH_DEFINE, b"").replace(FLAT_HASH_MEMBER, b")")
+    require(b"STAR_USE_RUST_FLAT_HASH_TABLE" not in cmake, "FlatHashTable integration shape")
     require(cmake.count(SET_OPTION) == 1 and cmake.count(SET_DEFINE) == 1 and
             cmake.count(SET_MEMBER) == 1 and aggregate_gate(cmake).count(b"STAR_USE_RUST_SET") == 1,
             "Set integration shape")
@@ -290,6 +298,16 @@ class SourceContract(unittest.TestCase):
         for mutant in bad:
             with self.subTest(size=len(mutant)):
                 self.reject("Set integration shape", normalize_current_cmake, mutant)
+
+    def test_bad_flat_hash_integration(self):
+        bad = [self.current_cmake.replace(FLAT_HASH_OPTION, FLAT_HASH_OPTION.replace(b" OFF)", b" ON)"), 1),
+               self.current_cmake.replace(FLAT_HASH_OPTION, b"", 1), self.current_cmake + FLAT_HASH_OPTION,
+               self.current_cmake.replace(b" OR STAR_USE_RUST_FLAT_HASH_TABLE", b"", 1),
+               self.current_cmake.replace(FLAT_HASH_DEFINE, b"add_compile_definitions(STAR_USE_RUST_FLAT_HASH_TABLE)\n\n", 1),
+               self.current_cmake + b"\nset(STAR_USE_RUST_FLAT_HASH_TABLE ON)\n"]
+        for mutant in bad:
+            with self.subTest(size=len(mutant)):
+                self.reject("FlatHashTable integration shape", normalize_current_cmake, mutant)
 
     def test_bad_extra_runtime_configuration(self):
         mutant = self.cmake + b"\nset(STAR_RUST_TARGET_DIR unexpected)\n"

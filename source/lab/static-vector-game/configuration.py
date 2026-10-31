@@ -16,7 +16,8 @@ BIMAP = 'STAR_USE_RUST_BIMAP'
 UUID = 'STAR_USE_RUST_UUID'
 ORDERED_SET = 'STAR_USE_RUST_ORDERED_SET'
 SET = 'STAR_USE_RUST_SET'
-CURRENT_SELECTORS = (*SELECTORS, BIMAP, UUID, ORDERED_SET, SET)
+FLAT_HASH_TABLE = 'STAR_USE_RUST_FLAT_HASH_TABLE'
+CURRENT_SELECTORS = (*SELECTORS, BIMAP, UUID, ORDERED_SET, SET, FLAT_HASH_TABLE)
 
 
 def need(ok, why):
@@ -51,7 +52,7 @@ def validate_profile(role, values):
 def configure_options(role):
     validate_source()
     need(role in profiles(), 'exact reference/candidate role required')
-    values = dict(profiles()[role], **{BIMAP: 'OFF', UUID: 'OFF', ORDERED_SET: 'OFF', SET: 'OFF'})
+    values = dict(profiles()[role], **{BIMAP: 'OFF', UUID: 'OFF', ORDERED_SET: 'OFF', SET: 'OFF', FLAT_HASH_TABLE: 'OFF'})
     return ['-D' + key + '=' + value for key, value in sorted(values.items())]
 
 
@@ -66,6 +67,7 @@ def validate_cache(role, text):
     need(rows.pop(UUID) == 'OFF', 'UUID must remain OFF')
     need(rows.pop(ORDERED_SET) == 'OFF', 'OrderedSet must remain OFF')
     need(rows.pop(SET) == 'OFF', 'Set must remain OFF')
+    need(rows.pop(FLAT_HASH_TABLE) == 'OFF', 'FlatHashTable must remain OFF')
     validate_profile(role, rows)
 
 
