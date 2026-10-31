@@ -8,14 +8,24 @@ sh scripts/migration-inventory.sh --check
 sh scripts/migration-inventory.sh --self-test
 ```
 
-`--check` computes expected bytes without writing or repairing anything. run it directly in validation, never after automatic regeneration. the primary integration agent owns adding that invocation to cmake/ci; this directory does not claim that integration is already wired. `--root /path/to/fixture` supports isolated negative tests.
+`catalog.json` is generated local data, not tracked code. After a fresh checkout,
+run `--write` once to create it. Keep `--check` in subsequent validation: ignoring
+the output removes commit churn, not the unknown-file or drift checks.
+
+`--check` computes expected bytes without writing or repairing anything. For an
+existing local catalog, run it directly so drift stays visible. Fresh-checkout
+CI explicitly generates its disposable catalog, checks deterministic output and
+runs `--self-test`; it no longer compares against a committed snapshot. The
+self-tests still verify that unknown/ambiguous sources and stale/corrupted
+outputs fail without repair. `--root /path/to/fixture` supports isolated negative
+tests.
 
 ## inclusion and evidence
 
 - all native headers, sources, inline implementations and existing rust under `source/`, `lib/`, `scripts/` and `attic/`; c/c++ source/header templates too. `.py`/`.sh` under `scripts/`, `attic/` and `source/lab/` are supplemental tooling/harness records.
 - filesystem discovery includes untracked, inactive and header-only files. no target membership is **not** proof of dead code. inactive utility disposition is an explicit reviewed filename list; it is not inferred from absence of a target.
 - builds, rust `target/`, generated inventory outputs and the inventory implementation directory are excluded before traversal. assets/lua/mod data, prebuilt sdk binaries, downloaded dependencies outside these roots and build-generated source are outside this native migration registry. missing vendored imgui references remain visible as extraction limits, not imaginary file records.
-- records carry a file coordinate, classification rule, disposition and direct cmake source/target coordinates. sorted source/config/generator hashes identify the current working-tree inputs without unstable timestamps, absolute machine paths or a commit id that changes when this catalog is committed. regenerate after other agents finish editing those inputs.
+- records carry a file coordinate, classification rule, disposition and direct cmake source/target coordinates. sorted source/config/generator hashes identify the current working-tree inputs without unstable timestamps, absolute machine paths or a commit id that would change with every checkpoint. regenerate after other agents finish editing those inputs.
 
 ## static cmake limits
 

@@ -13,7 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Verify the checked-in source inventory without regenerating it
+      - name: Classify current sources into a disposable inventory
+        run: sh scripts/migration-inventory.sh --write
+      - name: Verify deterministic inventory output
         run: sh scripts/migration-inventory.sh --check
       - name: Exercise stale-output and source-drift detection
         run: sh scripts/migration-inventory.sh --self-test
