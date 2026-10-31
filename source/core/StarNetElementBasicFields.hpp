@@ -5,6 +5,9 @@
 #include "StarNetElement.hpp"
 #include "StarString.hpp"
 #include "StarByteArray.hpp"
+#ifdef STAR_USE_RUST_NET_FIELD
+#include "StarNetFieldHost.hpp"
+#endif
 
 namespace Star {
 
@@ -51,6 +54,10 @@ protected:
   virtual void updated();
 
 private:
+#ifdef STAR_USE_RUST_NET_FIELD
+  void netFieldConstLeaf(uint32_t leaf, SbNetFieldReply& reply, DataStream* stream = nullptr) const;
+  void netFieldMutableLeaf(uint32_t leaf, SbNetFieldReply& reply, DataStream* stream = nullptr);
+#endif
   NetElementVersion const* m_netVersion = nullptr;
   uint64_t m_latestUpdateVersion = 0;
   T m_value = T();
@@ -141,6 +148,43 @@ private:
 typedef NetElementData<String> NetElementString;
 typedef NetElementData<ByteArray> NetElementBytes;
 
+#ifdef STAR_USE_RUST_NET_FIELD
+template <typename T>
+void NetElementBasicField<T>::netFieldConstLeaf(uint32_t leaf, SbNetFieldReply& reply, DataStream* stream) const {
+  switch (leaf) {
+  case SB_NET_FIELD_HAS_PENDING: reply.a = bool(m_pendingInterpolatedValues); break;
+  case SB_NET_FIELD_PENDING_NONEMPTY: reply.a = !m_pendingInterpolatedValues->empty(); break;
+  case SB_NET_FIELD_NEXT_READY:
+    reply.a = !m_pendingInterpolatedValues->empty() && m_pendingInterpolatedValues->first().first <= 0.0f;
+    break;
+  case SB_NET_FIELD_LAST_AVAILABLE:
+    reply.a = m_pendingInterpolatedValues && !m_pendingInterpolatedValues->empty();
+    break;
+  case SB_NET_FIELD_LATEST_VERSION: reply.a = m_latestUpdateVersion; break;
+  case SB_NET_FIELD_WRITE_LAST: writeData(*stream, m_pendingInterpolatedValues->last().second); break;
+  case SB_NET_FIELD_WRITE_VALUE: writeData(*stream, m_value); break;
+  default: throw std::logic_error("Invalid NetElementBasicField const leaf");
+  }
+}
+
+template <typename T>
+void NetElementBasicField<T>::netFieldMutableLeaf(uint32_t leaf, SbNetFieldReply& reply, DataStream* stream) {
+  // Keep typed assignments and virtual hooks whole: a throwing operation may
+  // already have changed a value or popped a pending entry. Do not roll it back.
+  switch (leaf) {
+  case SB_NET_FIELD_UPDATED: updated(); break;
+  case SB_NET_FIELD_SET_LATEST: m_latestUpdateVersion = m_netVersion ? m_netVersion->current() : 0; break;
+  case SB_NET_FIELD_CLEAR_PENDING: m_pendingInterpolatedValues->clear(); break;
+  case SB_NET_FIELD_EMPLACE_PENDING: m_pendingInterpolatedValues.emplace(); break;
+  case SB_NET_FIELD_ASSIGN_LAST: m_value = m_pendingInterpolatedValues->takeLast().second; break;
+  case SB_NET_FIELD_RESET_PENDING: m_pendingInterpolatedValues.reset(); break;
+  case SB_NET_FIELD_ASSIGN_FIRST: m_value = m_pendingInterpolatedValues->takeFirst().second; break;
+  case SB_NET_FIELD_READ_VALUE: readData(*stream, m_value); break;
+  default: netFieldConstLeaf(leaf, reply, stream); break;
+  }
+}
+
+#endif
 template <typename T>
 T const& NetElementBasicField<T>::get() const {
   return m_value;
@@ -148,17 +192,38 @@ T const& NetElementBasicField<T>::get() const {
 
 template <typename T>
 void NetElementBasicField<T>::set(T const& value) {
+#ifdef STAR_USE_RUST_NET_FIELD
+  NetFieldDetail::run(SB_NET_FIELD_SET, 0, [&](uint32_t leaf, uint64_t, SbNetFieldReply& reply) {
+    switch (leaf) {
+    case SB_NET_FIELD_CHANGED:
+      if (!(m_value == value)) reply.a = 1;
+      break;
+    case SB_NET_FIELD_PUSH_COPY: push(value); break;
+    default: throw std::logic_error("Invalid NetElementBasicField set leaf");
+    }
+  });
+#else
   if (!(m_value == value))
     push(value);
+#endif
 }
 
 template <typename T>
 void NetElementBasicField<T>::push(T value) {
+#ifdef STAR_USE_RUST_NET_FIELD
+  NetFieldDetail::run(SB_NET_FIELD_PUSH, 0, [&](uint32_t leaf, uint64_t, SbNetFieldReply& reply) {
+    if (leaf == SB_NET_FIELD_ASSIGN_PUSH)
+      m_value = std::move(value);
+    else
+      netFieldMutableLeaf(leaf, reply);
+  });
+#else
   m_value = std::move(value);
   updated();
   m_latestUpdateVersion = m_netVersion ? m_netVersion->current() : 0;
   if (m_pendingInterpolatedValues)
     m_pendingInterpolatedValues->clear();
+#endif
 }
 
 template <typename T>
@@ -169,12 +234,21 @@ bool NetElementBasicField<T>::pullUpdated() {
 template <typename T>
 template <typename Mutator>
 void NetElementBasicField<T>::update(Mutator&& mutator) {
+#ifdef STAR_USE_RUST_NET_FIELD
+  NetFieldDetail::run(SB_NET_FIELD_UPDATE, 0, [&](uint32_t leaf, uint64_t, SbNetFieldReply& reply) {
+    if (leaf == SB_NET_FIELD_MUTATE) {
+      if (mutator(m_value)) reply.a = 1;
+    } else
+      netFieldMutableLeaf(leaf, reply);
+  });
+#else
   if (mutator(m_value)) {
     updated();
     m_latestUpdateVersion = m_netVersion ? m_netVersion->current() : 0;
     if (m_pendingInterpolatedValues)
       m_pendingInterpolatedValues->clear();
   }
+#endif
 }
 
 template <typename T>
@@ -185,21 +259,52 @@ void NetElementBasicField<T>::initNetVersion(NetElementVersion const* version) {
 
 template <typename T>
 void NetElementBasicField<T>::enableNetInterpolation(float) {
+#ifdef STAR_USE_RUST_NET_FIELD
+  NetFieldDetail::run(SB_NET_FIELD_ENABLE, 0, [&](uint32_t leaf, uint64_t, SbNetFieldReply& reply) {
+    netFieldMutableLeaf(leaf, reply);
+  });
+#else
   if (!m_pendingInterpolatedValues)
     m_pendingInterpolatedValues.emplace();
+#endif
 }
 
 template <typename T>
 void NetElementBasicField<T>::disableNetInterpolation() {
+#ifdef STAR_USE_RUST_NET_FIELD
+  NetFieldDetail::run(SB_NET_FIELD_DISABLE, 0, [&](uint32_t leaf, uint64_t, SbNetFieldReply& reply) {
+    netFieldMutableLeaf(leaf, reply);
+  });
+#else
   if (m_pendingInterpolatedValues) {
     if (!m_pendingInterpolatedValues->empty())
       m_value = m_pendingInterpolatedValues->takeLast().second;
     m_pendingInterpolatedValues.reset();
   }
+#endif
 }
 
 template <typename T>
 void NetElementBasicField<T>::tickNetInterpolation(float dt) {
+#ifdef STAR_USE_RUST_NET_FIELD
+  using Iterator = typename Deque<pair<float, T>>::iterator;
+  std::optional<std::pair<Iterator, Iterator>> range;
+  NetFieldDetail::run(SB_NET_FIELD_TICK, 0, [&](uint32_t leaf, uint64_t, SbNetFieldReply& reply) {
+    switch (leaf) {
+    case SB_NET_FIELD_ENTER_RANGE: {
+      auto begin = m_pendingInterpolatedValues->begin();
+      auto end = m_pendingInterpolatedValues->end();
+      range.emplace(begin, end);
+      break;
+    }
+    case SB_NET_FIELD_MORE: reply.a = range->first != range->second; break;
+    case SB_NET_FIELD_DECREMENT: range->first->first -= dt; break;
+    case SB_NET_FIELD_ADVANCE: ++range->first; break;
+    case SB_NET_FIELD_LEAVE_RANGE: range.reset(); break;
+    default: netFieldMutableLeaf(leaf, reply); break;
+    }
+  });
+#else
   if (m_pendingInterpolatedValues) {
     for (auto& p : *m_pendingInterpolatedValues)
       p.first -= dt;
@@ -208,30 +313,48 @@ void NetElementBasicField<T>::tickNetInterpolation(float dt) {
       updated();
     }
   }
+#endif
 }
 
 template <typename T>
 void NetElementBasicField<T>::netStore(DataStream& ds, NetCompatibilityRules rules) const {
   if (!checkWithRules(rules)) return;
+#ifdef STAR_USE_RUST_NET_FIELD
+  NetFieldDetail::run(SB_NET_FIELD_STORE, 0, [&](uint32_t leaf, uint64_t, SbNetFieldReply& reply) {
+    netFieldConstLeaf(leaf, reply, &ds);
+  });
+#else
   if (m_pendingInterpolatedValues && !m_pendingInterpolatedValues->empty())
     writeData(ds, m_pendingInterpolatedValues->last().second);
   else
     writeData(ds, m_value);
+#endif
 }
 
 template <typename T>
 void NetElementBasicField<T>::netLoad(DataStream& ds, NetCompatibilityRules rules) {
   if (!checkWithRules(rules)) return;
+#ifdef STAR_USE_RUST_NET_FIELD
+  NetFieldDetail::run(SB_NET_FIELD_LOAD, 0, [&](uint32_t leaf, uint64_t, SbNetFieldReply& reply) {
+    netFieldMutableLeaf(leaf, reply, &ds);
+  });
+#else
   readData(ds, m_value);
   m_latestUpdateVersion = m_netVersion ? m_netVersion->current() : 0;
   updated();
   if (m_pendingInterpolatedValues)
     m_pendingInterpolatedValues->clear();
+#endif
 }
 
 template <typename T>
 bool NetElementBasicField<T>::writeNetDelta(DataStream& ds, uint64_t fromVersion, NetCompatibilityRules rules) const {
   if (!checkWithRules(rules)) return false;
+#ifdef STAR_USE_RUST_NET_FIELD
+  return NetFieldDetail::run(SB_NET_FIELD_WRITE, fromVersion, [&](uint32_t leaf, uint64_t, SbNetFieldReply& reply) {
+    netFieldConstLeaf(leaf, reply, &ds);
+  });
+#else
   if (m_latestUpdateVersion < fromVersion)
     return false;
 
@@ -241,12 +364,26 @@ bool NetElementBasicField<T>::writeNetDelta(DataStream& ds, uint64_t fromVersion
     writeData(ds, m_value);
 
   return true;
+#endif
 }
 
 template <typename T>
 void NetElementBasicField<T>::readNetDelta(DataStream& ds, float interpolationTime, NetCompatibilityRules rules) {
   if (!checkWithRules(rules)) return;
   T t;
+#ifdef STAR_USE_RUST_NET_FIELD
+  NetFieldDetail::run(SB_NET_FIELD_READ, 0, [&](uint32_t leaf, uint64_t, SbNetFieldReply& reply) {
+    switch (leaf) {
+    case SB_NET_FIELD_READ_INCOMING: readData(ds, t); break;
+    case SB_NET_FIELD_ACCEPT_DELAY:
+      reply.a = interpolationTime > 0.0f && (m_pendingInterpolatedValues->empty() || interpolationTime >= m_pendingInterpolatedValues->last().first);
+      break;
+    case SB_NET_FIELD_APPEND_INCOMING: m_pendingInterpolatedValues->append({interpolationTime, std::move(t)}); break;
+    case SB_NET_FIELD_ASSIGN_INCOMING: m_value = std::move(t); break;
+    default: netFieldMutableLeaf(leaf, reply); break;
+    }
+  });
+#else
   readData(ds, t);
   m_latestUpdateVersion = m_netVersion ? m_netVersion->current() : 0;
   if (m_pendingInterpolatedValues) {
@@ -265,6 +402,7 @@ void NetElementBasicField<T>::readNetDelta(DataStream& ds, float interpolationTi
     m_value = std::move(t);
     updated();
   }
+#endif
 }
 
 template <typename T>

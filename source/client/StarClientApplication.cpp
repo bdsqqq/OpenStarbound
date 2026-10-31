@@ -16,6 +16,9 @@
 #ifdef STAR_USE_RUST_SET
 #include "StarRustSet.h"
 #endif
+#ifdef STAR_USE_RUST_NET_FIELD
+#include "StarRustNetField.h"
+#endif
 #ifdef STAR_USE_RUST_NET_SIGNAL
 #include "StarRustNetSignal.h"
 #endif
@@ -4495,6 +4498,24 @@ void ClientApplication::renderBehaviorScenario() {
   };
 #ifdef STAR_USE_RUST_UUID
   metadata = metadata.set("rustUuidCalls", JsonArray{sb_uuid_count(0), sb_uuid_count(1), sb_uuid_count(2)});
+#endif
+#ifdef STAR_USE_RUST_NET_FIELD
+  uint64_t fieldMain[SB_NET_FIELD_COUNT], fieldAll[SB_NET_FIELD_COUNT], fieldLeaves[SB_NET_FIELD_OP_COUNT];
+  for (uint32_t mode = 0; mode != SB_NET_FIELD_COUNT; ++mode) {
+    fieldMain[mode] = sb_net_field_count(0, mode);
+    fieldAll[mode] = sb_net_field_count(1, mode);
+  }
+  for (uint32_t op = 0; op != SB_NET_FIELD_OP_COUNT; ++op)
+    fieldLeaves[op] = sb_net_field_count(2, op);
+  JsonArray fieldMainJson, fieldAllJson, fieldLeafJson;
+  for (uint32_t mode = 0; mode != SB_NET_FIELD_COUNT; ++mode) {
+    fieldMainJson.append(fieldMain[mode]);
+    fieldAllJson.append(fieldAll[mode]);
+  }
+  for (uint32_t op = 0; op != SB_NET_FIELD_OP_COUNT; ++op)
+    fieldLeafJson.append(fieldLeaves[op]);
+  metadata = metadata.set("rustNetField", JsonObject{
+      {"main", fieldMainJson}, {"allThreads", fieldAllJson}, {"attemptedLeaves", fieldLeafJson}});
 #endif
 #ifdef STAR_USE_RUST_NET_SIGNAL
   uint64_t signalMain[SB_NET_SIGNAL_COUNT], signalAll[SB_NET_SIGNAL_COUNT], signalLeaves[SB_NET_SIGNAL_OP_COUNT];

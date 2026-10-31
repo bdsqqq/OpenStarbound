@@ -51,6 +51,9 @@ TIME_MEMBER = b" OR STAR_USE_RUST_TIME)"
 NET_SIGNAL_OPTION = b'option(STAR_USE_RUST_NET_SIGNAL "Use Rust network signal queue policy" OFF)\n'
 NET_SIGNAL_DEFINE = b"if(STAR_USE_RUST_NET_SIGNAL)\n  add_compile_definitions(STAR_USE_RUST_NET_SIGNAL)\nendif()\n\n"
 NET_SIGNAL_MEMBER = b" OR STAR_USE_RUST_NET_SIGNAL)"
+NET_FIELD_OPTION = b'option(STAR_USE_RUST_NET_FIELD "Use Rust basic network-field policy" OFF)\n'
+NET_FIELD_DEFINE = b"if(STAR_USE_RUST_NET_FIELD)\n  add_compile_definitions(STAR_USE_RUST_NET_FIELD)\nendif()\n\n"
+NET_FIELD_MEMBER = b" OR STAR_USE_RUST_NET_FIELD)"
 
 
 def require(condition, label):
@@ -126,6 +129,11 @@ def check_define(cmake):
 
 
 def normalize_current_cmake(cmake):
+    require(cmake.count(NET_FIELD_OPTION) == 1 and cmake.count(NET_FIELD_DEFINE) == 1 and
+            cmake.count(NET_FIELD_MEMBER) == 1 and aggregate_gate(cmake).count(b"STAR_USE_RUST_NET_FIELD") == 1,
+            "NetField integration shape")
+    cmake = cmake.replace(NET_FIELD_OPTION, b"").replace(NET_FIELD_DEFINE, b"").replace(NET_FIELD_MEMBER, b")")
+    require(b"STAR_USE_RUST_NET_FIELD" not in cmake, "NetField integration shape")
     require(cmake.count(NET_SIGNAL_OPTION) == 1 and cmake.count(NET_SIGNAL_DEFINE) == 1 and
             cmake.count(NET_SIGNAL_MEMBER) == 1 and aggregate_gate(cmake).count(b"STAR_USE_RUST_NET_SIGNAL") == 1,
             "NetSignal integration shape")
@@ -398,6 +406,16 @@ class SourceContract(unittest.TestCase):
         for mutant in bad:
             with self.subTest(size=len(mutant)):
                 self.reject("NetSignal integration shape", normalize_current_cmake, mutant)
+
+    def test_bad_net_field_integration(self):
+        bad = [self.current_cmake.replace(NET_FIELD_OPTION, NET_FIELD_OPTION.replace(b" OFF)", b" ON)"), 1),
+               self.current_cmake.replace(NET_FIELD_OPTION, b"", 1), self.current_cmake + NET_FIELD_OPTION,
+               self.current_cmake.replace(b" OR STAR_USE_RUST_NET_FIELD", b"", 1),
+               self.current_cmake.replace(NET_FIELD_DEFINE, b"add_compile_definitions(STAR_USE_RUST_NET_FIELD)\n\n", 1),
+               self.current_cmake + b"\nset(STAR_USE_RUST_NET_FIELD ON)\n"]
+        for mutant in bad:
+            with self.subTest(size=len(mutant)):
+                self.reject("NetField integration shape", normalize_current_cmake, mutant)
 
     def test_bad_extra_runtime_configuration(self):
         mutant = self.cmake + b"\nset(STAR_RUST_TARGET_DIR unexpected)\n"

@@ -23,6 +23,7 @@ SET (star_core_tests_SOURCES
       clock_test.cpp
       time_conversion_test.cpp
       net_signal_test.cpp
+      net_field_test.cpp
       color_test.cpp
       container_test.cpp
       encode_test.cpp
