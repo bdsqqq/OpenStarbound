@@ -12,6 +12,8 @@ mod bimap;
 pub use bimap::{sb_bimap_count, sb_bimap_run, SbBiMapHost, SbBiMapReply, SbBiMapRequest};
 mod net_dynamic;
 pub use net_dynamic::{sb_net_dynamic_run, sb_net_dynamic_count};
+mod net_float;
+pub use net_float::{sb_net_float_run, sb_net_float_count};
 mod net_override;
 pub use net_override::{sb_net_override_run, sb_net_override_count};
 mod net_map;

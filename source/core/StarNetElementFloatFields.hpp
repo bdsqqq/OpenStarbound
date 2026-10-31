@@ -4,6 +4,10 @@
 
 #include "StarNetElement.hpp"
 #include "StarInterpolation.hpp"
+#ifdef STAR_USE_RUST_NET_FIELD
+#include "StarNetGroupHost.hpp"
+#include "StarRustNetFloat.h"
+#endif
 
 namespace Star {
 
@@ -69,6 +73,27 @@ T NetElementFloating<T>::get() const {
 
 template <typename T>
 void NetElementFloating<T>::set(T value) {
+#ifdef STAR_USE_RUST_NET_FIELD
+  NetGroupDetail::run(SB_NET_FLOAT_SET, 0, [&](uint32_t leaf, uint64_t, SbNetFloatReply& reply) {
+    switch (leaf) {
+    case SB_NET_FLOAT_VALUE_DIFFERS:
+      if (m_value != value) reply.a = 1; else reply.a = 0;
+      break;
+    case SB_NET_FLOAT_ENCODE_DIFFERS:
+      if (!m_fixedPointBase || round(m_value / *m_fixedPointBase) != round(value / *m_fixedPointBase)) reply.a = 1;
+      else reply.a = 0;
+      break;
+    case SB_NET_FLOAT_CAPTURE_VERSION: m_latestUpdateVersion = m_netVersion ? m_netVersion->current() : 0; break;
+    case SB_NET_FLOAT_ASSIGN_INPUT: m_value = value; break;
+    case SB_NET_FLOAT_HAS_POINTS:
+      if (m_interpolationDataPoints) reply.a = 1; else reply.a = 0;
+      break;
+    case SB_NET_FLOAT_CLEAR_POINTS: m_interpolationDataPoints->clear(); break;
+    case SB_NET_FLOAT_APPEND_ZERO: m_interpolationDataPoints->append({0.0f, m_value}); break;
+    default: throw std::logic_error("Invalid floating field set leaf");
+    }
+  }, sb_net_float_run);
+#else
   if (m_value != value) {
     // Only mark the step as updated here if it actually would change the
     // transmitted value.
@@ -82,6 +107,7 @@ void NetElementFloating<T>::set(T value) {
       m_interpolationDataPoints->append({0.0f, m_value});
     }
   }
+#endif
 }
 
 template <typename T>
@@ -103,22 +129,83 @@ void NetElementFloating<T>::initNetVersion(NetElementVersion const* version) {
 template <typename T>
 void NetElementFloating<T>::enableNetInterpolation(float extrapolationHint) {
   m_extrapolation = extrapolationHint;
+#ifdef STAR_USE_RUST_NET_FIELD
+  NetGroupDetail::run(SB_NET_FLOAT_ENABLE, 0, [&](uint32_t leaf, uint64_t, SbNetFloatReply& reply) {
+    switch (leaf) {
+    case SB_NET_FLOAT_HAS_POINTS:
+      if (m_interpolationDataPoints) reply.a = 1; else reply.a = 0;
+      break;
+    case SB_NET_FLOAT_EMPLACE_POINTS: m_interpolationDataPoints.emplace(); break;
+    case SB_NET_FLOAT_APPEND_ZERO: m_interpolationDataPoints->append({0.0f, m_value}); break;
+    default: throw std::logic_error("Invalid floating field enable leaf");
+    }
+  }, sb_net_float_run);
+#else
   if (!m_interpolationDataPoints) {
     m_interpolationDataPoints.emplace();
     m_interpolationDataPoints->append({0.0f, m_value});
   }
+#endif
 }
 
 template <typename T>
 void NetElementFloating<T>::disableNetInterpolation() {
+#ifdef STAR_USE_RUST_NET_FIELD
+  NetGroupDetail::run(SB_NET_FLOAT_DISABLE, 0, [&](uint32_t leaf, uint64_t, SbNetFloatReply& reply) {
+    switch (leaf) {
+    case SB_NET_FLOAT_HAS_POINTS:
+      if (m_interpolationDataPoints) reply.a = 1; else reply.a = 0;
+      break;
+    case SB_NET_FLOAT_ASSIGN_LAST: m_value = m_interpolationDataPoints->last().second; break;
+    case SB_NET_FLOAT_RESET_POINTS: m_interpolationDataPoints.reset(); break;
+    default: throw std::logic_error("Invalid floating field disable leaf");
+    }
+  }, sb_net_float_run);
+#else
   if (m_interpolationDataPoints) {
     m_value = m_interpolationDataPoints->last().second;
     m_interpolationDataPoints.reset();
   }
+#endif
 }
 
 template <typename T>
 void NetElementFloating<T>::tickNetInterpolation(float dt) {
+#ifdef STAR_USE_RUST_NET_FIELD
+  NetGroupDetail::run(SB_NET_FLOAT_TICK, 0, [&](uint32_t leaf, uint64_t, SbNetFloatReply& reply) {
+    switch (leaf) {
+    case SB_NET_FLOAT_HAS_POINTS:
+      if (m_interpolationDataPoints) reply.a = 1; else reply.a = 0;
+      break;
+    case SB_NET_FLOAT_DECREMENT_SCOPE: {
+      auto& points = *m_interpolationDataPoints;
+      auto begin = points.begin();
+      auto end = points.end();
+      NetGroupDetail::run(SB_NET_FLOAT_DECREMENT, 0, [&](uint32_t item, uint64_t, SbNetFloatReply& result) {
+        switch (item) {
+        case SB_NET_FLOAT_MORE:
+          if (begin != end) result.a = 1; else result.a = 0;
+          break;
+        case SB_NET_FLOAT_ADVANCE: ++begin; break;
+        case SB_NET_FLOAT_DECREMENT_CURRENT: {
+          auto& p = *begin;
+          p.first -= dt;
+          break;
+        }
+        default: throw std::logic_error("Invalid floating field decrement leaf");
+        }
+      }, sb_net_float_run);
+      break;
+    }
+    case SB_NET_FLOAT_PRUNE_READY:
+      reply.a = m_interpolationDataPoints->size() > 2 && (*m_interpolationDataPoints)[1].first <= 0.0f;
+      break;
+    case SB_NET_FLOAT_REMOVE_FIRST: m_interpolationDataPoints->removeFirst(); break;
+    case SB_NET_FLOAT_ASSIGN_INTERPOLATED: m_value = interpolate(); break;
+    default: throw std::logic_error("Invalid floating field tick leaf");
+    }
+  }, sb_net_float_run);
+#else
   if (m_interpolationDataPoints) {
     for (auto& p : *m_interpolationDataPoints)
       p.first -= dt;
@@ -128,31 +215,74 @@ void NetElementFloating<T>::tickNetInterpolation(float dt) {
 
     m_value = interpolate();
   }
+#endif
 }
 
 template <typename T>
 void NetElementFloating<T>::netStore(DataStream& ds, NetCompatibilityRules rules) const {
   if (!checkWithRules(rules)) return;
+#ifdef STAR_USE_RUST_NET_FIELD
+  NetGroupDetail::run(SB_NET_FLOAT_STORE, 0, [&](uint32_t leaf, uint64_t, SbNetFloatReply& reply) {
+    switch (leaf) {
+    case SB_NET_FLOAT_HAS_POINTS:
+      if (m_interpolationDataPoints) reply.a = 1; else reply.a = 0;
+      break;
+    case SB_NET_FLOAT_WRITE_LAST: writeValue(ds, m_interpolationDataPoints->last().second); break;
+    case SB_NET_FLOAT_WRITE_CURRENT: writeValue(ds, m_value); break;
+    default: throw std::logic_error("Invalid floating field store leaf");
+    }
+  }, sb_net_float_run);
+#else
   if (m_interpolationDataPoints)
     writeValue(ds, m_interpolationDataPoints->last().second);
   else
     writeValue(ds, m_value);
+#endif
 }
 
 template <typename T>
 void NetElementFloating<T>::netLoad(DataStream& ds, NetCompatibilityRules rules) {
   if (!checkWithRules(rules)) return;
+#ifdef STAR_USE_RUST_NET_FIELD
+  NetGroupDetail::run(SB_NET_FLOAT_LOAD, 0, [&](uint32_t leaf, uint64_t, SbNetFloatReply& reply) {
+    switch (leaf) {
+    case SB_NET_FLOAT_ASSIGN_READ: m_value = readValue(ds); break;
+    case SB_NET_FLOAT_CAPTURE_VERSION: m_latestUpdateVersion = m_netVersion ? m_netVersion->current() : 0; break;
+    case SB_NET_FLOAT_HAS_POINTS:
+      if (m_interpolationDataPoints) reply.a = 1; else reply.a = 0;
+      break;
+    case SB_NET_FLOAT_CLEAR_POINTS: m_interpolationDataPoints->clear(); break;
+    case SB_NET_FLOAT_APPEND_ZERO: m_interpolationDataPoints->append({0.0f, m_value}); break;
+    default: throw std::logic_error("Invalid floating field load leaf");
+    }
+  }, sb_net_float_run);
+#else
   m_value = readValue(ds);
   m_latestUpdateVersion = m_netVersion ? m_netVersion->current() : 0;
   if (m_interpolationDataPoints) {
     m_interpolationDataPoints->clear();
     m_interpolationDataPoints->append({0.0f, m_value});
   }
+#endif
 }
 
 template <typename T>
 bool NetElementFloating<T>::writeNetDelta(DataStream& ds, uint64_t fromVersion, NetCompatibilityRules rules) const {
   if (!checkWithRules(rules)) return false;
+#ifdef STAR_USE_RUST_NET_FIELD
+  return NetGroupDetail::run(SB_NET_FLOAT_WRITE, fromVersion,
+      [&](uint32_t leaf, uint64_t, SbNetFloatReply& reply) {
+    switch (leaf) {
+    case SB_NET_FLOAT_LATEST_VERSION: reply.a = m_latestUpdateVersion; break;
+    case SB_NET_FLOAT_HAS_POINTS:
+      if (m_interpolationDataPoints) reply.a = 1; else reply.a = 0;
+      break;
+    case SB_NET_FLOAT_WRITE_LAST: writeValue(ds, m_interpolationDataPoints->last().second); break;
+    case SB_NET_FLOAT_WRITE_CURRENT: writeValue(ds, m_value); break;
+    default: throw std::logic_error("Invalid floating field write leaf");
+    }
+  }, sb_net_float_run);
+#else
   if (m_latestUpdateVersion < fromVersion)
     return false;
 
@@ -162,6 +292,7 @@ bool NetElementFloating<T>::writeNetDelta(DataStream& ds, uint64_t fromVersion, 
     writeValue(ds, m_value);
 
   return true;
+#endif
 }
 
 template <typename T>
@@ -169,6 +300,22 @@ void NetElementFloating<T>::readNetDelta(DataStream& ds, float interpolationTime
   _unused(rules);
   T t = readValue(ds);
 
+#ifdef STAR_USE_RUST_NET_FIELD
+  NetGroupDetail::run(SB_NET_FLOAT_READ, 0, [&](uint32_t leaf, uint64_t, SbNetFloatReply& reply) {
+    switch (leaf) {
+    case SB_NET_FLOAT_CAPTURE_VERSION: m_latestUpdateVersion = m_netVersion ? m_netVersion->current() : 0; break;
+    case SB_NET_FLOAT_HAS_POINTS:
+      if (m_interpolationDataPoints) reply.a = 1; else reply.a = 0;
+      break;
+    case SB_NET_FLOAT_INPUT_EARLIER: reply.a = interpolationTime < m_interpolationDataPoints->last().first; break;
+    case SB_NET_FLOAT_CLEAR_POINTS: m_interpolationDataPoints->clear(); break;
+    case SB_NET_FLOAT_APPEND_INPUT: m_interpolationDataPoints->append({interpolationTime, t}); break;
+    case SB_NET_FLOAT_ASSIGN_INTERPOLATED: m_value = interpolate(); break;
+    case SB_NET_FLOAT_ASSIGN_INPUT: m_value = t; break;
+    default: throw std::logic_error("Invalid floating field read leaf");
+    }
+  }, sb_net_float_run);
+#else
   m_latestUpdateVersion = m_netVersion ? m_netVersion->current() : 0;
   if (m_interpolationDataPoints) {
     if (interpolationTime < m_interpolationDataPoints->last().first)
@@ -178,10 +325,36 @@ void NetElementFloating<T>::readNetDelta(DataStream& ds, float interpolationTime
   } else {
     m_value = t;
   }
+#endif
 }
 
 template <typename T>
 void NetElementFloating<T>::blankNetDelta(float interpolationTime) {
+#ifdef STAR_USE_RUST_NET_FIELD
+  NetGroupDetail::run(SB_NET_FLOAT_BLANK, 0, [&](uint32_t leaf, uint64_t, SbNetFloatReply& reply) {
+    switch (leaf) {
+    case SB_NET_FLOAT_HAS_POINTS:
+      if (m_interpolationDataPoints) reply.a = 1; else reply.a = 0;
+      break;
+    case SB_NET_FLOAT_SCOPED_BLANK: {
+      auto lastPoint = m_interpolationDataPoints->last();
+      float lastTime = lastPoint.first;
+      lastPoint.first = interpolationTime;
+      NetGroupDetail::run(SB_NET_FLOAT_BLANK_ITEM, 0, [&](uint32_t item, uint64_t, SbNetFloatReply& result) {
+        switch (item) {
+        case SB_NET_FLOAT_SAVED_EARLIER: result.a = interpolationTime < lastTime; break;
+        case SB_NET_FLOAT_REPLACE_LAST_POINT: *m_interpolationDataPoints = {lastPoint}; break;
+        case SB_NET_FLOAT_APPEND_LAST_POINT: m_interpolationDataPoints->append(lastPoint); break;
+        case SB_NET_FLOAT_ASSIGN_INTERPOLATED: m_value = interpolate(); break;
+        default: throw std::logic_error("Invalid floating field blank item leaf");
+        }
+      }, sb_net_float_run);
+      break;
+    }
+    default: throw std::logic_error("Invalid floating field blank leaf");
+    }
+  }, sb_net_float_run);
+#else
   if (m_interpolationDataPoints) {
     auto lastPoint = m_interpolationDataPoints->last();
     float lastTime = lastPoint.first;
@@ -193,6 +366,7 @@ void NetElementFloating<T>::blankNetDelta(float interpolationTime) {
 
     m_value = interpolate();
   }
+#endif
 }
 
 template <typename T>

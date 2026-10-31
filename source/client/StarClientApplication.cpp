@@ -17,6 +17,9 @@
 #include "StarRustSet.h"
 #endif
 #ifdef STAR_USE_RUST_NET_FIELD
+#include "StarRustNetFloat.h"
+#endif
+#ifdef STAR_USE_RUST_NET_FIELD
 #include "StarRustNetScalar.h"
 #endif
 #ifdef STAR_USE_RUST_NET_GROUP
@@ -4519,6 +4522,17 @@ void ClientApplication::renderBehaviorScenario() {
   };
 #ifdef STAR_USE_RUST_UUID
   metadata = metadata.set("rustUuidCalls", JsonArray{sb_uuid_count(0), sb_uuid_count(1), sb_uuid_count(2)});
+#endif
+#ifdef STAR_USE_RUST_NET_FIELD
+  JsonArray floatMain, floatAll, floatLeaves;
+  for (uint32_t mode = 0; mode != SB_NET_FLOAT_COUNT; ++mode) {
+    floatMain.append(sb_net_float_count(0, mode));
+    floatAll.append(sb_net_float_count(1, mode));
+  }
+  for (uint32_t op = 0; op != SB_NET_FLOAT_OP_COUNT; ++op)
+    floatLeaves.append(sb_net_float_count(2, op));
+  metadata = metadata.set("rustNetFloat", JsonObject{
+      {"main", floatMain}, {"allThreads", floatAll}, {"attemptedLeaves", floatLeaves}});
 #endif
 #ifdef STAR_USE_RUST_NET_FIELD
   uint64_t scalarMain[SB_NET_SCALAR_COUNT], scalarAll[SB_NET_SCALAR_COUNT];
