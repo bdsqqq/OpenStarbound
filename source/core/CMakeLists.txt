@@ -96,6 +96,7 @@ SET (star_core_HEADERS
     StarRustNetSignal.h
     StarRustNetScalar.h
     StarRustNetSync.h
+    StarRustNetOverride.h
     StarRustNetMap.h
     StarNetMapHost.hpp
     StarRustNetTop.h

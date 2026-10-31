@@ -1,6 +1,10 @@
 #pragma once
 
 #include "StarNetElement.hpp"
+#ifdef STAR_USE_RUST_NET_GROUP
+#include "StarNetGroupHost.hpp"
+#include "StarRustNetOverride.h"
+#endif
 
 namespace Star {
 
@@ -35,34 +39,86 @@ private:
 
 template <typename BaseNetElement>
 void NetElementOverride<BaseNetElement>::netStore(DataStream& ds, NetCompatibilityRules rules) const {
+#ifdef STAR_USE_RUST_NET_GROUP
+  NetGroupDetail::run(SB_NET_OVERRIDE_STORE, 0, [&](uint32_t leaf, uint64_t, SbNetOverrideReply& reply) {
+    switch (leaf) {
+    case SB_NET_OVERRIDE_HAS:
+      if (m_netStorer) reply.a = 1; else reply.a = 0;
+      break;
+    case SB_NET_OVERRIDE_CALL_OVERRIDE: m_netStorer(ds, rules); break;
+    case SB_NET_OVERRIDE_CALL_BASE: BaseNetElement::netStore(ds, rules); break;
+    default: throw std::logic_error("Invalid network override store leaf");
+    }
+  }, sb_net_override_run);
+#else
   if (m_netStorer)
     m_netStorer(ds, rules);
   else
     BaseNetElement::netStore(ds, rules);
+#endif
 }
 
 template <typename BaseNetElement>
 void NetElementOverride<BaseNetElement>::netLoad(DataStream& ds, NetCompatibilityRules rules) {
+#ifdef STAR_USE_RUST_NET_GROUP
+  NetGroupDetail::run(SB_NET_OVERRIDE_LOAD, 0, [&](uint32_t leaf, uint64_t, SbNetOverrideReply& reply) {
+    switch (leaf) {
+    case SB_NET_OVERRIDE_HAS:
+      if (m_netLoader) reply.a = 1; else reply.a = 0;
+      break;
+    case SB_NET_OVERRIDE_CALL_OVERRIDE: m_netLoader(ds, rules); break;
+    case SB_NET_OVERRIDE_CALL_BASE: BaseNetElement::netLoad(ds, rules); break;
+    default: throw std::logic_error("Invalid network override load leaf");
+    }
+  }, sb_net_override_run);
+#else
   if (m_netLoader)
     m_netLoader(ds, rules);
   else
     BaseNetElement::netLoad(ds, rules);
+#endif
 }
 
 template <typename BaseNetElement>
 bool NetElementOverride<BaseNetElement>::writeNetDelta(DataStream& ds, uint64_t fromVersion, NetCompatibilityRules rules) const {
+#ifdef STAR_USE_RUST_NET_GROUP
+  return NetGroupDetail::run(SB_NET_OVERRIDE_WRITE, 0, [&](uint32_t leaf, uint64_t, SbNetOverrideReply& reply) {
+    switch (leaf) {
+    case SB_NET_OVERRIDE_HAS:
+      if (m_netDeltaWriter) reply.a = 1; else reply.a = 0;
+      break;
+    case SB_NET_OVERRIDE_CALL_OVERRIDE: reply.a = m_netDeltaWriter(ds, fromVersion, rules); break;
+    case SB_NET_OVERRIDE_CALL_BASE: reply.a = BaseNetElement::writeNetDelta(ds, fromVersion, rules); break;
+    default: throw std::logic_error("Invalid network override write leaf");
+    }
+  }, sb_net_override_run);
+#else
   if (m_netDeltaWriter)
     return m_netDeltaWriter(ds, fromVersion, rules);
   else
     return BaseNetElement::writeNetDelta(ds, fromVersion, rules);
+#endif
 }
 
 template <typename BaseNetElement>
 void NetElementOverride<BaseNetElement>::readNetDelta(DataStream& ds, float interpolationTime, NetCompatibilityRules rules) {
+#ifdef STAR_USE_RUST_NET_GROUP
+  NetGroupDetail::run(SB_NET_OVERRIDE_READ, 0, [&](uint32_t leaf, uint64_t, SbNetOverrideReply& reply) {
+    switch (leaf) {
+    case SB_NET_OVERRIDE_HAS:
+      if (m_netDeltaReader) reply.a = 1; else reply.a = 0;
+      break;
+    case SB_NET_OVERRIDE_CALL_OVERRIDE: m_netDeltaReader(ds, interpolationTime, rules); break;
+    case SB_NET_OVERRIDE_CALL_BASE: BaseNetElement::readNetDelta(ds, interpolationTime, rules); break;
+    default: throw std::logic_error("Invalid network override read leaf");
+    }
+  }, sb_net_override_run);
+#else
   if (m_netDeltaReader)
     m_netDeltaReader(ds, interpolationTime, rules);
   else
     BaseNetElement::readNetDelta(ds, interpolationTime, rules);
+#endif
 }
 
 template <typename BaseNetElement>
