@@ -710,3 +710,242 @@ TEST(FlatHashInsert, PublicInsertDiagnostics) {
   EXPECT_EQ(sb_flat_hash_count(1, SB_FLAT_HASH_COUNT), 0u);
 }
 #endif
+
+namespace {
+struct FlatEraseMarker {};
+struct FlatEraseHooks {
+  std::string trace;
+  std::function<void()> beforeAssign;
+  FlatEraseMarker* marker = nullptr;
+  int failure = 0, throwCompare = 0, comparisons = 0;
+  int live = 0, copies = 0, moves = 0, proxies = 0;
+  void event(char kind, int key) { trace += kind + std::to_string(key) + ";"; }
+  void fail() {
+    try { throw FlatEraseMarker{}; }
+    catch (FlatEraseMarker& original) { marker = &original; throw; }
+  }
+  void emit(char const* label) const {
+    std::printf("FLAT_ERASE_TRACE %s %s\n", label, trace.c_str());
+  }
+};
+struct FlatEraseValue {
+  int key;
+  FlatEraseHooks* hooks;
+  FlatEraseValue(int k, FlatEraseHooks* h) : key(k), hooks(h) { ++hooks->live; hooks->event('N', key); }
+  FlatEraseValue(FlatEraseValue const& v) : key(v.key), hooks(v.hooks) {
+    ++hooks->live; ++hooks->copies; hooks->event('C', key);
+  }
+  FlatEraseValue(FlatEraseValue&& v) : key(v.key), hooks(v.hooks) {
+    ++hooks->live; ++hooks->moves; hooks->event('M', key);
+  }
+  FlatEraseValue& operator=(FlatEraseValue const& v) {
+    key = v.key; ++hooks->copies; hooks->event('c', key); return *this;
+  }
+  FlatEraseValue& operator=(FlatEraseValue&& v) {
+    hooks->event('A', v.key);
+    if (hooks->beforeAssign) hooks->beforeAssign();
+    if (hooks->failure == 1) hooks->fail();
+    key = v.key;
+    if (hooks->failure == 2) hooks->fail();
+    return *this;
+  }
+  ~FlatEraseValue() { --hooks->live; hooks->event('D', key); }
+};
+struct FlatEraseContextBool {
+  bool different;
+  FlatEraseHooks* hooks;
+#ifdef STAR_USE_RUST_FLAT_HASH_TABLE
+  uint64_t scans = sb_flat_hash_count(0, SB_FLAT_HASH_SCAN);
+#endif
+  FlatEraseContextBool(bool d, FlatEraseHooks* h) : different(d), hooks(h) { ++hooks->proxies; }
+  FlatEraseContextBool(FlatEraseContextBool const&) = delete;
+  explicit operator bool() const { hooks->event('B', different); return different; }
+  ~FlatEraseContextBool() {
+#ifdef STAR_USE_RUST_FLAT_HASH_TABLE
+    EXPECT_EQ(sb_flat_hash_count(0, SB_FLAT_HASH_SCAN), scans); // No ++i/++j before proxy destruction.
+#endif
+    --hooks->proxies; hooks->event('P', different);
+  }
+};
+FlatEraseContextBool operator!=(FlatEraseValue const& a, FlatEraseValue const& b) {
+  auto& h = *a.hooks;
+  EXPECT_EQ(h.proxies, 0); // The preceding full expression must already have ended.
+  h.event('q', a.key); h.event('r', b.key);
+  if (++h.comparisons == h.throwCompare) h.fail();
+  return FlatEraseContextBool(a.key != b.key, &h);
+}
+struct FlatEraseGetKey {
+  int const& operator()(FlatEraseValue const& value) const { return value.key; }
+};
+struct FlatEraseHash {
+  int mode = 0;
+  size_t operator()(int key) const {
+    return mode == 1 ? 0 : mode == 2 ? std::numeric_limits<size_t>::max() - 1 : size_t(key);
+  }
+};
+using FlatEraseTable = FlatHashTable<FlatEraseValue, int, FlatEraseGetKey,
+    FlatEraseHash, std::equal_to<int>, std::allocator<FlatEraseValue>>;
+}
+
+TEST(FlatHashErase, ShiftHomeStopAndWrappedReturn) {
+  FlatEraseHooks h;
+  {
+    FlatEraseTable table(3, {}, {}, {}, {});
+    for (int key : {0, 8, 16, 24}) table.insert(FlatEraseValue(key, &h));
+    h.emit("shift-seed");
+    auto base = table.begin().current;
+    ASSERT_EQ(table.end().current - base, 8);
+    auto victim = table.find(8);
+    ASSERT_EQ(victim.current - base, 1);
+    h.trace.clear();
+    auto next = table.erase(victim);
+    ASSERT_NE(next, table.end());
+    EXPECT_EQ(next.current, base + 1); EXPECT_EQ(next->key, 16);
+    EXPECT_EQ(table.size(), 3u); EXPECT_EQ(h.live, 3);
+    EXPECT_EQ(h.trace, "A16;A24;D24;"); h.emit("shift");
+    EXPECT_EQ(table.find(8), table.end());
+    EXPECT_NE(table.find(0), table.end()); EXPECT_NE(table.find(24), table.end());
+    h.trace.clear();
+    auto rootNext = table.erase(table.begin());
+    ASSERT_NE(rootNext, table.end());
+    EXPECT_EQ(rootNext.current, base); EXPECT_EQ(rootNext->key, 16);
+    EXPECT_EQ(table.size(), 2u); EXPECT_NE(table.find(24), table.end());
+    EXPECT_EQ(h.trace, "A16;A24;D24;"); h.emit("root-shift");
+    h.trace.clear(); table.clear(); h.emit("shift-cleanup");
+    for (int key : {0, 1}) table.insert(FlatEraseValue(key, &h));
+    h.trace.clear();
+    auto home = table.erase(table.begin());
+    ASSERT_NE(home, table.end());
+    EXPECT_EQ(home->key, 1); EXPECT_EQ(h.trace, "D0;"); h.emit("home-stop");
+    h.trace.clear(); table.clear(); h.emit("home-cleanup");
+  }
+  EXPECT_EQ(h.live, 0);
+  {
+    FlatEraseTable table(3, {}, FlatEraseHash{2}, {}, {});
+    h.trace.clear();
+    for (int key : {1, 2, 3}) table.insert(FlatEraseValue(key, &h));
+    h.emit("wrap-seed");
+    auto victim = table.find(1);
+    auto source = table.find(2);
+    ASSERT_EQ(source.current - victim.current, 1);
+    h.trace.clear();
+    auto next = table.erase(victim);
+    ASSERT_NE(next, table.end());
+    EXPECT_EQ(next.current, victim.current); EXPECT_EQ(next->key, 2);
+    EXPECT_EQ(source->key, 3); // Old source slot now contains the following value.
+    EXPECT_EQ(table.size(), 2u); EXPECT_EQ(h.trace, "A2;A3;D3;"); h.emit("wrap");
+    EXPECT_NE(table.find(2), table.end()); EXPECT_NE(table.find(3), table.end());
+    h.trace.clear(); table.clear(); h.emit("wrap-cleanup");
+  }
+  EXPECT_EQ(h.live, 0);
+}
+
+TEST(FlatHashErase, AssignmentFailurePreservesNativeHashAndLiveObjects) {
+  for (int stage : {1, 2}) {
+    FlatEraseHooks h;
+    FlatEraseTable table(3, {}, {}, {}, {});
+    for (int key : {0, 8, 2}) table.insert(FlatEraseValue(key, &h));
+    h.emit("failure-seed");
+    auto victim = table.begin();
+    auto source = table.find(8);
+    auto tail = table.find(2);
+    h.beforeAssign = [&] {
+      EXPECT_EQ(victim.current->hash, size_t(8) | (size_t(1) << (sizeof(size_t) * 8 - 1)));
+      EXPECT_EQ(victim->key, 0); EXPECT_EQ(source->key, 8);
+      EXPECT_EQ(table.size(), 3u); EXPECT_EQ(h.live, 3);
+    };
+    h.failure = stage; h.trace.clear();
+    bool caught = false;
+    try { table.erase(victim); }
+    catch (FlatEraseMarker& original) { caught = true; EXPECT_EQ(&original, h.marker); }
+    h.failure = 0; h.beforeAssign = {};
+    EXPECT_TRUE(caught); EXPECT_EQ(table.size(), 3u); EXPECT_EQ(h.live, 3);
+    EXPECT_EQ(victim->key, stage == 1 ? 0 : 8);
+    EXPECT_EQ(source->key, 8); EXPECT_EQ(tail->key, 2);
+    EXPECT_EQ(h.trace, "A8;"); h.event('F', stage); h.emit("assignment-throw");
+    // Both duplicate-key objects remain live; do not find/repair the corrupted table.
+    h.trace.clear(); table.clear();
+    EXPECT_EQ(h.live, 0); EXPECT_EQ(table.size(), 0u);
+    EXPECT_EQ(h.trace, stage == 1 ? "D0;D8;D2;" : "D8;D8;D2;"); h.emit("failure-clear");
+  }
+}
+
+TEST(FlatHashErase, RangePhysicalBoundaryAndClearOrder) {
+  FlatEraseHooks h;
+  FlatEraseTable table(3, {}, {}, {}, {});
+  for (int key : {0, 1, 2, 3}) table.insert(FlatEraseValue(key, &h));
+  auto first = table.begin(); auto last = table.find(2);
+  h.trace.clear();
+  auto next = table.erase(first, last);
+  EXPECT_EQ(next, last); EXPECT_EQ(next->key, 2); EXPECT_EQ(table.size(), 2u);
+  EXPECT_EQ(h.trace, "D0;D1;"); h.emit("range-subset");
+  auto empty = table.erase(next, next); EXPECT_EQ(empty, next);
+  h.trace.clear();
+  EXPECT_EQ(table.erase(table.begin(), table.end()), table.end());
+  EXPECT_EQ(h.trace, "D2;D3;"); h.emit("range-whole");
+  FlatEraseTable wrapped(3, {}, FlatEraseHash{2}, {}, {});
+  for (int key : {1, 2, 3}) wrapped.insert(FlatEraseValue(key, &h));
+  int copies = h.copies, moves = h.moves;
+  h.trace.clear(); wrapped.clear();
+  EXPECT_EQ(h.trace, "D3;D1;D2;"); h.emit("clear-order");
+  EXPECT_EQ(h.copies, copies); EXPECT_EQ(h.moves, moves); EXPECT_EQ(h.live, 0);
+  EXPECT_EQ(wrapped.begin(), wrapped.end());
+  h.trace.clear(); wrapped.clear(); EXPECT_TRUE(h.trace.empty());
+  wrapped.insert(FlatEraseValue(4, &h)); EXPECT_EQ(wrapped.begin()->key, 4);
+}
+
+TEST(FlatHashErase, EqualityIsOrderedAndProxyExpressionsFinish) {
+  FlatEraseHooks h;
+  FlatEraseTable a(3, {}, FlatEraseHash{1}, {}, {}), b(3, {}, FlatEraseHash{1}, {}, {});
+  for (int key : {1, 2}) a.insert(FlatEraseValue(key, &h));
+  for (int key : {2, 1}) b.insert(FlatEraseValue(key, &h));
+  h.trace.clear(); EXPECT_FALSE(a == b);
+  EXPECT_EQ(h.trace, "q1;r2;B1;P1;"); h.emit("ordered-unequal");
+  h.trace.clear(); auto copy = a; h.emit("equality-copy");
+  int copies = h.copies, moves = h.moves;
+  h.trace.clear(); h.comparisons = 0;
+  EXPECT_TRUE(a == copy);
+  EXPECT_EQ(h.trace, "q1;r1;B0;P0;q2;r2;B0;P0;"); h.emit("copy-equal");
+  h.trace.clear(); h.comparisons = 0; h.throwCompare = 2;
+  bool caught = false;
+  try { (void)(a == copy); }
+  catch (FlatEraseMarker& original) { caught = true; EXPECT_EQ(&original, h.marker); }
+  h.throwCompare = 0;
+  EXPECT_TRUE(caught); EXPECT_EQ(h.comparisons, 2); EXPECT_EQ(h.proxies, 0);
+  EXPECT_EQ(h.trace, "q1;r1;B0;P0;q2;r2;"); h.emit("compare-throw");
+  EXPECT_EQ(h.copies, copies); EXPECT_EQ(h.moves, moves);
+  b.erase(b.begin()); h.trace.clear();
+#ifdef STAR_USE_RUST_FLAT_HASH_TABLE
+  auto scans = sb_flat_hash_count(0, SB_FLAT_HASH_SCAN);
+#endif
+  EXPECT_FALSE(a == b); EXPECT_TRUE(h.trace.empty());
+#ifdef STAR_USE_RUST_FLAT_HASH_TABLE
+  EXPECT_EQ(sb_flat_hash_count(0, SB_FLAT_HASH_SCAN), scans);
+#endif
+}
+
+TEST(FlatHashErase, PublicMapAndSetMutationAndEquality) {
+#ifdef STAR_USE_RUST_FLAT_HASH_TABLE
+  uint64_t before[2][5];
+  for (uint32_t kind = 0; kind != 2; ++kind)
+    for (uint32_t mode = 3; mode != 8; ++mode) before[kind][mode - 3] = sb_flat_hash_count(kind, mode);
+#endif
+  FlatHashMap<int, int, FlatEraseHash> map(3, FlatEraseHash{1});
+  FlatHashSet<int, FlatEraseHash> set(3, FlatEraseHash{1});
+  for (int key : {1, 2, 3}) { map.insert({key, key * 17}); set.insert(key); }
+  auto mapCopy = map; auto setCopy = set;
+  EXPECT_TRUE(map == mapCopy); EXPECT_TRUE(set == setCopy);
+  auto mi = map.erase(map.begin()); auto si = set.erase(set.begin());
+  ASSERT_NE(mi, map.end()); ASSERT_NE(si, set.end());
+  EXPECT_EQ(mi->first, 2); EXPECT_EQ(mi->second, 34); EXPECT_EQ(*si, 2);
+  EXPECT_EQ(map.erase(mi, map.end()), map.end()); EXPECT_EQ(set.erase(si, set.end()), set.end());
+  EXPECT_TRUE(map.empty()); EXPECT_TRUE(set.empty());
+  EXPECT_FALSE(map == mapCopy); EXPECT_FALSE(set == setCopy);
+  mapCopy.clear(); setCopy.clear();
+  EXPECT_TRUE(map == mapCopy); EXPECT_TRUE(set == setCopy);
+#ifdef STAR_USE_RUST_FLAT_HASH_TABLE
+  for (uint32_t kind = 0; kind != 2; ++kind)
+    for (uint32_t mode = 3; mode != 8; ++mode)
+      EXPECT_GT(sb_flat_hash_count(kind, mode), before[kind][mode - 3]);
+#endif
+}

@@ -335,12 +335,23 @@ size_t FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::size() const 
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
 void FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::clear() {
+#ifdef STAR_USE_RUST_FLAT_HASH_TABLE
+  FlatHashTableDetail::run(SB_FLAT_HASH_CLEAR, [&](uint32_t operation, size_t argument) -> size_t {
+    switch (operation) {
+      case SB_FLAT_HASH_SIZE: return m_buckets.size();
+      case SB_FLAT_HASH_CLEAR_BUCKET: m_buckets[argument].setEmpty(); return 0;
+      case SB_FLAT_HASH_RESET_FILLED: m_filledCount = 0; return 0;
+      default: FlatHashTableDetail::invalidOperation();
+    }
+  });
+#else
   if (m_buckets.empty())
     return;
 
   for (size_t i = 0; i < m_buckets.size() - 1; ++i)
     m_buckets[i].setEmpty();
   m_filledCount = 0;
+#endif
 }
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
@@ -421,6 +432,33 @@ auto FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::insert(Value va
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
 auto FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::erase(const_iterator pos) -> iterator {
+#ifdef STAR_USE_RUST_FLAT_HASH_TABLE
+  size_t bucketIndex = pos.current - m_buckets.data();
+  auto currentBucket = &m_buckets[bucketIndex];
+  Bucket* nextBucket = nullptr;
+  Value* nextPtr = nullptr;
+  auto reply = FlatHashTableDetail::run(SB_FLAT_HASH_ERASE, [&](uint32_t operation, size_t argument) -> size_t {
+    switch (operation) {
+      case SB_FLAT_HASH_REQUEST: return bucketIndex;
+      case SB_FLAT_HASH_SIZE: return m_buckets.size();
+      case SB_FLAT_HASH_LOAD:
+        nextBucket = &m_buckets[argument];
+        nextPtr = nextBucket->valuePtr();
+        return nextPtr ? 1 : 0;
+      case SB_FLAT_HASH_ACTIVE_HASH: return nextBucket->hash;
+      case SB_FLAT_HASH_SHIFT:
+        // Preserve the native partial mutation if Value move-assignment throws.
+        currentBucket->hash = nextBucket->hash;
+        *currentBucket->valuePtr() = std::move(*nextPtr);
+        currentBucket = nextBucket;
+        return 0;
+      case SB_FLAT_HASH_CLEAR_BUCKET: m_buckets[argument].setEmpty(); return 0;
+      case SB_FLAT_HASH_DECREMENT_FILLED: --m_filledCount; return 0;
+      default: FlatHashTableDetail::invalidOperation();
+    }
+  });
+  return iterator{scan(m_buckets.data() + reply.index)};
+#else
   size_t bucketIndex = pos.current - m_buckets.data();
   size_t currentBucketIndex = bucketIndex;
   auto currentBucket = &m_buckets[currentBucketIndex];
@@ -446,12 +484,23 @@ auto FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::erase(const_ite
   --m_filledCount;
 
   return iterator{scan(m_buckets.data() + bucketIndex)};
+#endif
 }
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
 auto FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::erase(const_iterator first, const_iterator last) -> iterator {
+#ifdef STAR_USE_RUST_FLAT_HASH_TABLE
+  FlatHashTableDetail::run(SB_FLAT_HASH_ERASE_RANGE, [&](uint32_t operation, size_t) -> size_t {
+    switch (operation) {
+      case SB_FLAT_HASH_ITER_MORE: return first != last ? 1 : 0;
+      case SB_FLAT_HASH_ERASE_ITER: first = erase(first); return 0;
+      default: FlatHashTableDetail::invalidOperation();
+    }
+  });
+#else
   while (first != last)
     first = erase(first);
+#endif
   return iterator{(Bucket*)first.current};
 }
 
@@ -527,6 +576,33 @@ Allocator FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::getAllocat
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
 bool FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::operator==(FlatHashTable const& rhs) const {
+#ifdef STAR_USE_RUST_FLAT_HASH_TABLE
+  auto reply = FlatHashTableDetail::run(SB_FLAT_HASH_EQUAL, [&](uint32_t operation, size_t) -> size_t {
+    switch (operation) {
+      case SB_FLAT_HASH_SIZES_EQUAL: return size() == rhs.size() ? 1 : 0;
+      case SB_FLAT_HASH_ENTER_COMPARE: {
+        auto i = begin();
+        auto j = rhs.begin();
+        auto e = end();
+        auto comparison = FlatHashTableDetail::run(SB_FLAT_HASH_COMPARE, [&](uint32_t operation, size_t) -> size_t {
+          switch (operation) {
+            case SB_FLAT_HASH_ITER_MORE: return i != e ? 1 : 0;
+            case SB_FLAT_HASH_NOT_EQUAL: return *i != *j ? 1 : 0;
+            case SB_FLAT_HASH_ADVANCE_BOTH: ++i; ++j; return 0;
+            default: FlatHashTableDetail::invalidOperation();
+          }
+        });
+        if (comparison.found > 1)
+          FlatHashTableDetail::invalidOperation();
+        return comparison.found != 0;
+      }
+      default: FlatHashTableDetail::invalidOperation();
+    }
+  });
+  if (reply.found > 1)
+    FlatHashTableDetail::invalidOperation();
+  return reply.found != 0;
+#else
   if (size() != rhs.size())
     return false;
 
@@ -542,6 +618,7 @@ bool FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::operator==(Flat
   }
 
   return true;
+#endif
 }
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>

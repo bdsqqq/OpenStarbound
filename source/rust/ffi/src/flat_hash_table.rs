@@ -1,4 +1,4 @@
-//! FlatHashTable probe/insert policy; native storage and value lifetimes stay native.
+//! FlatHashTable control policy; native storage and value lifetimes stay native.
 use std::cell::Cell;
 use std::ffi::c_void;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -11,7 +11,12 @@ const PANIC: u32 = 3;
 const FIND: u32 = 0;
 const SCAN: u32 = 1;
 const INSERT: u32 = 2;
-const COUNT: usize = 3;
+const ERASE: u32 = 3;
+const ERASE_RANGE: u32 = 4;
+const CLEAR: u32 = 5;
+const EQUAL: u32 = 6;
+const COMPARE: u32 = 7;
+const COUNT: usize = 8;
 const SIZE: u32 = 0;
 const HASH: u32 = 1;
 const LOAD: u32 = 2;
@@ -25,6 +30,17 @@ const SWAP_VALUE: u32 = 9;
 const EXCHANGE_HASH: u32 = 10;
 const SET_FILLED: u32 = 11;
 const INCREMENT_FILLED: u32 = 12;
+const REQUEST: u32 = 13;
+const SHIFT: u32 = 14;
+const CLEAR_BUCKET: u32 = 15;
+const DECREMENT_FILLED: u32 = 16;
+const ITER_MORE: u32 = 17;
+const ERASE_ITER: u32 = 18;
+const RESET_FILLED: u32 = 19;
+const SIZES_EQUAL: u32 = 20;
+const ENTER_COMPARE: u32 = 21;
+const NOT_EQUAL: u32 = 22;
+const ADVANCE_BOTH: u32 = 23;
 const FILLED: usize = 1usize << (usize::BITS - 1);
 
 type Leaf = unsafe extern "C" fn(*mut c_void, u32, usize, *mut usize) -> u32;
@@ -59,9 +75,11 @@ unsafe fn invoke(ctx: *mut c_void, leaf: Leaf, op: u32, arg: usize) -> Result<us
     if leaf(ctx, op, arg, &mut value) != 0 {
         return Err(HOST_ERROR);
     }
-    if ((op == LOAD || op == EQUALS || op == SCAN_EMPTY || op == CAPACITY_NEEDED) && value > 1)
-        || ((op == SCAN_ADVANCE || op == ENSURE_CAPACITY || op == SWAP_VALUE
-            || op == SET_FILLED || op == INCREMENT_FILLED) && value != 0)
+    if (matches!(op, LOAD | EQUALS | SCAN_EMPTY | CAPACITY_NEEDED
+            | ITER_MORE | SIZES_EQUAL | ENTER_COMPARE | NOT_EQUAL) && value > 1)
+        || (matches!(op, SCAN_ADVANCE | ENSURE_CAPACITY | SWAP_VALUE
+            | SET_FILLED | INCREMENT_FILLED | SHIFT | CLEAR_BUCKET
+            | DECREMENT_FILLED | ERASE_ITER | RESET_FILLED | ADVANCE_BOTH) && value != 0)
     {
         return Err(INVALID);
     }
@@ -113,8 +131,69 @@ unsafe fn insert(ctx: *mut c_void, leaf: Leaf) -> Result<SbFlatHashReply, u32> {
 }
 
 unsafe fn run(mode: u32, ctx: *mut c_void, leaf: Leaf) -> Result<SbFlatHashReply, u32> {
-    if mode == INSERT {
-        return insert(ctx, leaf);
+    match mode {
+        INSERT => return insert(ctx, leaf),
+        ERASE => {
+            // REQUEST is the already-computed native pos.current - data index.
+            let start = invoke(ctx, leaf, REQUEST, 0)?;
+            let mut current = start;
+            loop {
+                let mask = invoke(ctx, leaf, SIZE, 0)?.wrapping_sub(2);
+                let next = current.wrapping_add(1) & mask;
+                if invoke(ctx, leaf, LOAD, next)? == 0 {
+                    break;
+                }
+                let next_hash = invoke(ctx, leaf, ACTIVE_HASH, 0)?;
+                let mask = invoke(ctx, leaf, SIZE, 0)?.wrapping_sub(2);
+                let next_error = next.wrapping_sub(next_hash) & mask;
+                if next_error == 0 {
+                    break;
+                }
+                // Native hash assignment precedes throwing Value move assignment.
+                // Only a successful SHIFT advances either current pointer/index.
+                invoke(ctx, leaf, SHIFT, 0)?;
+                current = next;
+            }
+            invoke(ctx, leaf, CLEAR_BUCKET, current)?;
+            invoke(ctx, leaf, DECREMENT_FILLED, 0)?;
+            return Ok(SbFlatHashReply { index: start, found: 0 });
+        }
+        ERASE_RANGE => {
+            while invoke(ctx, leaf, ITER_MORE, 0)? != 0 {
+                invoke(ctx, leaf, ERASE_ITER, 0)?;
+            }
+            return Ok(MISS);
+        }
+        CLEAR => {
+            if invoke(ctx, leaf, SIZE, 0)? == 0 {
+                return Ok(MISS);
+            }
+            let mut index = 0usize;
+            while index < invoke(ctx, leaf, SIZE, 0)?.wrapping_sub(1) {
+                invoke(ctx, leaf, CLEAR_BUCKET, index)?;
+                index = index.wrapping_add(1);
+            }
+            invoke(ctx, leaf, RESET_FILLED, 0)?;
+            return Ok(MISS);
+        }
+        EQUAL => {
+            if invoke(ctx, leaf, SIZES_EQUAL, 0)? == 0 {
+                return Ok(MISS);
+            }
+            // Native ENTER_COMPARE owns named i, j, e through nested COMPARE.
+            let equal = invoke(ctx, leaf, ENTER_COMPARE, 0)?;
+            return Ok(SbFlatHashReply { index: 0, found: equal as u32 });
+        }
+        COMPARE => {
+            while invoke(ctx, leaf, ITER_MORE, 0)? != 0 {
+                if invoke(ctx, leaf, NOT_EQUAL, 0)? != 0 {
+                    return Ok(MISS);
+                }
+                invoke(ctx, leaf, ADVANCE_BOTH, 0)?;
+            }
+            return Ok(SbFlatHashReply { index: 0, found: 1 });
+        }
+        _ => {}
     }
     if mode == SCAN {
         while invoke(ctx, leaf, SCAN_EMPTY, 0)? != 0 {
@@ -153,7 +232,7 @@ unsafe fn run(mode: u32, ctx: *mut c_void, leaf: Leaf) -> Result<SbFlatHashReply
     }
 }
 
-/// Executes find/scan/insert control, publishing a reply only after success.
+/// Executes table control, publishing a reply only after success.
 ///
 /// # Safety
 /// Context must remain live and satisfy every leaf operation's native contract.
@@ -549,7 +628,7 @@ mod tests {
         let mut host = Host { steps: vec![], next: 0, bad: false };
         let ctx = (&mut host as *mut Host).cast();
         let mut out = UNCHANGED;
-        let before = [sb_flat_hash_count(0, FIND), sb_flat_hash_count(0, SCAN), sb_flat_hash_count(0, INSERT)];
+        let before: [u64; COUNT] = std::array::from_fn(|mode| sb_flat_hash_count(0, mode as u32));
         unsafe {
             assert_eq!(sb_flat_hash_run(COUNT as u32, ctx, Some(scripted), &mut out), INVALID);
             assert_eq!(sb_flat_hash_run(FIND, std::ptr::null_mut(), Some(scripted), &mut out), INVALID);
@@ -563,7 +642,7 @@ mod tests {
         assert_eq!(out, UNCHANGED);
         assert!(!host.bad);
         assert_eq!(host.next, 0);
-        assert_eq!(before, [sb_flat_hash_count(0, FIND), sb_flat_hash_count(0, SCAN), sb_flat_hash_count(0, INSERT)]);
+        assert_eq!(before, std::array::from_fn(|mode| sb_flat_hash_count(0, mode as u32)));
         assert_eq!(sb_flat_hash_count(2, FIND), 0);
         assert_eq!(sb_flat_hash_count(0, COUNT as u32), 0);
         assert_eq!(sb_flat_hash_count(1, u32::MAX), 0);
@@ -628,6 +707,228 @@ mod tests {
         assert!(state.entered && !state.bad);
         assert_eq!(sb_flat_hash_count(0, FIND), before[0].wrapping_add(1));
         assert_eq!(sb_flat_hash_count(0, SCAN), before[1].wrapping_add(1));
+    }
+    fn erase_absent() -> Vec<Step> {
+        vec![s(REQUEST, 0, 3), s(SIZE, 0, 9), s(LOAD, 4, 0),
+            s(CLEAR_BUCKET, 3, 0), s(DECREMENT_FILLED, 0, 0)]
+    }
+    fn erase_home() -> Vec<Step> {
+        vec![s(REQUEST, 0, 3), s(SIZE, 0, 9), s(LOAD, 4, 1),
+            s(ACTIVE_HASH, 0, 4), s(SIZE, 0, 9),
+            s(CLEAR_BUCKET, 3, 0), s(DECREMENT_FILLED, 0, 0)]
+    }
+    fn erase_shifts() -> Vec<Step> {
+        vec![s(REQUEST, 0, 7), s(SIZE, 0, 9), s(LOAD, 0, 1),
+            // Raw 7 (without FILLED) still has distance 1 after wrapping.
+            s(ACTIVE_HASH, 0, 7), s(SIZE, 0, 9), s(SHIFT, 0, 0),
+            s(SIZE, 0, 9), s(LOAD, 1, 1), s(ACTIVE_HASH, 0, usize::MAX),
+            s(SIZE, 0, 9), s(SHIFT, 0, 0),
+            s(SIZE, 0, 9), s(LOAD, 2, 0),
+            s(CLEAR_BUCKET, 1, 0), s(DECREMENT_FILLED, 0, 0)]
+    }
+    fn clear_fresh() -> Vec<Step> {
+        vec![s(SIZE, 0, 3), s(SIZE, 0, 3), s(CLEAR_BUCKET, 0, 0),
+            // Destructor/reentry changes the native size; condition must reread.
+            s(SIZE, 0, 4), s(CLEAR_BUCKET, 1, 0),
+            s(SIZE, 0, 4), s(CLEAR_BUCKET, 2, 0),
+            s(SIZE, 0, 2), s(RESET_FILLED, 0, 0)]
+    }
+    fn compare_equal() -> Vec<Step> {
+        vec![s(ITER_MORE, 0, 1), s(NOT_EQUAL, 0, 0), s(ADVANCE_BOTH, 0, 0),
+            s(ITER_MORE, 0, 1), s(NOT_EQUAL, 0, 0), s(ADVANCE_BOTH, 0, 0),
+            s(ITER_MORE, 0, 0)]
+    }
+    fn new_cases() -> Vec<(u32, Vec<Step>, SbFlatHashReply)> {
+        vec![
+            (ERASE, erase_absent(), SbFlatHashReply { index: 3, found: 0 }),
+            (ERASE, erase_home(), SbFlatHashReply { index: 3, found: 0 }),
+            (ERASE, erase_shifts(), SbFlatHashReply { index: 7, found: 0 }),
+            (ERASE_RANGE, vec![s(ITER_MORE, 0, 0)], MISS),
+            (ERASE_RANGE, vec![s(ITER_MORE, 0, 1), s(ERASE_ITER, 0, 0),
+                s(ITER_MORE, 0, 1), s(ERASE_ITER, 0, 0), s(ITER_MORE, 0, 0)], MISS),
+            (CLEAR, vec![s(SIZE, 0, 0)], MISS),
+            (CLEAR, vec![s(SIZE, 0, 1), s(SIZE, 0, 1), s(RESET_FILLED, 0, 0)], MISS),
+            (CLEAR, clear_fresh(), MISS),
+            (EQUAL, vec![s(SIZES_EQUAL, 0, 0)], MISS),
+            (EQUAL, vec![s(SIZES_EQUAL, 0, 1), s(ENTER_COMPARE, 0, 0)], MISS),
+            (EQUAL, vec![s(SIZES_EQUAL, 0, 1), s(ENTER_COMPARE, 0, 1)],
+                SbFlatHashReply { index: 0, found: 1 }),
+            (COMPARE, vec![s(ITER_MORE, 0, 0)], SbFlatHashReply { index: 0, found: 1 }),
+            (COMPARE, vec![s(ITER_MORE, 0, 1), s(NOT_EQUAL, 0, 1)], MISS),
+            (COMPARE, compare_equal(), SbFlatHashReply { index: 0, found: 1 }),
+        ]
+    }
+    #[test]
+    fn erase_clear_range_and_order_sensitive_compare_scripts() {
+        for (mode, steps, reply) in new_cases() {
+            execute(mode, &steps, OK, reply);
+        }
+        // A next_error > 0 -> == 0 mutant must fail both required-shift and
+        // home-bucket-stop scripts; don't weaken these into final-state checks.
+        let mut v = erase_home();
+        v[3].value = FILLED | 4;
+        execute(ERASE, &v, OK, SbFlatHashReply { index: 3, found: 0 });
+        // Read the distance mask AFTER ACTIVE_HASH; using the first mask would
+        // wrongly treat raw hash 12 as home at next=4 and omit SHIFT.
+        execute(ERASE, &[s(REQUEST, 0, 3), s(SIZE, 0, 9), s(LOAD, 4, 1),
+            s(ACTIVE_HASH, 0, 12), s(SIZE, 0, 17), s(SHIFT, 0, 0),
+            s(SIZE, 0, 17), s(LOAD, 5, 0), s(CLEAR_BUCKET, 4, 0),
+            s(DECREMENT_FILLED, 0, 0)], OK, SbFlatHashReply { index: 3, found: 0 });
+        // Start and SIZE are unrestricted words, with no validity repair.
+        execute(ERASE, &[s(REQUEST, 0, usize::MAX), s(SIZE, 0, 0),
+            s(LOAD, 0, 0), s(CLEAR_BUCKET, usize::MAX, 0),
+            s(DECREMENT_FILLED, 0, 0)], OK,
+            SbFlatHashReply { index: usize::MAX, found: 0 });
+    }
+    #[test]
+    fn clear_empty_preserves_odd_filled_count_and_zero_fresh_size_wraps() {
+        struct Empty { filled: usize, calls: usize }
+        unsafe extern "C" fn empty(ctx: *mut c_void, op: u32, arg: usize, out: *mut usize) -> u32 {
+            let state = &mut *ctx.cast::<Empty>();
+            state.calls = state.calls.wrapping_add(1);
+            if op == RESET_FILLED { state.filled = 0; }
+            if op != SIZE || arg != 0 { return 1; }
+            out.write(0);
+            0
+        }
+        let mut state = Empty { filled: 42, calls: 0 };
+        let mut out = UNCHANGED;
+        let status = unsafe { sb_flat_hash_run(CLEAR, (&mut state as *mut Empty).cast(), Some(empty), &mut out) };
+        assert_eq!(status, OK);
+        assert_eq!(out, MISS);
+        assert_eq!((state.filled, state.calls), (42, 1));
+        // After the initial guard, zero SIZE means usize::MAX as loop bound,
+        // not a second empty-table early return or invariant repair.
+        execute(CLEAR, &[s(SIZE, 0, 1), s(SIZE, 0, 0),
+            s(CLEAR_BUCKET, 0, 0), s(SIZE, 0, 1), s(RESET_FILLED, 0, 0)], OK, MISS);
+    }
+    #[test]
+    fn new_modes_every_callback_failure_and_malformed_reply_stops() {
+        for (mode, steps, _) in new_cases() {
+            for (i, step) in steps.iter().enumerate() {
+                for status in [1, 2, u32::MAX] {
+                    let mut v = steps[..=i].to_vec();
+                    v[i].status = status;
+                    v[i].value = usize::MAX;
+                    execute(mode, &v, HOST_ERROR, UNCHANGED);
+                }
+                let predicate = matches!(step.op, LOAD | ITER_MORE | SIZES_EQUAL | ENTER_COMPARE | NOT_EQUAL);
+                let void = matches!(step.op, SHIFT | CLEAR_BUCKET | DECREMENT_FILLED
+                    | ERASE_ITER | RESET_FILLED | ADVANCE_BOTH);
+                if predicate || void {
+                    for value in [2, usize::MAX] {
+                        let mut v = steps[..=i].to_vec();
+                        v[i].value = value;
+                        execute(mode, &v, INVALID, UNCHANGED);
+                    }
+                }
+                if void {
+                    let mut v = steps[..=i].to_vec();
+                    v[i].value = 1;
+                    execute(mode, &v, INVALID, UNCHANGED);
+                }
+            }
+        }
+    }
+    #[test]
+    fn shift_failure_keeps_native_hash_prefix_without_clear_or_decrement() {
+        struct Prefix { host: Host, hash: usize, current: usize, moves: usize }
+        unsafe extern "C" fn prefix_leaf(ctx: *mut c_void, op: u32, arg: usize, out: *mut usize) -> u32 {
+            let state = ctx.cast::<Prefix>();
+            let status = scripted(std::ptr::addr_of_mut!((*state).host).cast(), op, arg, out);
+            if op == SHIFT {
+                // Model the native rollback-free hash write before move throws.
+                (*state).hash = 7;
+                (*state).moves = (*state).moves.wrapping_add(1);
+                if status == 0 {
+                    (*state).current = 0;
+                }
+            }
+            status
+        }
+        let mut steps = erase_shifts();
+        let fail = steps.iter().position(|step| step.op == SHIFT).unwrap();
+        steps.truncate(fail + 1);
+        steps[fail].status = 1;
+        let mut state = Prefix { host: Host { steps, next: 0, bad: false }, hash: 12, current: 7, moves: 0 };
+        let mut out = UNCHANGED;
+        let status = unsafe { sb_flat_hash_run(ERASE, (&mut state as *mut Prefix).cast(), Some(prefix_leaf), &mut out) };
+        assert_eq!(status, HOST_ERROR);
+        assert_eq!(out, UNCHANGED);
+        assert_eq!((state.hash, state.current, state.moves), (7, 7, 1));
+        assert!(!state.host.bad);
+        assert_eq!(state.host.next, state.host.steps.len());
+    }
+    #[test]
+    fn equal_nested_compare_scope_order_and_early_exit() {
+        struct Nested { outer: Host, inner: Host, live: bool, inner_active: bool, nested_status: u32 }
+        unsafe extern "C" fn nested_equal(ctx: *mut c_void, op: u32, arg: usize, out: *mut usize) -> u32 {
+            let state = ctx.cast::<Nested>();
+            if (*state).inner_active {
+                if !(*state).live { return 1; }
+                return scripted(std::ptr::addr_of_mut!((*state).inner).cast(), op, arg, out);
+            }
+            let status = scripted(std::ptr::addr_of_mut!((*state).outer).cast(), op, arg, out);
+            if status != 0 { return status; }
+            if op == ENTER_COMPARE {
+                (*state).live = true;
+                (*state).inner_active = true;
+                let mut reply = UNCHANGED;
+                let status = sb_flat_hash_run(COMPARE, ctx, Some(nested_equal), &mut reply);
+                (*state).nested_status = status;
+                (*state).inner_active = false;
+                (*state).live = false;
+                if status != OK { return 1; }
+                out.write(reply.found as usize);
+            }
+            0
+        }
+        let mut cases = vec![(vec![s(ITER_MORE, 0, 0)], 1), (compare_equal(), 1),
+            // Same members in another order are unequal at the first Value !=.
+            (vec![s(ITER_MORE, 0, 1), s(NOT_EQUAL, 0, 1)], 0)];
+        let mut later_mismatch = compare_equal();
+        later_mismatch.truncate(5);
+        later_mismatch[4].value = 1;
+        cases.push((later_mismatch, 0));
+        for (inner, found) in cases {
+            let mut state = Nested {
+                outer: Host { steps: vec![s(SIZES_EQUAL, 0, 1), s(ENTER_COMPARE, 0, 0)], next: 0, bad: false },
+                inner: Host { steps: inner, next: 0, bad: false },
+                live: false, inner_active: false, nested_status: u32::MAX,
+            };
+            let before = [sb_flat_hash_count(0, EQUAL), sb_flat_hash_count(0, COMPARE)];
+            let mut out = UNCHANGED;
+            let status = unsafe { sb_flat_hash_run(EQUAL, (&mut state as *mut Nested).cast(), Some(nested_equal), &mut out) };
+            assert_eq!(status, OK);
+            assert_eq!(out, SbFlatHashReply { index: 0, found });
+            assert_eq!(state.nested_status, OK);
+            assert!(!state.live && !state.inner_active);
+            for host in [&state.outer, &state.inner] {
+                assert!(!host.bad);
+                assert_eq!(host.next, host.steps.len());
+            }
+            assert_eq!(sb_flat_hash_count(0, EQUAL), before[0].wrapping_add(1));
+            assert_eq!(sb_flat_hash_count(0, COMPARE), before[1].wrapping_add(1));
+        }
+    }
+    #[test]
+    fn all_eight_modes_count_and_wrap_independently() {
+        COUNTS.with(|cell| {
+            let saved = cell.get();
+            cell.set([u64::MAX; COUNT]);
+            for mode in 0..COUNT as u32 {
+                // Every accepted entry counts even if its first callback fails.
+                let op = match mode {
+                    FIND | CLEAR => SIZE, SCAN => SCAN_EMPTY, INSERT => CAPACITY_NEEDED,
+                    ERASE => REQUEST, ERASE_RANGE | COMPARE => ITER_MORE,
+                    EQUAL => SIZES_EQUAL, _ => unreachable!(),
+                };
+                execute(mode, &[Step { op, arg: 0, value: usize::MAX, status: 1 }], HOST_ERROR, UNCHANGED);
+                assert_eq!(sb_flat_hash_count(0, mode), 0);
+            }
+            assert_eq!(cell.get(), [0; COUNT]);
+            cell.set(saved);
+        });
     }
     #[test]
     fn reply_matches_native_size_t_u32_layout() {

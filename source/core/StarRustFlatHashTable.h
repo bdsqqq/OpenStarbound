@@ -18,7 +18,12 @@ enum {
   SB_FLAT_HASH_FIND = 0,
   SB_FLAT_HASH_SCAN = 1,
   SB_FLAT_HASH_INSERT = 2,
-  SB_FLAT_HASH_COUNT = 3
+  SB_FLAT_HASH_ERASE = 3,
+  SB_FLAT_HASH_ERASE_RANGE = 4,
+  SB_FLAT_HASH_CLEAR = 5,
+  SB_FLAT_HASH_EQUAL = 6,
+  SB_FLAT_HASH_COMPARE = 7,
+  SB_FLAT_HASH_COUNT = 8
 };
 enum {
   SB_FLAT_HASH_SIZE = 0,
@@ -33,7 +38,18 @@ enum {
   SB_FLAT_HASH_SWAP_VALUE = 9,
   SB_FLAT_HASH_EXCHANGE_HASH = 10,
   SB_FLAT_HASH_SET_FILLED = 11,
-  SB_FLAT_HASH_INCREMENT_FILLED = 12
+  SB_FLAT_HASH_INCREMENT_FILLED = 12,
+  SB_FLAT_HASH_REQUEST = 13,
+  SB_FLAT_HASH_SHIFT = 14,
+  SB_FLAT_HASH_CLEAR_BUCKET = 15,
+  SB_FLAT_HASH_DECREMENT_FILLED = 16,
+  SB_FLAT_HASH_ITER_MORE = 17,
+  SB_FLAT_HASH_ERASE_ITER = 18,
+  SB_FLAT_HASH_RESET_FILLED = 19,
+  SB_FLAT_HASH_SIZES_EQUAL = 20,
+  SB_FLAT_HASH_ENTER_COMPARE = 21,
+  SB_FLAT_HASH_NOT_EQUAL = 22,
+  SB_FLAT_HASH_ADVANCE_BOTH = 23
 };
 
 typedef uint32_t (*SbFlatHashLeaf)(void*, uint32_t, size_t, size_t*);
@@ -42,7 +58,7 @@ typedef struct SbFlatHashReply {
   uint32_t found;
 } SbFlatHashReply;
 
-/* Probe/scan/insert policy: buckets, values, pointers and capacity arithmetic
+/* Table control policy: buckets, values, pointers and capacity arithmetic
  * remain native. SIZE includes the end bucket. FIND HASH evaluates the complete
  * native m_hash(key) expression; INSERT HASH evaluates m_hash(m_getKey(value)). LOAD(index) selects the native active
  * bucket, calls activeBucket->valuePtr() exactly once, saves that returned Value*
@@ -73,7 +89,41 @@ typedef struct SbFlatHashReply {
  * INCREMENT_FILLED increments m_filledCount and returns 0. On each occupied
  * bucket, fresh ACTIVE_HASH and SIZE after false equality/mismatch determine the
  * entry target before swap; another fresh SIZE determines advancement after swap.
- * All operations except LOAD, EXCHANGE_HASH and SET_FILLED receive argument 0.
+ * ERASE REQUEST returns the native pos.current - m_buckets.data() index,
+ * computed before entering Rust; native currentBucket initially points there.
+ * No empty-table or position-validity check is added: original preconditions hold.
+ * Each iteration reads SIZE, masks current+1, and LOAD(next) selects the NEXT
+ * native bucket and saves its valuePtr() exactly once. If present, ACTIVE_HASH
+ * reads that next bucket's raw hash, followed by fresh SIZE for its distance.
+ * A zero distance stops; otherwise SHIFT assigns currentBucket->hash from the
+ * next bucket, then *currentBucket->valuePtr() = std::move(*savedNextValue), then
+ * currentBucket = nextBucket, returning 0. Keep that exact rollback-free order:
+ * hash assignment may survive a throwing move, but current pointer/index advance
+ * only after success. Finally CLEAR_BUCKET(currentIndex) calls setEmpty(), then
+ * DECREMENT_FILLED decrements m_filledCount. Both return 0. Rust returns the
+ * original index with found=0; C++ then calls scan(fresh data + reply.index).
+ * ERASE itself must not scan in Rust or cache data for that outer result.
+ *
+ * ERASE_RANGE ITER_MORE evaluates first != last (exactly 0/1); ERASE_ITER performs
+ * first = erase(first) and returns 0. Keep native parameter/end scopes; ignore the
+ * Rust MISS reply and construct the result from native first.current.
+ * CLEAR returns immediately on initial SIZE==0 WITHOUT resetting filled count.
+ * Otherwise its index loop rereads SIZE for every condition, excluding the end
+ * bucket, calls CLEAR_BUCKET(index), then RESET_FILLED sets m_filledCount=0.
+ * Do not repair odd states or impose bounds. CLEAR returns MISS.
+ *
+ * EQUAL SIZES_EQUAL evaluates size()==rhs.size() (exactly 0/1). Only after true,
+ * ENTER_COMPARE creates named native i=begin(), j=rhs.begin(), e=end(), and calls
+ * nested COMPARE while those iterators remain live, returning its boolean.
+ * COMPARE ITER_MORE evaluates i != e; NOT_EQUAL evaluates the WHOLE native
+ * *i != *j expression, without substituting == or splitting temporary scopes.
+ * On false NOT_EQUAL, ADVANCE_BOTH executes ++i then ++j and returns 0. Comparison
+ * is deliberately iteration-order-sensitive, NOT unordered membership equality.
+ * COMPARE returns {0,1} at end or MISS at first unequal Value; EQUAL returns
+ * {0,nestedBool} or MISS on size mismatch. No iterator is created on size mismatch.
+ *
+ * All operations except LOAD, EXCHANGE_HASH, SET_FILLED and CLEAR_BUCKET
+ * receive argument 0.
  * Predicate replies must be exactly 0/1, void replies exactly 0; word replies
  * (including EXCHANGE_HASH) are unrestricted native size_t values.
  *
