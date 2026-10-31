@@ -8,7 +8,12 @@ uint64_t NetElementVersion::current() const {
 }
 
 uint64_t NetElementVersion::increment() {
+#ifdef STAR_USE_RUST_NET_GROUP
+  m_version = NetElementDetail::scalar(SB_NET_SCALAR_VERSION_NEXT, 0, m_version, 0);
+  return m_version;
+#else
   return ++m_version;
+#endif
 }
 
 void NetElement::enableNetInterpolation(float) {}

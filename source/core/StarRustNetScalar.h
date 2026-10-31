@@ -19,7 +19,9 @@ enum {
   SB_NET_SCALAR_CLAMP = 2,
   SB_NET_SCALAR_SIZE_ENCODE = 3,
   SB_NET_SCALAR_SIZE_DECODE = 4,
-  SB_NET_SCALAR_COUNT = 5
+  SB_NET_SCALAR_VERSION_NEXT = 5,
+  SB_NET_SCALAR_COMPAT = 6,
+  SB_NET_SCALAR_COUNT = 7
 };
 
 typedef struct SbNetScalarReply {
@@ -27,7 +29,9 @@ typedef struct SbNetScalarReply {
   uint64_t pulled;
 } SbNetScalarReply;
 
-/* by-value kernels under the existing STAR_USE_RUST_NET_FIELD selector/runtime;
+/* by-value event/size kernels retain STAR_USE_RUST_NET_FIELD; base-version
+ * kernels use the existing STAR_USE_RUST_NET_GROUP selector/runtime instead.
+ * both selectors default OFF; no new selector or runtime is introduced.
  * no callbacks, input pointers, heap allocation or floating-point operations.
  * this does not retire the field/event/size classes: native c++ still owns
  * storage, streams, assertions, typed operations and virtual updated ordering.
@@ -53,11 +57,21 @@ typedef struct SbNetScalarReply {
  * this preserves native size_t truncation, NOT a clamp: wire UINT64_MAX at
  * width 32 decodes to UINT32_MAX-1. NPos is the zero-wire sentinel, not a
  * license to reject or specially interpret maximal nonzero wire values.
+ * VERSION_NEXT: word_bits=0, previous=0; every u64 value is accepted and
+ * increment wraps modulo 2^64, sharing NEXT arithmetic but not its counter.
+ * native NetElementVersion commits reply.value before returning it; its u64
+ * storage, default zero, copies and trivial getter remain native.
+ * COMPAT: word_bits=32 ONLY; value=stored compatibility version and
+ * previous=rules version, both <=UINT32_MAX. returns u64 boolean
+ * (value==UINT32_MAX || previous>=value). raw UINT32_MAX is accepted as Any.
+ * native checkWithRules MUST retain its outer AnyVersion guard BEFORE reading
+ * rules.version(): passing that read here unconditionally would expand the
+ * native read domain despite an equivalent boolean result.
  * reply.pulled is zero except for PULL; each successful reply writes both
  * fields, size 16/alignment 8, value offset 0 and pulled offset 8.
  *
  * null output, output not aligned to 8, invalid mode, unused nonzero bits or
- * previous, invalid width or encode range returns INVALID BEFORE counters,
+ * previous, invalid width or encode/compat range returns INVALID BEFORE counters,
  * dereference or write. otherwise output must be a live writable 16-byte
  * object; address checks cannot establish provenance or liveness. there are
  * no input-pointer/output alias requirements because inputs are by value.
@@ -68,7 +82,8 @@ uint32_t sb_net_scalar_run(uint32_t mode, uint32_t word_bits,
     uint64_t value, uint64_t previous, SbNetScalarReply* out);
 
 /* kind 0=current-thread accepted entries; kind 1=relaxed all-thread accepted
- * entries. five wrapping u64 counters in each set; accepted entries count
+ * entries. seven wrapping u64 counters in each set, retaining the original
+ * five-mode numeric prefix; accepted entries count
  * before computation, including a later panic. rejected calls never count.
  * invalid kind/mode queries return zero; no reset API. independent relaxed
  * loads are not synchronized snapshots, completion or performance evidence.

@@ -1,8 +1,23 @@
 #pragma once
 
 #include "StarDataStream.hpp"
+#ifdef STAR_USE_RUST_NET_GROUP
+#include "StarRustNetScalar.h"
+#include <stdexcept>
+#endif
 
 namespace Star {
+#ifdef STAR_USE_RUST_NET_GROUP
+namespace NetElementDetail {
+inline uint64_t scalar(uint32_t mode, uint32_t bits, uint64_t value, uint64_t previous) {
+  SbNetScalarReply reply{};
+  if (sb_net_scalar_run(mode, bits, value, previous, &reply) != SB_NET_SCALAR_OK ||
+      reply.pulled != 0 || (mode == SB_NET_SCALAR_COMPAT && reply.value > 1))
+    throw std::logic_error("Invalid network element scalar result");
+  return reply.value;
+}
+}
+#endif
 
 // Monotonically increasing NetElementVersion shared between all NetElements in
 // a network.
@@ -71,9 +86,17 @@ inline void NetElement::setCompatibilityVersion(VersionNumber version) {
 }
 
 inline bool NetElement::checkWithRules(NetCompatibilityRules const& rules) const {
+#ifdef STAR_USE_RUST_NET_GROUP
+  // Keep the native no-read case: AnyVersion must not inspect rules.version().
+  if (m_netCompatibilityVersion != AnyVersion)
+    return NetElementDetail::scalar(SB_NET_SCALAR_COMPAT, 32,
+        m_netCompatibilityVersion, rules.version()) != 0;
+  return true;
+#else
   if (m_netCompatibilityVersion != AnyVersion)
     return rules.version() >= m_netCompatibilityVersion;
   return true;
+#endif
 }
 
 }

@@ -355,7 +355,8 @@ TEST(NetScalar, RustNaturalCountersAndByValueModelsNotCpp32PlatformExecution) {
   scalarLoad(event, 9);
   event.trigger();
   EXPECT_EQ(event.pullOccurrences(), uint64_t(10));
-  uint64_t expectedCounts[] = {1, 1, 2, 1, 1};
+  // This event/size-only fixture has no version pointer and all fields use AnyVersion.
+  uint64_t expectedCounts[] = {1, 1, 2, 1, 1, 0, 0};
   for (uint32_t mode = 0; mode != SB_NET_SCALAR_COUNT; ++mode) {
     EXPECT_EQ(sb_net_scalar_count(0, mode) - before[mode], expectedCounts[mode]);
     EXPECT_GE(sb_net_scalar_count(1, mode) - globalBefore[mode], expectedCounts[mode]);
