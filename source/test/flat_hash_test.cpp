@@ -9,8 +9,11 @@
 #include <cstdio>
 #include <functional>
 #include <limits>
+#include <memory>
+#include <new>
 #include <set>
 #include <string>
+#include <type_traits>
 
 #ifdef STAR_USE_RUST_FLAT_HASH_TABLE
 #include "StarRustFlatHashTable.h"
@@ -949,3 +952,306 @@ TEST(FlatHashErase, PublicMapAndSetMutationAndEquality) {
       EXPECT_GT(sb_flat_hash_count(kind, mode), before[kind][mode - 3]);
 #endif
 }
+
+namespace {
+struct FlatGrowMarker : std::bad_alloc {};
+struct FlatGrowHooks {
+  std::string trace;
+  FlatGrowMarker* marker = nullptr;
+  bool armed = true, failAllocation = false, failMove = false;
+  int failHash = -1, liveValues = 0, liveTemps = 0, buffers = 0;
+  int copies = 0, moves = 0, hashes = 0, allocatorCtors = 0, allocations = 0;
+  size_t allocatedBuckets = 0;
+  void event(char kind, int key) { trace += kind + std::to_string(key) + ";"; }
+  [[noreturn]] void fail() {
+    try { throw FlatGrowMarker{}; }
+    catch (FlatGrowMarker& original) { marker = &original; throw; }
+  }
+  void emit(char const* label) const {
+    std::printf("FLAT_GROW_TRACE %s %s live=%d temps=%d buffers=%d copies=%d moves=%d hashes=%d\n",
+        label, trace.c_str(), liveValues, liveTemps, buffers, copies, moves, hashes);
+  }
+};
+// One identity for every allocator rebind, including the private Bucket type.
+FlatGrowHooks* flatGrowHooks = nullptr;
+struct FlatGrowArm {
+  FlatGrowHooks* previous;
+  explicit FlatGrowArm(FlatGrowHooks& h) : previous(flatGrowHooks) { flatGrowHooks = &h; }
+  ~FlatGrowArm() { flatGrowHooks = previous; }
+};
+template <typename T>
+struct FlatGrowAllocator {
+  using value_type = T;
+  using is_always_equal = std::true_type;
+  template <typename U> struct rebind { using other = FlatGrowAllocator<U>; };
+  FlatGrowAllocator() noexcept {
+    if (flatGrowHooks && flatGrowHooks->armed) {
+      ++flatGrowHooks->allocatorCtors; flatGrowHooks->event('a', 0);
+    }
+  }
+  template <typename U> FlatGrowAllocator(FlatGrowAllocator<U> const&) noexcept {}
+  T* allocate(size_t count) {
+    auto& h = *flatGrowHooks;
+    h.event('A', int(count));
+    if (h.failAllocation) { h.failAllocation = false; h.fail(); }
+    T* result = std::allocator<T>{}.allocate(count);
+    ++h.buffers; ++h.allocations; h.allocatedBuckets = count;
+    return result;
+  }
+  void deallocate(T* storage, size_t count) noexcept {
+    auto& h = *flatGrowHooks;
+    h.event('Z', int(count)); --h.buffers;
+    std::allocator<T>{}.deallocate(storage, count);
+  }
+};
+template <typename T, typename U>
+bool operator==(FlatGrowAllocator<T> const&, FlatGrowAllocator<U> const&) { return true; }
+template <typename T, typename U>
+bool operator!=(FlatGrowAllocator<T> const&, FlatGrowAllocator<U> const&) { return false; }
+struct FlatGrowValue {
+  int key, payload;
+  FlatGrowHooks* hooks;
+  FlatGrowValue(int k, FlatGrowHooks* h) : key(k), payload(k * 17), hooks(h) {
+    EXPECT_EQ(hooks, flatGrowHooks); ++hooks->liveValues; hooks->event('N', key);
+  }
+  FlatGrowValue(FlatGrowValue const& v) : key(v.key), payload(v.payload), hooks(v.hooks) {
+    ++hooks->copies; ++hooks->liveValues; hooks->event('C', key);
+  }
+  FlatGrowValue(FlatGrowValue&& v) : key(v.key), payload(v.payload), hooks(v.hooks) {
+    EXPECT_EQ(hooks, flatGrowHooks); ++hooks->moves; hooks->event('M', key);
+    // Observe moved-from old buckets and parameters, including a failed move.
+    v.key = -v.key - 1; v.payload = -1;
+    if (hooks->failMove) { hooks->failMove = false; hooks->fail(); }
+    ++hooks->liveValues;
+  }
+  FlatGrowValue& operator=(FlatGrowValue const& v) {
+    key = v.key; payload = v.payload; ++hooks->copies; hooks->event('c', key); return *this;
+  }
+  FlatGrowValue& operator=(FlatGrowValue&& v) {
+    key = v.key; payload = v.payload; ++hooks->moves; hooks->event('m', key);
+    v.key = -v.key - 1; v.payload = -1; return *this;
+  }
+  ~FlatGrowValue() noexcept {
+    EXPECT_EQ(hooks, flatGrowHooks); --hooks->liveValues;
+    hooks->event('D', key); hooks->event('p', payload);
+  }
+};
+struct FlatGrowTemp {
+  int const* key;
+  FlatGrowHooks* hooks;
+  FlatGrowTemp(int const& k, FlatGrowHooks* h) : key(&k), hooks(h) {
+    ++hooks->liveTemps; hooks->event('+', *key);
+  }
+  FlatGrowTemp(FlatGrowTemp const&) = delete;
+  ~FlatGrowTemp() noexcept { hooks->event('-', *key); --hooks->liveTemps; }
+  operator int const&() const { EXPECT_GT(hooks->liveTemps, 0); return *key; }
+};
+struct FlatGrowGetKey {
+  FlatGrowHooks* hooks;
+  FlatGrowTemp operator()(FlatGrowValue const& v) const {
+    EXPECT_EQ(v.hooks, hooks); EXPECT_EQ(hooks, flatGrowHooks);
+    hooks->event('g', v.key); return FlatGrowTemp(v.key, hooks);
+  }
+};
+struct FlatGrowHash {
+  FlatGrowHooks* hooks;
+  size_t operator()(int key) const {
+    EXPECT_EQ(hooks, flatGrowHooks); EXPECT_EQ(hooks->liveTemps, 1);
+    ++hooks->hashes; hooks->event('h', key);
+    if (key == hooks->failHash) hooks->fail();
+    return size_t(key);
+  }
+};
+using FlatGrowTable = FlatHashTable<FlatGrowValue, int, FlatGrowGetKey,
+    FlatGrowHash, std::equal_to<int>, FlatGrowAllocator<FlatGrowValue>>;
+}
+
+TEST(FlatHashGrow, ZeroAndNativeLoadThresholds) {
+  size_t const requests[] = {0, 1, 5, 6, 8, 11, 12, 22};
+  size_t const buckets[] = {0, 9, 9, 17, 17, 17, 33, 33};
+  for (bool constructor : {false, true}) {
+    for (size_t i = 0; i != 8; ++i) {
+      FlatGrowHooks h;
+      FlatGrowArm arm(h);
+      {
+        FlatGrowTable table(constructor ? requests[i] : 0, FlatGrowGetKey{&h},
+            FlatGrowHash{&h}, {}, {});
+        if (!constructor) table.reserve(requests[i]);
+        EXPECT_EQ(h.allocatedBuckets, buckets[i]);
+        EXPECT_EQ(h.allocations, requests[i] ? 1 : 0);
+        EXPECT_EQ(h.buffers, requests[i] ? 1 : 0);
+        EXPECT_EQ(h.hashes, 0); EXPECT_EQ(h.moves, 0); EXPECT_EQ(h.copies, 0);
+        EXPECT_EQ(table.size(), 0u); EXPECT_EQ(table.begin(), table.end());
+        auto const& view = table;
+        EXPECT_EQ(view.begin(), view.end());
+        h.event('r', int(requests[i])); h.emit(constructor ? "ctor-threshold" : "reserve-threshold");
+        h.trace.clear();
+      }
+      EXPECT_EQ(h.liveValues, 0); EXPECT_EQ(h.liveTemps, 0); EXPECT_EQ(h.buffers, 0);
+      h.emit("threshold-cleanup");
+    }
+  }
+}
+
+TEST(FlatHashGrow, NoGrowthSkipsOldAllocatorAndReinsertPreservesFields) {
+  FlatGrowHooks h;
+  FlatGrowArm arm(h);
+  {
+    FlatGrowTable table(3, FlatGrowGetKey{&h}, FlatGrowHash{&h}, {}, {});
+    for (int key : {0, 8, 16}) table.insert(FlatGrowValue(key, &h));
+    EXPECT_EQ(h.liveValues, 3);
+    int ctors = h.allocatorCtors, allocations = h.allocations;
+    int hashes = h.hashes, moves = h.moves, copies = h.copies;
+    h.trace.clear();
+    for (size_t request : {0u, 1u, 3u, 4u, 5u}) table.reserve(request);
+    EXPECT_TRUE(h.trace.empty()); EXPECT_EQ(h.allocatorCtors, ctors);
+    EXPECT_EQ(h.allocations, allocations); EXPECT_EQ(h.hashes, hashes);
+    EXPECT_EQ(h.moves, moves); EXPECT_EQ(h.copies, copies);
+    h.emit("no-growth");
+    table.reserve(6);
+    EXPECT_EQ(h.allocatorCtors, ctors + 1); EXPECT_EQ(h.allocations, allocations + 1);
+    EXPECT_EQ(h.allocatedBuckets, 17u); EXPECT_EQ(h.buffers, 1);
+    EXPECT_EQ(h.liveValues, 3); EXPECT_EQ(h.liveTemps, 0);
+    EXPECT_EQ(h.hashes, hashes + 3); EXPECT_EQ(h.copies, copies);
+    EXPECT_GT(h.moves, moves); EXPECT_EQ(table.size(), 3u);
+    h.emit("reserve-reinsert"); h.trace.clear();
+    std::set<int> actual;
+    for (auto const& value : table) {
+      EXPECT_EQ(value.hooks, &h); EXPECT_EQ(value.payload, value.key * 17);
+      actual.insert(value.key);
+    }
+    EXPECT_EQ(actual, (std::set<int>{0, 8, 16}));
+    EXPECT_EQ(table.begin()->key, 0);
+    auto const& view = table;
+    EXPECT_EQ(view.begin()->payload, 0);
+    EXPECT_TRUE(h.trace.empty());
+  }
+  EXPECT_EQ(h.buffers, 0); EXPECT_EQ(h.liveValues, 0); EXPECT_EQ(h.liveTemps, 0);
+  h.emit("reinsert-cleanup");
+}
+
+TEST(FlatHashGrow, SixthInsertGrowsAndKeepsCopiedCaller) {
+  FlatGrowHooks h;
+  FlatGrowArm arm(h);
+  {
+    FlatGrowTable table(0, FlatGrowGetKey{&h}, FlatGrowHash{&h}, {}, {});
+    for (int key : {0, 8, 16, 24, 32}) table.insert(FlatGrowValue(key, &h));
+    EXPECT_EQ(h.allocatedBuckets, 9u); EXPECT_EQ(h.liveValues, 5);
+    int ctors = h.allocatorCtors, allocations = h.allocations;
+    int copies = h.copies, hashes = h.hashes;
+    h.trace.clear();
+    {
+      FlatGrowValue caller(40, &h);
+      auto added = table.insert(caller);
+      ASSERT_TRUE(added.second); EXPECT_EQ(added.first->key, 40);
+      EXPECT_EQ(added.first->payload, 680);
+      EXPECT_EQ(caller.key, 40); EXPECT_EQ(caller.payload, 680);
+      EXPECT_EQ(h.liveValues, 7); EXPECT_EQ(h.copies, copies + 1);
+      EXPECT_EQ(h.hashes, hashes + 6); EXPECT_EQ(h.liveTemps, 0);
+      EXPECT_EQ(h.allocatorCtors, ctors + 1); EXPECT_EQ(h.allocations, allocations + 1);
+      EXPECT_EQ(h.allocatedBuckets, 17u); EXPECT_EQ(h.buffers, 1);
+      EXPECT_EQ(table.size(), 6u);
+      std::set<int> actual;
+      for (auto const& value : table) {
+        actual.insert(value.key); EXPECT_EQ(value.payload, value.key * 17);
+      }
+      EXPECT_EQ(actual, (std::set<int>{0, 8, 16, 24, 32, 40}));
+      h.emit("sixth-insert"); h.trace.clear();
+    }
+    EXPECT_EQ(h.liveValues, 6); h.emit("copied-caller-cleanup"); h.trace.clear();
+  }
+  EXPECT_EQ(h.liveValues, 0); EXPECT_EQ(h.buffers, 0); h.emit("sixth-insert-cleanup");
+}
+
+TEST(FlatHashGrow, AllocationFailureKeepsNativeStaleSizeWithoutRollback) {
+  FlatGrowHooks h;
+  FlatGrowArm arm(h);
+  {
+    FlatGrowTable table(3, FlatGrowGetKey{&h}, FlatGrowHash{&h}, {}, {});
+    for (int key : {0, 8, 16}) table.insert(FlatGrowValue(key, &h));
+    h.trace.clear(); h.failAllocation = true;
+    bool caught = false;
+    try { table.reserve(6); }
+    catch (FlatGrowMarker& original) { caught = true; EXPECT_EQ(&original, h.marker); }
+    EXPECT_TRUE(caught); EXPECT_FALSE(h.failAllocation);
+    EXPECT_EQ(table.size(), 3u); // Reset was never reached after storage swap.
+    EXPECT_EQ(h.liveValues, 0); EXPECT_EQ(h.liveTemps, 0); EXPECT_EQ(h.buffers, 0);
+    h.emit("allocation-throw"); h.trace.clear();
+    // Do not iterate/find/clear the stale-size table. Its empty vector is safe to destroy.
+  }
+  EXPECT_EQ(h.liveValues, 0); EXPECT_EQ(h.buffers, 0);
+  EXPECT_TRUE(h.trace.empty()); h.emit("allocation-cleanup");
+}
+
+TEST(FlatHashGrow, HashFailureRetainsOnlySuccessfulReinsertPrefix) {
+  FlatGrowHooks h;
+  FlatGrowArm arm(h);
+  {
+    FlatGrowTable table(3, FlatGrowGetKey{&h}, FlatGrowHash{&h}, {}, {});
+    for (int key : {0, 8, 16}) table.insert(FlatGrowValue(key, &h));
+    h.trace.clear(); h.failHash = 8;
+    bool caught = false;
+    try { table.reserve(6); }
+    catch (FlatGrowMarker& original) { caught = true; EXPECT_EQ(&original, h.marker); }
+    h.failHash = -1;
+    EXPECT_TRUE(caught); EXPECT_EQ(table.size(), 1u);
+    EXPECT_EQ(h.liveValues, 1); EXPECT_EQ(h.liveTemps, 0); EXPECT_EQ(h.buffers, 1);
+    EXPECT_EQ(h.allocatedBuckets, 17u);
+    h.emit("hash-prefix-throw"); h.trace.clear();
+    auto first = table.begin(); ASSERT_NE(first, table.end());
+    EXPECT_EQ(first->key, 0); EXPECT_EQ(first->payload, 0); EXPECT_EQ(first->hooks, &h);
+    EXPECT_EQ(++first, table.end());
+    // Inspect public values, avoiding a raw-key find that would not create a GetKey temporary.
+  }
+  EXPECT_EQ(h.liveValues, 0); EXPECT_EQ(h.liveTemps, 0); EXPECT_EQ(h.buffers, 0);
+  h.emit("hash-prefix-cleanup");
+}
+
+TEST(FlatHashGrow, FirstOldValueMoveFailureNeverConstructsInsertParameter) {
+  FlatGrowHooks h;
+  FlatGrowArm arm(h);
+  {
+    FlatGrowTable table(3, FlatGrowGetKey{&h}, FlatGrowHash{&h}, {}, {});
+    for (int key : {0, 8, 16}) table.insert(FlatGrowValue(key, &h));
+    int hashes = h.hashes, moves = h.moves, copies = h.copies;
+    h.trace.clear(); h.failMove = true;
+#ifdef STAR_USE_RUST_FLAT_HASH_TABLE
+    auto inserts = sb_flat_hash_count(0, SB_FLAT_HASH_INSERT);
+#endif
+    bool caught = false;
+    try { table.reserve(6); }
+    catch (FlatGrowMarker& original) { caught = true; EXPECT_EQ(&original, h.marker); }
+    EXPECT_TRUE(caught); EXPECT_FALSE(h.failMove);
+#ifdef STAR_USE_RUST_FLAT_HASH_TABLE
+    EXPECT_EQ(sb_flat_hash_count(0, SB_FLAT_HASH_INSERT), inserts);
+#endif
+    EXPECT_EQ(h.hashes, hashes); EXPECT_EQ(h.moves, moves + 1); EXPECT_EQ(h.copies, copies);
+    EXPECT_EQ(table.size(), 0u); EXPECT_EQ(h.liveValues, 0); EXPECT_EQ(h.liveTemps, 0);
+    EXPECT_EQ(h.buffers, 1); EXPECT_EQ(h.allocatedBuckets, 17u);
+    EXPECT_EQ(table.begin(), table.end());
+    h.emit("first-move-throw"); h.trace.clear();
+  }
+  EXPECT_EQ(h.liveValues, 0); EXPECT_EQ(h.buffers, 0); h.emit("first-move-cleanup");
+}
+
+#ifdef STAR_USE_RUST_FLAT_HASH_TABLE
+TEST(FlatHashGrow, PublicGrowthDiagnostics) {
+  uint64_t before[2][5];
+  for (uint32_t kind = 0; kind != 2; ++kind)
+    for (uint32_t mode = 8; mode != 13; ++mode) before[kind][mode - 8] = sb_flat_hash_count(kind, mode);
+  FlatHashMap<int, int> map(0);
+  EXPECT_EQ(map.begin(), map.end());
+  map.reserve(0); map.reserve(5);
+  for (int key = 0; key != 6; ++key) map.insert({key, key * 17});
+  map.reserve(22);
+  auto const& view = map;
+  ASSERT_NE(view.begin(), view.end());
+  for (auto const& value : view) EXPECT_EQ(value.second, value.first * 17);
+  for (uint32_t kind = 0; kind != 2; ++kind)
+    for (uint32_t mode = 8; mode != 13; ++mode)
+      EXPECT_GT(sb_flat_hash_count(kind, mode), before[kind][mode - 8]);
+  EXPECT_EQ(SB_FLAT_HASH_RESERVE, 8); EXPECT_EQ(SB_FLAT_HASH_GROW_PLAN, 9);
+  EXPECT_EQ(SB_FLAT_HASH_GROW_WORK, 10); EXPECT_EQ(SB_FLAT_HASH_REINSERT, 11);
+  EXPECT_EQ(SB_FLAT_HASH_BEGIN, 12); EXPECT_EQ(SB_FLAT_HASH_COUNT, 13);
+}
+#endif

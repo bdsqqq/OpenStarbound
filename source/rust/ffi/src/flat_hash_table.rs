@@ -16,7 +16,12 @@ const ERASE_RANGE: u32 = 4;
 const CLEAR: u32 = 5;
 const EQUAL: u32 = 6;
 const COMPARE: u32 = 7;
-const COUNT: usize = 8;
+const RESERVE: u32 = 8;
+const GROW_PLAN: u32 = 9;
+const GROW_WORK: u32 = 10;
+const REINSERT: u32 = 11;
+const BEGIN: u32 = 12;
+const COUNT: usize = 13;
 const SIZE: u32 = 0;
 const HASH: u32 = 1;
 const LOAD: u32 = 2;
@@ -41,6 +46,18 @@ const SIZES_EQUAL: u32 = 20;
 const ENTER_COMPARE: u32 = 21;
 const NOT_EQUAL: u32 = 22;
 const ADVANCE_BOTH: u32 = 23;
+const FILLED_COUNT: u32 = 24;
+const CALL_GROW: u32 = 25;
+const MIN_CAPACITY: u32 = 26;
+const TOO_FULL: u32 = 27;
+const SWAP_STORAGE: u32 = 28;
+const RESIZE_BUCKETS: u32 = 29;
+const VECTOR_CAPACITY: u32 = 30;
+const SET_END: u32 = 31;
+const ENTER_REINSERT: u32 = 32;
+const INSERT_VALUE: u32 = 33;
+const ADVANCE_OLD: u32 = 34;
+const OLD_VALUE: u32 = 35;
 const FILLED: usize = 1usize << (usize::BITS - 1);
 
 type Leaf = unsafe extern "C" fn(*mut c_void, u32, usize, *mut usize) -> u32;
@@ -76,10 +93,12 @@ unsafe fn invoke(ctx: *mut c_void, leaf: Leaf, op: u32, arg: usize) -> Result<us
         return Err(HOST_ERROR);
     }
     if (matches!(op, LOAD | EQUALS | SCAN_EMPTY | CAPACITY_NEEDED
-            | ITER_MORE | SIZES_EQUAL | ENTER_COMPARE | NOT_EQUAL) && value > 1)
+            | ITER_MORE | SIZES_EQUAL | ENTER_COMPARE | NOT_EQUAL | TOO_FULL | OLD_VALUE) && value > 1)
         || (matches!(op, SCAN_ADVANCE | ENSURE_CAPACITY | SWAP_VALUE
             | SET_FILLED | INCREMENT_FILLED | SHIFT | CLEAR_BUCKET
-            | DECREMENT_FILLED | ERASE_ITER | RESET_FILLED | ADVANCE_BOTH) && value != 0)
+            | DECREMENT_FILLED | ERASE_ITER | RESET_FILLED | ADVANCE_BOTH
+            | CALL_GROW | SWAP_STORAGE | RESIZE_BUCKETS | SET_END
+            | ENTER_REINSERT | INSERT_VALUE | ADVANCE_OLD) && value != 0)
     {
         return Err(INVALID);
     }
@@ -87,7 +106,7 @@ unsafe fn invoke(ctx: *mut c_void, leaf: Leaf, op: u32, arg: usize) -> Result<us
 }
 
 unsafe fn insert(ctx: *mut c_void, leaf: Leaf) -> Result<SbFlatHashReply, u32> {
-    // Keep native fast-math load-factor arithmetic and growth/reentry native.
+    // Keep fast-math arithmetic native; ENSURE_CAPACITY reenters via the host.
     if invoke(ctx, leaf, CAPACITY_NEEDED, 0)? != 0 {
         invoke(ctx, leaf, ENSURE_CAPACITY, 0)?;
     }
@@ -133,6 +152,62 @@ unsafe fn insert(ctx: *mut c_void, leaf: Leaf) -> Result<SbFlatHashReply, u32> {
 unsafe fn run(mode: u32, ctx: *mut c_void, leaf: Leaf) -> Result<SbFlatHashReply, u32> {
     match mode {
         INSERT => return insert(ctx, leaf),
+        RESERVE => {
+            let requested = invoke(ctx, leaf, REQUEST, 0)?;
+            let filled = invoke(ctx, leaf, FILLED_COUNT, 0)?;
+            if requested > filled {
+                invoke(ctx, leaf, CALL_GROW, requested.wrapping_sub(filled))?;
+            }
+            return Ok(MISS);
+        }
+        GROW_PLAN => {
+            if invoke(ctx, leaf, REQUEST, 0)? == 0 {
+                return Ok(MISS);
+            }
+            let count = invoke(ctx, leaf, SIZE, 0)?;
+            let mut new_size = if count != 0 {
+                count.wrapping_sub(1)
+            } else {
+                invoke(ctx, leaf, MIN_CAPACITY, 0)?
+            };
+            // Native fast-math evaluates the load factor; Rust only branches.
+            while invoke(ctx, leaf, TOO_FULL, new_size)? != 0 {
+                new_size = new_size.wrapping_mul(2);
+            }
+            if new_size == invoke(ctx, leaf, SIZE, 0)?.wrapping_sub(1) {
+                return Ok(MISS);
+            }
+            return Ok(SbFlatHashReply { index: new_size, found: 1 });
+        }
+        GROW_WORK => {
+            // Host creates oldBuckets only after GROW_PLAN chose a change,
+            // retaining its lexical scope through this entire nested call.
+            let mut new_size = invoke(ctx, leaf, REQUEST, 0)?;
+            invoke(ctx, leaf, SWAP_STORAGE, 0)?;
+            invoke(ctx, leaf, RESIZE_BUCKETS, new_size.wrapping_add(1))?;
+            while invoke(ctx, leaf, VECTOR_CAPACITY, 0)? > new_size.wrapping_mul(2).wrapping_add(1) {
+                new_size = new_size.wrapping_mul(2);
+                invoke(ctx, leaf, RESIZE_BUCKETS, new_size.wrapping_add(1))?;
+            }
+            invoke(ctx, leaf, SET_END, new_size)?;
+            invoke(ctx, leaf, RESET_FILLED, 0)?;
+            // Only now may native old-vector iterators be initialized.
+            invoke(ctx, leaf, ENTER_REINSERT, 0)?;
+            return Ok(MISS);
+        }
+        REINSERT => {
+            while invoke(ctx, leaf, ITER_MORE, 0)? != 0 {
+                if invoke(ctx, leaf, OLD_VALUE, 0)? != 0 {
+                    invoke(ctx, leaf, INSERT_VALUE, 0)?;
+                }
+                invoke(ctx, leaf, ADVANCE_OLD, 0)?;
+            }
+            return Ok(MISS);
+        }
+        BEGIN => {
+            let present = invoke(ctx, leaf, SIZE, 0)? != 0;
+            return Ok(SbFlatHashReply { index: 0, found: present as u32 });
+        }
         ERASE => {
             // REQUEST is the already-computed native pos.current - data index.
             let start = invoke(ctx, leaf, REQUEST, 0)?;
@@ -912,15 +987,16 @@ mod tests {
         }
     }
     #[test]
-    fn all_eight_modes_count_and_wrap_independently() {
+    fn all_thirteen_modes_count_and_wrap_independently() {
         COUNTS.with(|cell| {
             let saved = cell.get();
             cell.set([u64::MAX; COUNT]);
             for mode in 0..COUNT as u32 {
                 // Every accepted entry counts even if its first callback fails.
                 let op = match mode {
-                    FIND | CLEAR => SIZE, SCAN => SCAN_EMPTY, INSERT => CAPACITY_NEEDED,
-                    ERASE => REQUEST, ERASE_RANGE | COMPARE => ITER_MORE,
+                    FIND | CLEAR | BEGIN => SIZE, SCAN => SCAN_EMPTY, INSERT => CAPACITY_NEEDED,
+                    ERASE | RESERVE | GROW_PLAN | GROW_WORK => REQUEST,
+                    ERASE_RANGE | COMPARE | REINSERT => ITER_MORE,
                     EQUAL => SIZES_EQUAL, _ => unreachable!(),
                 };
                 execute(mode, &[Step { op, arg: 0, value: usize::MAX, status: 1 }], HOST_ERROR, UNCHANGED);
@@ -929,6 +1005,253 @@ mod tests {
             assert_eq!(cell.get(), [0; COUNT]);
             cell.set(saved);
         });
+    }
+    fn growth_cases() -> Vec<(u32, Vec<Step>, SbFlatHashReply)> {
+        vec![
+            (RESERVE, vec![s(REQUEST, 0, 0), s(FILLED_COUNT, 0, 7)], MISS),
+            (RESERVE, vec![s(REQUEST, 0, 7), s(FILLED_COUNT, 0, 7)], MISS),
+            (RESERVE, vec![s(REQUEST, 0, 12), s(FILLED_COUNT, 0, 7), s(CALL_GROW, 5, 0)], MISS),
+            (GROW_PLAN, vec![s(REQUEST, 0, 0)], MISS),
+            (GROW_PLAN, vec![s(REQUEST, 0, 1), s(SIZE, 0, 9),
+                s(TOO_FULL, 8, 0), s(SIZE, 0, 9)], MISS),
+            (GROW_PLAN, vec![s(REQUEST, 0, 1), s(SIZE, 0, 0), s(MIN_CAPACITY, 0, 8),
+                s(TOO_FULL, 8, 0), s(SIZE, 0, 0)], SbFlatHashReply { index: 8, found: 1 }),
+            // TOO_FULL inversion or multiplying by four breaks the exact trace.
+            (GROW_PLAN, vec![s(REQUEST, 0, 19), s(SIZE, 0, 9), s(TOO_FULL, 8, 1),
+                s(TOO_FULL, 16, 1), s(TOO_FULL, 32, 0), s(SIZE, 0, 9)],
+                SbFlatHashReply { index: 32, found: 1 }),
+            // Comparison rereads SIZE rather than caching the initial count.
+            (GROW_PLAN, vec![s(REQUEST, 0, 1), s(SIZE, 0, 9), s(TOO_FULL, 8, 1),
+                s(TOO_FULL, 16, 0), s(SIZE, 0, 17)], MISS),
+            (GROW_WORK, vec![s(REQUEST, 0, 8), s(SWAP_STORAGE, 0, 0),
+                s(RESIZE_BUCKETS, 9, 0), s(VECTOR_CAPACITY, 0, 17),
+                s(SET_END, 8, 0), s(RESET_FILLED, 0, 0), s(ENTER_REINSERT, 0, 0)], MISS),
+            // Strict >, repeated fresh capacities and element-count arguments.
+            (GROW_WORK, oversized_growth(), MISS),
+            (REINSERT, vec![s(ITER_MORE, 0, 0)], MISS),
+            (REINSERT, old_entries(), MISS),
+            (BEGIN, vec![s(SIZE, 0, 0)], MISS),
+            (BEGIN, vec![s(SIZE, 0, 1)], SbFlatHashReply { index: 0, found: 1 }),
+            (BEGIN, vec![s(SIZE, 0, usize::MAX)], SbFlatHashReply { index: 0, found: 1 }),
+        ]
+    }
+    fn oversized_growth() -> Vec<Step> {
+        vec![s(REQUEST, 0, 8), s(SWAP_STORAGE, 0, 0), s(RESIZE_BUCKETS, 9, 0),
+            s(VECTOR_CAPACITY, 0, 66), s(RESIZE_BUCKETS, 17, 0),
+            s(VECTOR_CAPACITY, 0, 66), s(RESIZE_BUCKETS, 33, 0),
+            s(VECTOR_CAPACITY, 0, 65), s(SET_END, 32, 0),
+            s(RESET_FILLED, 0, 0), s(ENTER_REINSERT, 0, 0)]
+    }
+    fn old_entries() -> Vec<Step> {
+        vec![s(ITER_MORE, 0, 1), s(OLD_VALUE, 0, 0), s(ADVANCE_OLD, 0, 0),
+            s(ITER_MORE, 0, 1), s(OLD_VALUE, 0, 1), s(INSERT_VALUE, 0, 0), s(ADVANCE_OLD, 0, 0),
+            s(ITER_MORE, 0, 1), s(OLD_VALUE, 0, 0), s(ADVANCE_OLD, 0, 0), s(ITER_MORE, 0, 0)]
+    }
+    #[test]
+    fn reserve_plan_work_reinsert_and_begin_exact_scripts() {
+        for (mode, steps, reply) in growth_cases() {
+            execute(mode, &steps, OK, reply);
+        }
+    }
+    #[test]
+    fn growth_words_wrap_without_repairs_or_rust_float() {
+        execute(RESERVE, &[s(REQUEST, 0, usize::MAX), s(FILLED_COUNT, 0, 0),
+            s(CALL_GROW, usize::MAX, 0)], OK, MISS);
+        // Arbitrary native MIN_CAPACITY and wrapping doubling are intentional.
+        execute(GROW_PLAN, &[s(REQUEST, 0, usize::MAX), s(SIZE, 0, 0),
+            s(MIN_CAPACITY, 0, FILLED), s(TOO_FULL, FILLED, 1),
+            s(TOO_FULL, 0, 0), s(SIZE, 0, 0)], OK, SbFlatHashReply { index: 0, found: 1 });
+        execute(GROW_PLAN, &[s(REQUEST, 0, 1), s(SIZE, 0, 1),
+            s(TOO_FULL, 0, 0), s(SIZE, 0, 1)], OK, MISS);
+        // Final SIZE subtraction also wraps rather than validating zero.
+        execute(GROW_PLAN, &[s(REQUEST, 0, 1), s(SIZE, 0, 0),
+            s(MIN_CAPACITY, 0, usize::MAX), s(TOO_FULL, usize::MAX, 0), s(SIZE, 0, 0)], OK, MISS);
+        // newSize+1 and newSize*2+1 wrap; capacity 1 equals the wrapped bound.
+        execute(GROW_WORK, &[s(REQUEST, 0, FILLED), s(SWAP_STORAGE, 0, 0),
+            s(RESIZE_BUCKETS, FILLED.wrapping_add(1), 0), s(VECTOR_CAPACITY, 0, 2),
+            s(RESIZE_BUCKETS, 1, 0), s(VECTOR_CAPACITY, 0, 1),
+            s(SET_END, 0, 0), s(RESET_FILLED, 0, 0), s(ENTER_REINSERT, 0, 0)], OK, MISS);
+        execute(GROW_WORK, &[s(REQUEST, 0, usize::MAX), s(SWAP_STORAGE, 0, 0),
+            s(RESIZE_BUCKETS, 0, 0), s(VECTOR_CAPACITY, 0, usize::MAX),
+            s(SET_END, usize::MAX, 0), s(RESET_FILLED, 0, 0), s(ENTER_REINSERT, 0, 0)], OK, MISS);
+    }
+    #[test]
+    fn growth_every_callback_error_and_malformed_reply_stops_without_output() {
+        for (mode, steps, _) in growth_cases() {
+            for (i, step) in steps.iter().enumerate() {
+                for status in [1, 2, u32::MAX] {
+                    let mut v = steps[..=i].to_vec();
+                    v[i].status = status;
+                    v[i].value = usize::MAX;
+                    execute(mode, &v, HOST_ERROR, UNCHANGED);
+                }
+                let predicate = matches!(step.op, TOO_FULL | OLD_VALUE | ITER_MORE);
+                let void = matches!(step.op, CALL_GROW | SWAP_STORAGE | RESIZE_BUCKETS
+                    | SET_END | RESET_FILLED | ENTER_REINSERT | INSERT_VALUE | ADVANCE_OLD);
+                if predicate || void {
+                    for value in [2, usize::MAX] {
+                        let mut v = steps[..=i].to_vec();
+                        v[i].value = value;
+                        execute(mode, &v, INVALID, UNCHANGED);
+                    }
+                }
+                if void {
+                    let mut v = steps[..=i].to_vec();
+                    v[i].value = 1;
+                    execute(mode, &v, INVALID, UNCHANGED);
+                }
+            }
+        }
+    }
+    #[test]
+    fn grow_work_nested_reinsert_insert_keeps_scopes_and_error_prefixes() {
+        struct Rehash {
+            work: Host, old: Host, insert: Host, level: u32,
+            swapped: bool, sentinel: bool, reset: bool, iterators: bool,
+            inserted: bool, nested_status: u32,
+        }
+        unsafe extern "C" fn rehash(ctx: *mut c_void, op: u32, arg: usize, out: *mut usize) -> u32 {
+            let state = ctx.cast::<Rehash>();
+            let host = match (*state).level {
+                0 => std::ptr::addr_of_mut!((*state).work),
+                1 => std::ptr::addr_of_mut!((*state).old),
+                2 => std::ptr::addr_of_mut!((*state).insert),
+                _ => return 1,
+            };
+            let status = scripted(host.cast(), op, arg, out);
+            if status != 0 { return status; }
+            match op {
+                SWAP_STORAGE => (*state).swapped = true,
+                RESIZE_BUCKETS => if !(*state).swapped || (*state).iterators { return 1; },
+                SET_END => (*state).sentinel = true,
+                RESET_FILLED => {
+                    if !(*state).sentinel { return 1; }
+                    (*state).reset = true;
+                }
+                ENTER_REINSERT => {
+                    if !(*state).reset || !(*state).sentinel { return 1; }
+                    (*state).iterators = true;
+                    (*state).level = 1;
+                    let mut reply = UNCHANGED;
+                    let status = sb_flat_hash_run(REINSERT, ctx, Some(rehash), &mut reply);
+                    (*state).level = 0;
+                    (*state).iterators = false;
+                    (*state).nested_status = status;
+                    if status != OK {
+                        if reply != UNCHANGED { return 2; }
+                        return 1;
+                    }
+                    if reply != MISS { return 1; }
+                }
+                ITER_MORE | OLD_VALUE | ADVANCE_OLD => if !(*state).iterators { return 1; },
+                INSERT_VALUE => {
+                    if !(*state).iterators { return 1; }
+                    (*state).level = 2;
+                    let mut reply = UNCHANGED;
+                    let status = sb_flat_hash_run(INSERT, ctx, Some(rehash), &mut reply);
+                    (*state).level = 1;
+                    if status != OK {
+                        if reply != UNCHANGED { return 2; }
+                        return 1;
+                    }
+                    if reply != (SbFlatHashReply { index: 12, found: 0 }) { return 1; }
+                    (*state).inserted = true;
+                }
+                _ => {}
+            }
+            0
+        }
+        let make_host = |steps| Host { steps, next: 0, bad: false };
+        let insertion = insert_new(false);
+        // Exercise every nested INSERT failure, not just the outer callback.
+        for fail in 0..=insertion.len() {
+            let success = fail == insertion.len();
+            let mut inner = insertion.clone();
+            if !success {
+                inner.truncate(fail + 1);
+                inner[fail].status = 1;
+            }
+            let mut old = old_entries();
+            if !success {
+                old.truncate(old.iter().position(|step| step.op == INSERT_VALUE).unwrap() + 1);
+            }
+            let mut state = Rehash {
+                work: make_host(oversized_growth()), old: make_host(old), insert: make_host(inner),
+                level: 0, swapped: false, sentinel: false, reset: false, iterators: false,
+                inserted: false, nested_status: u32::MAX,
+            };
+            let before = [sb_flat_hash_count(0, GROW_WORK), sb_flat_hash_count(0, REINSERT),
+                sb_flat_hash_count(0, INSERT)];
+            let mut out = UNCHANGED;
+            let status = unsafe { sb_flat_hash_run(GROW_WORK, (&mut state as *mut Rehash).cast(), Some(rehash), &mut out) };
+            assert_eq!(status, if success { OK } else { HOST_ERROR });
+            assert_eq!(out, if success { MISS } else { UNCHANGED });
+            assert_eq!(state.nested_status, status);
+            assert!(state.swapped && state.sentinel && state.reset);
+            assert!(!state.iterators);
+            assert_eq!(state.level, 0);
+            assert_eq!(state.inserted, success);
+            for host in [&state.work, &state.old, &state.insert] {
+                assert!(!host.bad);
+                assert_eq!(host.next, host.steps.len());
+            }
+            for (mode, count) in [GROW_WORK, REINSERT, INSERT].iter().copied().zip(before) {
+                assert_eq!(sb_flat_hash_count(0, mode), count.wrapping_add(1));
+            }
+        }
+    }
+    #[test]
+    fn resize_failure_preserves_swapped_storage_and_skips_later_effects() {
+        struct AllocationPrefix { host: Host, swapped: bool, resized: usize, sentinel: bool, reset: bool }
+        unsafe extern "C" fn allocation(ctx: *mut c_void, op: u32, arg: usize, out: *mut usize) -> u32 {
+            let state = ctx.cast::<AllocationPrefix>();
+            let status = scripted(std::ptr::addr_of_mut!((*state).host).cast(), op, arg, out);
+            if status != 0 { return status; }
+            match op {
+                SWAP_STORAGE => (*state).swapped = true,
+                RESIZE_BUCKETS => (*state).resized = arg,
+                SET_END => (*state).sentinel = true,
+                RESET_FILLED => (*state).reset = true,
+                _ => {}
+            }
+            0
+        }
+        let steps = oversized_growth();
+        for (fail, step) in steps.iter().enumerate() {
+            if step.op != RESIZE_BUCKETS { continue; }
+            let mut prefix = steps[..=fail].to_vec();
+            prefix[fail].status = 1;
+            let previous_size = steps[..fail].iter().rev()
+                .find(|step| step.op == RESIZE_BUCKETS).map_or(0, |step| step.arg);
+            let mut state = AllocationPrefix {
+                host: Host { steps: prefix, next: 0, bad: false },
+                swapped: false, resized: 0, sentinel: false, reset: false,
+            };
+            let mut out = UNCHANGED;
+            let status = unsafe {
+                sb_flat_hash_run(GROW_WORK, (&mut state as *mut AllocationPrefix).cast(), Some(allocation), &mut out)
+            };
+            assert_eq!(status, HOST_ERROR);
+            assert_eq!(out, UNCHANGED);
+            assert!(state.swapped);
+            assert_eq!(state.resized, previous_size);
+            assert!(!state.sentinel && !state.reset);
+            assert!(!state.host.bad);
+            assert_eq!(state.host.next, state.host.steps.len());
+        }
+    }
+    #[test]
+    fn growth_modes_success_and_error_count_on_acceptance() {
+        for (mode, steps, reply) in growth_cases() {
+            let before = sb_flat_hash_count(0, mode);
+            let total = sb_flat_hash_count(1, mode);
+            execute(mode, &steps, OK, reply);
+            let mut failure = steps[..1].to_vec();
+            failure[0].status = 1;
+            execute(mode, &failure, HOST_ERROR, UNCHANGED);
+            assert_eq!(sb_flat_hash_count(0, mode), before.wrapping_add(2));
+            assert!(sb_flat_hash_count(1, mode).wrapping_sub(total) >= 2);
+        }
     }
     #[test]
     fn reply_matches_native_size_t_u32_layout() {

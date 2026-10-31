@@ -107,8 +107,10 @@ private:
   static Bucket* scan(Bucket* p);
   static Bucket const* scan(Bucket const* p);
 
+#ifndef STAR_USE_RUST_FLAT_HASH_TABLE
   size_t hashBucket(size_t hash) const;
   size_t bucketError(size_t current, size_t target) const;
+#endif
   void checkCapacity(size_t additionalCapacity);
 
   Buckets m_buckets;
@@ -297,15 +299,33 @@ FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::FlatHashTable(size_t
     GetKey const& getKey, Hash const& hash, Equals const& equal, Allocator const& alloc)
   : m_buckets(alloc), m_filledCount(0), m_getKey(getKey),
     m_hash(hash), m_equals(equal) {
+#ifdef STAR_USE_RUST_FLAT_HASH_TABLE
+  checkCapacity(bucketCount);
+#else
   if (bucketCount != 0)
     checkCapacity(bucketCount);
+#endif
 }
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
 auto FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::begin() -> iterator {
+#ifdef STAR_USE_RUST_FLAT_HASH_TABLE
+  auto reply = FlatHashTableDetail::run(SB_FLAT_HASH_BEGIN, [&](uint32_t operation, size_t) -> size_t {
+    switch (operation) {
+      case SB_FLAT_HASH_SIZE: return m_buckets.size();
+      default: FlatHashTableDetail::invalidOperation();
+    }
+  });
+  if (reply.found > 1)
+    FlatHashTableDetail::invalidOperation();
+  if (!reply.found)
+    return end();
+  return iterator{scan(m_buckets.data())};
+#else
   if (m_buckets.empty())
     return end();
   return iterator{scan(m_buckets.data())};
+#endif
 }
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
@@ -565,8 +585,19 @@ auto FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::find(Key const&
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
 void FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::reserve(size_t capacity) {
+#ifdef STAR_USE_RUST_FLAT_HASH_TABLE
+  FlatHashTableDetail::run(SB_FLAT_HASH_RESERVE, [&](uint32_t operation, size_t argument) -> size_t {
+    switch (operation) {
+      case SB_FLAT_HASH_REQUEST: return capacity;
+      case SB_FLAT_HASH_FILLED: return m_filledCount;
+      case SB_FLAT_HASH_CALL_GROW: checkCapacity(argument); return 0;
+      default: FlatHashTableDetail::invalidOperation();
+    }
+  });
+#else
   if (capacity > m_filledCount)
     checkCapacity(capacity - m_filledCount);
+#endif
 }
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
@@ -654,6 +685,7 @@ auto FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::scan(Bucket con
 #endif
 }
 
+#ifndef STAR_USE_RUST_FLAT_HASH_TABLE
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
 size_t FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::hashBucket(size_t hash) const {
   return hash & (m_buckets.size() - 2);
@@ -663,9 +695,59 @@ template <typename Value, typename Key, typename GetKey, typename Hash, typename
 size_t FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::bucketError(size_t current, size_t target) const {
   return hashBucket(current - target);
 }
+#endif
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
 void FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::checkCapacity(size_t additionalCapacity) {
+#ifdef STAR_USE_RUST_FLAT_HASH_TABLE
+  auto plan = FlatHashTableDetail::run(SB_FLAT_HASH_GROW_PLAN, [&](uint32_t operation, size_t argument) -> size_t {
+    switch (operation) {
+      case SB_FLAT_HASH_REQUEST: return additionalCapacity;
+      case SB_FLAT_HASH_SIZE: return m_buckets.size();
+      case SB_FLAT_HASH_MIN_CAPACITY: return MinCapacity;
+      // Preserve native Release fast-math evaluation, not an equivalent ratio.
+      case SB_FLAT_HASH_TOO_FULL:
+        return (double)(m_filledCount + additionalCapacity) / (double)argument > MaxFillLevel ? 1 : 0;
+      default: FlatHashTableDetail::invalidOperation();
+    }
+  });
+  if (plan.found > 1)
+    FlatHashTableDetail::invalidOperation();
+  if (!plan.found)
+    return;
+
+  // Keep storage ownership in this scope through every nested call and error.
+  // In particular, a failed resize after swap must still destroy oldBuckets.
+  Buckets oldBuckets;
+  FlatHashTableDetail::run(SB_FLAT_HASH_GROW_WORK, [&](uint32_t operation, size_t argument) -> size_t {
+    switch (operation) {
+      case SB_FLAT_HASH_REQUEST: return plan.index;
+      case SB_FLAT_HASH_SWAP_STORAGE: swap(m_buckets, oldBuckets); return 0;
+      case SB_FLAT_HASH_RESIZE_BUCKETS: m_buckets.resize(argument); return 0;
+      case SB_FLAT_HASH_VECTOR_CAPACITY: return m_buckets.capacity();
+      case SB_FLAT_HASH_SET_END: m_buckets[argument].setEnd(); return 0;
+      case SB_FLAT_HASH_RESET_FILLED: m_filledCount = 0; return 0;
+      case SB_FLAT_HASH_ENTER_REINSERT: {
+        // Initialize iterators only after resize, sentinel and count reset.
+        auto oldIter = oldBuckets.begin(), oldEnd = oldBuckets.end();
+        Value* oldValue = nullptr;
+        FlatHashTableDetail::run(SB_FLAT_HASH_REINSERT, [&](uint32_t operation, size_t) -> size_t {
+          switch (operation) {
+            case SB_FLAT_HASH_ITER_MORE: return oldIter != oldEnd ? 1 : 0;
+            case SB_FLAT_HASH_OLD_VALUE:
+              oldValue = oldIter->valuePtr();
+              return oldValue ? 1 : 0;
+            case SB_FLAT_HASH_INSERT_VALUE: insert(std::move(*oldValue)); return 0;
+            case SB_FLAT_HASH_ADVANCE_OLD: ++oldIter; return 0;
+            default: FlatHashTableDetail::invalidOperation();
+          }
+        });
+        return 0;
+      }
+      default: FlatHashTableDetail::invalidOperation();
+    }
+  });
+#else
   if (additionalCapacity == 0)
     return;
 
@@ -700,6 +782,7 @@ void FlatHashTable<Value, Key, GetKey, Hash, Equals, Allocator>::checkCapacity(s
     if (auto ptr = entry.valuePtr())
       insert(std::move(*ptr));
   }
+#endif
 }
 
 }

@@ -23,7 +23,12 @@ enum {
   SB_FLAT_HASH_CLEAR = 5,
   SB_FLAT_HASH_EQUAL = 6,
   SB_FLAT_HASH_COMPARE = 7,
-  SB_FLAT_HASH_COUNT = 8
+  SB_FLAT_HASH_RESERVE = 8,
+  SB_FLAT_HASH_GROW_PLAN = 9,
+  SB_FLAT_HASH_GROW_WORK = 10,
+  SB_FLAT_HASH_REINSERT = 11,
+  SB_FLAT_HASH_BEGIN = 12,
+  SB_FLAT_HASH_COUNT = 13
 };
 enum {
   SB_FLAT_HASH_SIZE = 0,
@@ -49,7 +54,19 @@ enum {
   SB_FLAT_HASH_SIZES_EQUAL = 20,
   SB_FLAT_HASH_ENTER_COMPARE = 21,
   SB_FLAT_HASH_NOT_EQUAL = 22,
-  SB_FLAT_HASH_ADVANCE_BOTH = 23
+  SB_FLAT_HASH_ADVANCE_BOTH = 23,
+  SB_FLAT_HASH_FILLED = 24,
+  SB_FLAT_HASH_CALL_GROW = 25,
+  SB_FLAT_HASH_MIN_CAPACITY = 26,
+  SB_FLAT_HASH_TOO_FULL = 27,
+  SB_FLAT_HASH_SWAP_STORAGE = 28,
+  SB_FLAT_HASH_RESIZE_BUCKETS = 29,
+  SB_FLAT_HASH_VECTOR_CAPACITY = 30,
+  SB_FLAT_HASH_SET_END = 31,
+  SB_FLAT_HASH_ENTER_REINSERT = 32,
+  SB_FLAT_HASH_INSERT_VALUE = 33,
+  SB_FLAT_HASH_ADVANCE_OLD = 34,
+  SB_FLAT_HASH_OLD_VALUE = 35
 };
 
 typedef uint32_t (*SbFlatHashLeaf)(void*, uint32_t, size_t, size_t*);
@@ -58,8 +75,8 @@ typedef struct SbFlatHashReply {
   uint32_t found;
 } SbFlatHashReply;
 
-/* Table control policy: buckets, values, pointers and capacity arithmetic
- * remain native. SIZE includes the end bucket. FIND HASH evaluates the complete
+/* Table control policy: buckets, values, pointers and floating-point load-factor
+ * expressions remain native; Rust owns unsigned capacity control. SIZE includes the end bucket. FIND HASH evaluates the complete
  * native m_hash(key) expression; INSERT HASH evaluates m_hash(m_getKey(value)). LOAD(index) selects the native active
  * bucket, calls activeBucket->valuePtr() exactly once, saves that returned Value*
  * as activeValue, and returns exactly 0/1 for activeValue != null. This getter
@@ -122,8 +139,56 @@ typedef struct SbFlatHashReply {
  * COMPARE returns {0,1} at end or MISS at first unequal Value; EQUAL returns
  * {0,nestedBool} or MISS on size mismatch. No iterator is created on size mismatch.
  *
- * All operations except LOAD, EXCHANGE_HASH, SET_FILLED and CLEAR_BUCKET
- * receive argument 0.
+ * RESERVE reads REQUEST (requested capacity), then FILLED (m_filledCount).
+ * Only when request > filled does CALL_GROW(request-filled) call native
+ * checkCapacity(additional), returning 0. RESERVE always returns MISS.
+ *
+ * GROW_PLAN reads REQUEST (additionalCapacity). Zero returns MISS with no more
+ * callbacks. Otherwise SIZE includes the end bucket; initial newSize is SIZE-1
+ * if nonzero, or native MIN_CAPACITY (8) otherwise. TOO_FULL(newSize) evaluates
+ * EXACTLY (double)(m_filledCount + additionalCapacity) / (double)argument
+ * > MaxFillLevel in compiled native code and returns exactly 0/1. Do not move
+ * that expression into Rust or substitute an algebraically equivalent one.
+ * While true Rust doubles newSize with unsigned wrapping arithmetic. A fresh
+ * SIZE-1 equal to newSize returns MISS; otherwise return {newSize,1}.
+ * Constructor's native nonzero bucketCount guard may call checkCapacity;
+ * GROW_PLAN's zero guard also skips every allocation/storage operation.
+ *
+ * Only AFTER a changed GROW_PLAN reply may native checkCapacity declare
+ * Buckets oldBuckets; its original lexical scope must contain the entire nested
+ * GROW_WORK invocation, including exceptions/rethrows. GROW_WORK REQUEST is the
+ * planned newSize. SWAP_STORAGE swaps m_buckets and oldBuckets, returning 0.
+ * RESIZE_BUCKETS(elementCount) calls m_buckets.resize(elementCount), returning 0;
+ * Rust passes newSize+1, not newSize. VECTOR_CAPACITY reads m_buckets.capacity().
+ * While capacity > newSize*2+1 Rust doubles newSize and resizes again. SET_END
+ * (newSize) calls m_buckets[argument].setEnd(), then RESET_FILLED writes zero.
+ * All these arithmetic operations wrap; no capacity repair or loop cap is added.
+ * ENTER_REINSERT returns 0 and creates native oldBuckets begin/end iterators
+ * ONLY AFTER resize, sentinel and reset, then invokes nested REINSERT while
+ * iterators and oldBuckets remain live. GROW_WORK returns MISS.
+ *
+ * REINSERT ITER_MORE tests the native old-vector iterator against its end.
+ * OLD_VALUE calls entry.valuePtr() once, saves the returned Value*, and returns
+ * exactly 0/1 for its presence (including empty/end buckets). If present,
+ * INSERT_VALUE executes native insert(std::move(*savedOldValue)), retaining
+ * original by-value/full-expression scopes, then returns 0. It may reenter
+ * INSERT and growth; no Rust host borrow spans it. ADVANCE_OLD increments the
+ * old-vector iterator and returns 0, even after absent OLD_VALUE. REINSERT
+ * returns MISS. No old iterator is initialized before ENTER_REINSERT.
+ * Allocation/Value errors retain the original prefix: after swap a failing
+ * resize does NOT restore storage; oldBuckets unwinds in its native scope.
+ * Later failures likewise do not roll back sentinel, filled count or inserts.
+ *
+ * BEGIN reads SIZE once and returns {0,SIZE!=0}. Native begin keeps its original
+ * end() branch for zero and scan(m_buckets.data()) branch for nonzero; Rust does
+ * not compute pointers, scan or normalize an odd native size.
+ *
+ * All operations except LOAD, EXCHANGE_HASH, SET_FILLED, CLEAR_BUCKET,
+ * CALL_GROW, TOO_FULL, RESIZE_BUCKETS and SET_END receive argument 0.
+ * New word replies: FILLED, MIN_CAPACITY, VECTOR_CAPACITY (and existing REQUEST,
+ * SIZE). New boolean replies: TOO_FULL, OLD_VALUE only. New void replies:
+ * CALL_GROW, SWAP_STORAGE, RESIZE_BUCKETS, SET_END, ENTER_REINSERT, INSERT_VALUE,
+ * ADVANCE_OLD. In particular ENTER_REINSERT is void, not a boolean.
  * Predicate replies must be exactly 0/1, void replies exactly 0; word replies
  * (including EXCHANGE_HASH) are unrestricted native size_t values.
  *
