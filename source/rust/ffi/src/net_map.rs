@@ -28,7 +28,19 @@ const BASE_STORE: u32 = 15;
 const DECREMENT_RANGE: u32 = 16;
 const SHOULD_SCAN: u32 = 17;
 const WRITE_SCAN: u32 = 18;
-const COUNT: usize = 19;
+const INSERT: u32 = 19;
+const ADD: u32 = 20;
+const SET: u32 = 21;
+const REMOVE: u32 = 22;
+const CLEAR: u32 = 23;
+const RESET: u32 = 24;
+const RESET_REMOVALS: u32 = 25;
+const RESET_SETS: u32 = 26;
+const WRITE_CHANGE: u32 = 27;
+const READ_TYPE: u32 = 28;
+const RESET_REMOVE_ITEM: u32 = 29;
+const RESET_SET_ITEM: u32 = 30;
+const COUNT: usize = 31;
 const RECORD_RANGE_OP: u32 = 0;
 const MORE: u32 = 1;
 const ADVANCE: u32 = 2;
@@ -79,7 +91,33 @@ const APPLY_SET: u32 = 46;
 const APPLY_REMOVE: u32 = 47;
 const DECREMENT_CURRENT: u32 = 48;
 const WRITE_SCAN_OP: u32 = 49;
-const OP_COUNT: usize = 50;
+const INSERTED: u32 = 50;
+const RECORD_INSERTED: u32 = 51;
+const ADD_FAILED: u32 = 52;
+const THROW_DUPLICATE: u32 = 53;
+const FOUND: u32 = 54;
+const VALUE_DIFFERS: u32 = 55;
+const RECORD_EXISTING_SET: u32 = 56;
+const ASSIGN_EXISTING: u32 = 57;
+const RECORD_NEW_SET: u32 = 58;
+const INSERT_NEW: u32 = 59;
+const ERASE_FOUND: u32 = 60;
+const RECORD_REMOVAL: u32 = 61;
+const NONEMPTY: u32 = 62;
+const RESET_REMOVALS_OP: u32 = 63;
+const RESET_SETS_OP: u32 = 64;
+const RESET_ASSIGN: u32 = 65;
+const RESET_MISSING: u32 = 66;
+const RESET_CHANGED: u32 = 67;
+const RECORD_CURRENT_REMOVE: u32 = 68;
+const WRITE_TAG: u32 = 69;
+const WRITE_KEY: u32 = 70;
+const WRITE_VALUE: u32 = 71;
+const SELECT_KIND: u32 = 72;
+const THROW_TYPE: u32 = 73;
+const RESET_REMOVE_ITEM_OP: u32 = 74;
+const RESET_SET_ITEM_OP: u32 = 75;
+const OP_COUNT: usize = 76;
 
 static TOTALS: [AtomicU64; COUNT] = [const { AtomicU64::new(0) }; COUNT];
 static LEAVES: [AtomicU64; OP_COUNT] = [const { AtomicU64::new(0) }; OP_COUNT];
@@ -88,11 +126,16 @@ thread_local! { static COUNTS: Cell<[u64; COUNT]> = const { Cell::new([0; COUNT]
 fn version_argument(mode: u32) -> bool {
     matches!(mode, SHOULD | WRITE | SHOULD_SCAN | WRITE_SCAN)
 }
+fn valid_argument(mode: u32, argument: u64) -> bool {
+    version_argument(mode) || if mode == READ_TYPE { argument <= u8::MAX as u64 }
+        else { argument == 0 }
+}
 fn valid_reply(op: u32, r: SbNetMapReply) -> bool {
     if op == HISTORY_BOUNDS { return true; }
     r.b == 0 && match op {
         MORE | FRONT_READY | SHOULD_SCAN_OP | SHOULD_QUEUE | HISTORY_EMPTY |
-        PENDING_EARLIER | WRITE_SCAN_OP => r.a <= 1,
+        PENDING_EARLIER | WRITE_SCAN_OP | INSERTED | ADD_FAILED | FOUND |
+        VALUE_DIFFERS | NONEMPTY | RESET_MISSING | RESET_CHANGED => r.a <= 1,
         READ_COUNT | HISTORY_FLOOR | ENTRY_VERSION | READ_CODE => true,
         CHANGE_KIND => r.a <= 2,
         _ => r.a == 0,
@@ -215,6 +258,83 @@ unsafe fn run(mode: u32, ctx: *mut c_void, host: Host, argument: u64) -> Result<
             call(match kind { 0 => APPLY_SET, 1 => APPLY_REMOVE, _ => CLEAR_BASE })?;
             call(MARK_UPDATED)?;
         }
+        INSERT => {
+            // Native named res and original v parameter outlive this root.
+            if call(INSERTED)?.a != 0 {
+                call(RECORD_INSERTED)?;
+                call(MARK_UPDATED)?;
+            }
+        }
+        ADD => {
+            if call(ADD_FAILED)?.a != 0 {
+                call(THROW_DUPLICATE)?;
+                return Err(INVALID);
+            }
+        }
+        SET => {
+            if call(FOUND)?.a != 0 {
+                if call(VALUE_DIFFERS)?.a != 0 {
+                    call(RECORD_EXISTING_SET)?;
+                    call(ASSIGN_EXISTING)?;
+                    call(MARK_UPDATED)?;
+                }
+            } else {
+                call(RECORD_NEW_SET)?;
+                call(INSERT_NEW)?;
+                call(MARK_UPDATED)?;
+            }
+        }
+        REMOVE => {
+            if call(FOUND)?.a == 0 { return Ok(0); }
+            // Erasure precedes history copying, even when history later fails.
+            call(ERASE_FOUND)?;
+            call(RECORD_REMOVAL)?;
+            call(MARK_UPDATED)?;
+            return Ok(1);
+        }
+        CLEAR => {
+            if call(NONEMPTY)?.a != 0 {
+                call(RECORD_CLEAR)?;
+                call(MARK_UPDATED)?;
+                call(CLEAR_BASE)?;
+            }
+        }
+        RESET => {
+            call(RESET_REMOVALS_OP)?;
+            call(RESET_SETS_OP)?;
+            call(RESET_ASSIGN)?;
+        }
+        RESET_REMOVALS | RESET_SETS => {
+            while call(MORE)?.a != 0 {
+                call(if mode == RESET_REMOVALS { RESET_REMOVE_ITEM_OP } else { RESET_SET_ITEM_OP })?;
+                call(ADVANCE)?;
+            }
+        }
+        RESET_REMOVE_ITEM | RESET_SET_ITEM => {
+            // The whole native predicate includes its short-circuit/proxy lifetime.
+            let (predicate, record) = if mode == RESET_REMOVE_ITEM {
+                (RESET_MISSING, RECORD_CURRENT_REMOVE)
+            } else { (RESET_CHANGED, RECORD_CURRENT_SET) };
+            if call(predicate)?.a != 0 {
+                call(record)?;
+                call(MARK_UPDATED)?;
+            }
+        }
+        WRITE_CHANGE => {
+            let kind = call(CHANGE_KIND)?.a;
+            invoke(ctx, host, WRITE_TAG, kind)?;
+            if kind < 2 { call(WRITE_KEY)?; }
+            if kind == 0 { call(WRITE_VALUE)?; }
+        }
+        READ_TYPE => {
+            // Native t was read as u8 BEFORE entry. Typed locals/read/return
+            // scopes stay in C++; no ElementChange or extra move lives here.
+            if argument < 3 { invoke(ctx, host, SELECT_KIND, argument)?; }
+            else {
+                call(THROW_TYPE)?;
+                return Err(INVALID);
+            }
+        }
         _ => return Err(INVALID),
     }
     Ok(0)
@@ -231,7 +351,7 @@ pub unsafe extern "C" fn sb_net_map_run(
 ) -> u32 {
     if mode >= COUNT as u32 || ctx.is_null() || host.is_none() || out_result.is_null()
         || (out_result as usize) % std::mem::align_of::<u32>() != 0
-        || (!version_argument(mode) && argument != 0) {
+        || !valid_argument(mode, argument) {
         return INVALID;
     }
     barrier(|| {
@@ -426,7 +546,8 @@ mod tests {
     fn strict_reply_shapes_and_statuses() {
         for op in 0..OP_COUNT as u32 {
             let bool_op = matches!(op,MORE|FRONT_READY|SHOULD_SCAN_OP|SHOULD_QUEUE|
-                HISTORY_EMPTY|PENDING_EARLIER|WRITE_SCAN_OP);
+                HISTORY_EMPTY|PENDING_EARLIER|WRITE_SCAN_OP|INSERTED|ADD_FAILED|
+                FOUND|VALUE_DIFFERS|NONEMPTY|RESET_MISSING|RESET_CHANGED);
             let scalar = matches!(op,READ_COUNT|HISTORY_FLOOR|ENTRY_VERSION|READ_CODE);
             for a in [0,1,2,3,u64::MAX] {
                 for b in [0,1,u64::MAX] {
@@ -466,7 +587,8 @@ mod tests {
             }
             for mode in 0..COUNT as u32 {
                 if !version_argument(mode) {
-                    assert_eq!(sb_net_map_run(mode,ctx,Some(host),1,&mut out),INVALID);
+                    let argument = if mode == READ_TYPE { 256 } else { 1 };
+                    assert_eq!(sb_net_map_run(mode,ctx,Some(host),argument,&mut out),INVALID);
                 }
             }
             assert_eq!(sb_net_map_run(INIT,std::ptr::null_mut(),Some(host),0,&mut out),INVALID);
@@ -482,6 +604,146 @@ mod tests {
         for (kind,index) in [(0,COUNT as u32),(1,COUNT as u32),(2,OP_COUNT as u32),(3,0)] {
             assert_eq!(sb_net_map_count(kind,index),0);
         }
+    }
+    #[test]
+    fn mutation_schedules_and_every_leaf_failure_prefix() {
+        schedule(INSERT,0,vec![r(INSERTED,0)],0);
+        schedule(INSERT,0,vec![r(INSERTED,1),s(RECORD_INSERTED),s(MARK_UPDATED)],0);
+        schedule(ADD,0,vec![r(ADD_FAILED,0)],0);
+        schedule(SET,0,vec![r(FOUND,1),r(VALUE_DIFFERS,0)],0);
+        schedule(SET,0,vec![r(FOUND,1),r(VALUE_DIFFERS,1),s(RECORD_EXISTING_SET),
+            s(ASSIGN_EXISTING),s(MARK_UPDATED)],0);
+        schedule(SET,0,vec![r(FOUND,0),s(RECORD_NEW_SET),s(INSERT_NEW),s(MARK_UPDATED)],0);
+        schedule(REMOVE,0,vec![r(FOUND,0)],0);
+        schedule(REMOVE,0,vec![r(FOUND,1),s(ERASE_FOUND),s(RECORD_REMOVAL),s(MARK_UPDATED)],1);
+        schedule(CLEAR,0,vec![r(NONEMPTY,0)],0);
+        schedule(CLEAR,0,vec![r(NONEMPTY,1),s(RECORD_CLEAR),s(MARK_UPDATED),s(CLEAR_BASE)],0);
+        schedule(RESET,0,vec![s(RESET_REMOVALS_OP),s(RESET_SETS_OP),s(RESET_ASSIGN)],0);
+        for (mode,body) in [(RESET_REMOVALS,RESET_REMOVE_ITEM_OP),(RESET_SETS,RESET_SET_ITEM_OP)] {
+            schedule(mode,0,vec![r(MORE,0)],0);
+            schedule(mode,0,vec![r(MORE,1),s(body),s(ADVANCE),r(MORE,1),s(body),
+                s(ADVANCE),r(MORE,0)],0);
+        }
+        for (mode,predicate,record) in [(RESET_REMOVE_ITEM,RESET_MISSING,RECORD_CURRENT_REMOVE),
+            (RESET_SET_ITEM,RESET_CHANGED,RECORD_CURRENT_SET)] {
+            schedule(mode,0,vec![r(predicate,0)],0);
+            schedule(mode,0,vec![r(predicate,1),s(record),s(MARK_UPDATED)],0);
+        }
+    }
+    #[test]
+    fn tags_classification_and_throwing_leaves() {
+        for kind in 0..3 {
+            let mut steps = vec![r(CHANGE_KIND,kind),v(WRITE_TAG,kind,0)];
+            if kind < 2 { steps.push(s(WRITE_KEY)); }
+            if kind == 0 { steps.push(s(WRITE_VALUE)); }
+            schedule(WRITE_CHANGE,0,steps,0);
+            schedule(READ_TYPE,kind,vec![v(SELECT_KIND,kind,0)],0);
+        }
+        // All native u8 type codes are admitted, but only 0/1/2 select a kind.
+        // The throwing leaf cannot successfully continue into a typed read.
+        for code in 3..=255 {
+            for (status,expected) in [(OK,INVALID),(HOST_ERROR,HOST_ERROR),(PANIC,INVALID)] {
+                let mut m = Mock::new(vec![s(THROW_TYPE)]);
+                m.fault = Some((0,status,0,0));
+                let mut out = 77;
+                assert_eq!(m.call(READ_TYPE,code,&mut out),expected);
+                assert_eq!(out,77);
+                assert_eq!(m.events,vec![(THROW_TYPE,0)]);
+                assert!(!m.mismatch);
+            }
+        }
+        for (status,expected) in [(OK,INVALID),(HOST_ERROR,HOST_ERROR),(PANIC,INVALID)] {
+            let mut m = Mock::new(vec![r(ADD_FAILED,1),s(THROW_DUPLICATE)]);
+            m.fault = Some((1,status,0,0));
+            let mut out = 77;
+            assert_eq!(m.call(ADD,0,&mut out),expected);
+            assert_eq!(out,77);
+            assert_eq!(m.events,vec![(ADD_FAILED,0),(THROW_DUPLICATE,0)]);
+            assert!(!m.mismatch);
+        }
+        let mut failed = Mock::new(vec![r(ADD_FAILED,1),s(THROW_DUPLICATE)]);
+        failed.fault = Some((0,HOST_ERROR,0,0));
+        let mut out = 77;
+        assert_eq!(failed.call(ADD,0,&mut out),HOST_ERROR);
+        assert_eq!(out,77);
+        assert_eq!(failed.events,vec![(ADD_FAILED,0)]);
+    }
+    #[test]
+    fn appended_leaf_shapes_and_arguments_are_strict() {
+        for op in INSERTED..OP_COUNT as u32 {
+            let boolean = matches!(op,INSERTED|ADD_FAILED|FOUND|VALUE_DIFFERS|NONEMPTY|
+                RESET_MISSING|RESET_CHANGED);
+            let arg = if matches!(op,WRITE_TAG|SELECT_KIND) { 2 } else { 0 };
+            for (a,b) in [(if boolean { 2 } else { 1 },0),(0,1)] {
+                let mut m = Mock::new(vec![v(op,arg,0)]);
+                m.fault = Some((0,OK,a,b));
+                let ctx = &mut m as *mut _ as *mut c_void;
+                assert!(matches!(unsafe { invoke(ctx,host,op,arg) },Err(INVALID)));
+                assert_eq!(m.events,vec![(op,arg)]);
+                assert!(!m.mismatch);
+            }
+        }
+        for mode in 0..COUNT as u32 {
+            for argument in [0,1,2,3,255,256,u64::MAX] {
+                assert_eq!(valid_argument(mode,argument),
+                    matches!(mode,SHOULD|WRITE|SHOULD_SCAN|WRITE_SCAN) ||
+                    if mode == READ_TYPE { argument <= 255 } else { argument == 0 });
+            }
+        }
+        let mut m = Mock::new(vec![]);
+        let mut out = 77;
+        let before = sb_net_map_count(0,READ_TYPE);
+        for invalid in [256,u64::MAX] {
+            assert_eq!(m.call(READ_TYPE,invalid,&mut out),INVALID);
+        }
+        assert_eq!(out,77);
+        assert!(m.events.is_empty());
+        assert_eq!(sb_net_map_count(0,READ_TYPE),before);
+    }
+    #[test]
+    fn mutation_reentry_preserves_parent_continuation() {
+        // Each independent native scope boundary is modeled as a synchronous
+        // nested root. This does not certify actual C++ value/iterator lifetimes.
+        for (mode,steps,at,child,child_steps) in [
+            (INSERT,vec![r(INSERTED,1),s(RECORD_INSERTED),s(MARK_UPDATED)],
+                RECORD_INSERTED,HISTORY,vec![s(APPEND_HISTORY),s(SET_HISTORY_FLOOR),r(HISTORY_EMPTY,1)]),
+            (ADD,vec![r(ADD_FAILED,0)],ADD_FAILED,INSERT,vec![r(INSERTED,1),s(RECORD_INSERTED),s(MARK_UPDATED)]),
+            (RESET,vec![s(RESET_REMOVALS_OP),s(RESET_SETS_OP),s(RESET_ASSIGN)],
+                RESET_REMOVALS_OP,RESET_REMOVALS,vec![r(MORE,1),s(RESET_REMOVE_ITEM_OP),s(ADVANCE),r(MORE,0)]),
+            (RESET_REMOVALS,vec![r(MORE,1),s(RESET_REMOVE_ITEM_OP),s(ADVANCE),r(MORE,0)],
+                RESET_REMOVE_ITEM_OP,RESET_REMOVE_ITEM,vec![r(RESET_MISSING,1),s(RECORD_CURRENT_REMOVE),s(MARK_UPDATED)]),
+            (RESET_SETS,vec![r(MORE,1),s(RESET_SET_ITEM_OP),s(ADVANCE),r(MORE,0)],
+                RESET_SET_ITEM_OP,RESET_SET_ITEM,vec![r(RESET_CHANGED,1),s(RECORD_CURRENT_SET),s(MARK_UPDATED)]),
+        ] {
+            let expected = steps.iter().map(|s| (s.op,s.arg)).collect::<Vec<_>>();
+            let before = sb_net_map_count(0,child);
+            let mut m = Mock::new(steps);
+            m.nested = Some((at,child,0,child_steps));
+            let mut out = 77;
+            assert_eq!(m.call(mode,0,&mut out),OK);
+            assert_eq!(out,0);
+            assert_eq!(m.nested_result,Some((OK,0)));
+            assert_eq!(m.events,expected);
+            assert!(m.steps.is_empty());
+            assert!(!m.mismatch);
+            assert_eq!(sb_net_map_count(0,child),before.wrapping_add(1));
+        }
+    }
+    #[test]
+    fn old_numeric_query_prefix_is_unchanged() {
+        assert_eq!([INIT,FLUSH,TICK,STORE,LOAD,LOAD_ITEM,SHOULD,WRITE,READ,READ_ITEM,
+            HISTORY,PENDING,APPLY,STORE_PENDING,BASE_RECORD,BASE_STORE,DECREMENT_RANGE,
+            SHOULD_SCAN,WRITE_SCAN],std::array::from_fn::<_,19,_>(|i| i as u32));
+        assert_eq!([RECORD_RANGE_OP,MORE,ADVANCE,STORE_RANGE_OP,FLUSH_PENDING,RECORD_CLEAR,
+            RECORD_CURRENT_SET,DECREMENT_RANGE_OP,FRONT_READY,APPLY_FRONT,APPLY_PENDING_MOVE,
+            WRITE_SIZE,WRITE_CURRENT_SET,STORE_PENDING_OP,WRITE_PENDING_CHANGE,CLEAR_HISTORY,
+            CAPTURE_VERSION,CLEAR_PENDING,CLEAR_BASE,READ_COUNT,LOAD_ITEM_OP,RECORD_ITEM,
+            APPLY_ITEM_MOVE,MARK_UPDATED,HISTORY_FLOOR,SHOULD_SCAN_OP,ENTRY_VERSION,
+            WRITE_FULL_CODE,STORE_FULL,WRITE_CHANGE_CODE,WRITE_HISTORY_CHANGE,WRITE_TERMINATOR,
+            READ_CODE,LOAD_FULL,READ_ITEM_OP,SHOULD_QUEUE,QUEUE_ITEM_MOVE,THROW_CODE,
+            APPEND_HISTORY,SET_HISTORY_FLOOR,HISTORY_EMPTY,HISTORY_BOUNDS,POP_HISTORY,
+            PENDING_EARLIER,APPEND_PENDING,CHANGE_KIND,APPLY_SET,APPLY_REMOVE,DECREMENT_CURRENT,
+            WRITE_SCAN_OP],std::array::from_fn::<_,50,_>(|i| i as u32));
     }
     #[test]
     fn tls_global_attempts_and_panic_barrier() {

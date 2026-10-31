@@ -439,10 +439,23 @@ auto NetElementMapWrapper<BaseMap>::end() const -> const_iterator {
 template <typename BaseMap>
 auto NetElementMapWrapper<BaseMap>::insert(value_type v) -> pair<const_iterator, bool> {
   auto res = BaseMap::insert(v);
+#ifdef STAR_USE_RUST_NET_GROUP
+  NetMapDetail::run(SB_NET_MAP_INSERT, [&](uint32_t leaf, uint64_t, SbNetMapReply& reply) {
+    switch (leaf) {
+    case SB_NET_MAP_INSERTED:
+      if (res.second) reply.a = 1; else reply.a = 0;
+      break;
+    case SB_NET_MAP_RECORD_INSERTED: addChangeData(SetChange{std::move(v.first), std::move(v.second)}); break;
+    case SB_NET_MAP_MARK_UPDATED: m_updated = true; break;
+    default: throw std::logic_error("Invalid network-map insert leaf");
+    }
+  });
+#else
   if (res.second) {
     addChangeData(SetChange{std::move(v.first), std::move(v.second)});
     m_updated = true;
   }
+#endif
   return res;
 }
 
@@ -453,13 +466,44 @@ auto NetElementMapWrapper<BaseMap>::insert(key_type k, mapped_type v) -> pair<co
 
 template <typename BaseMap>
 void NetElementMapWrapper<BaseMap>::add(key_type k, mapped_type v) {
+#ifdef STAR_USE_RUST_NET_GROUP
+  NetMapDetail::run(SB_NET_MAP_ADD, [&](uint32_t leaf, uint64_t, SbNetMapReply& reply) {
+    switch (leaf) {
+    case SB_NET_MAP_ADD_FAILED:
+      if (!insert(value_type(std::move(k), std::move(v))).second) reply.a = 1;
+      else reply.a = 0;
+      break;
+    case SB_NET_MAP_THROW_DUPLICATE: throw MapException::format("Entry with key '{}' already present.", outputAny(k));
+    default: throw std::logic_error("Invalid network-map add leaf");
+    }
+  });
+#else
   if (!insert(value_type(std::move(k), std::move(v))).second)
     throw MapException::format("Entry with key '{}' already present.", outputAny(k));
+#endif
 }
 
 template <typename BaseMap>
 void NetElementMapWrapper<BaseMap>::set(key_type k, mapped_type v) {
   auto i = BaseMap::find(k);
+#ifdef STAR_USE_RUST_NET_GROUP
+  NetMapDetail::run(SB_NET_MAP_SET, [&](uint32_t leaf, uint64_t, SbNetMapReply& reply) {
+    switch (leaf) {
+    case SB_NET_MAP_FOUND:
+      if (i != BaseMap::end()) reply.a = 1; else reply.a = 0;
+      break;
+    case SB_NET_MAP_VALUE_DIFFERS:
+      if (!(i->second == v)) reply.a = 1; else reply.a = 0;
+      break;
+    case SB_NET_MAP_RECORD_EXISTING_SET: addChangeData(SetChange{std::move(k), v}); break;
+    case SB_NET_MAP_ASSIGN_EXISTING: i->second = std::move(v); break;
+    case SB_NET_MAP_RECORD_NEW_SET: addChangeData(SetChange{k, v}); break;
+    case SB_NET_MAP_INSERT_NEW: BaseMap::insert(value_type(std::move(k), std::move(v))); break;
+    case SB_NET_MAP_MARK_UPDATED: m_updated = true; break;
+    default: throw std::logic_error("Invalid network-map set leaf");
+    }
+  });
+#else
   if (i != BaseMap::end()) {
     if (!(i->second == v)) {
       addChangeData(SetChange{std::move(k), v});
@@ -471,6 +515,7 @@ void NetElementMapWrapper<BaseMap>::set(key_type k, mapped_type v) {
     BaseMap::insert(value_type(std::move(k), std::move(v)));
     m_updated = true;
   }
+#endif
 }
 
 template <typename BaseMap>
@@ -489,6 +534,19 @@ void NetElementMapWrapper<BaseMap>::push(key_type k, mapped_type v) {
 template <typename BaseMap>
 bool NetElementMapWrapper<BaseMap>::remove(key_type const& k) {
   auto i = BaseMap::find(k);
+#ifdef STAR_USE_RUST_NET_GROUP
+  return NetMapDetail::run(SB_NET_MAP_REMOVE, 0, [&](uint32_t leaf, uint64_t, SbNetMapReply& reply) {
+    switch (leaf) {
+    case SB_NET_MAP_FOUND:
+      if (i != BaseMap::end()) reply.a = 1; else reply.a = 0;
+      break;
+    case SB_NET_MAP_ERASE_FOUND: BaseMap::erase(i); break;
+    case SB_NET_MAP_RECORD_REMOVAL: addChangeData(RemoveChange{k}); break;
+    case SB_NET_MAP_MARK_UPDATED: m_updated = true; break;
+    default: throw std::logic_error("Invalid network-map remove leaf");
+    }
+  });
+#else
   if (i != BaseMap::end()) {
     BaseMap::erase(i);
     addChangeData(RemoveChange{k});
@@ -496,6 +554,7 @@ bool NetElementMapWrapper<BaseMap>::remove(key_type const& k) {
     return true;
   }
   return false;
+#endif
 }
 
 template <typename BaseMap>
@@ -527,11 +586,25 @@ auto NetElementMapWrapper<BaseMap>::maybeTake(key_type const& k) -> Maybe<mapped
 
 template <typename BaseMap>
 void NetElementMapWrapper<BaseMap>::clear() {
+#ifdef STAR_USE_RUST_NET_GROUP
+  NetMapDetail::run(SB_NET_MAP_CLEAR, [&](uint32_t leaf, uint64_t, SbNetMapReply& reply) {
+    switch (leaf) {
+    case SB_NET_MAP_NONEMPTY:
+      if (!empty()) reply.a = 1; else reply.a = 0;
+      break;
+    case SB_NET_MAP_RECORD_CLEAR: addChangeData(ClearChange()); break;
+    case SB_NET_MAP_MARK_UPDATED: m_updated = true; break;
+    case SB_NET_MAP_CLEAR_BASE: BaseMap::clear(); break;
+    default: throw std::logic_error("Invalid network-map clear leaf");
+    }
+  });
+#else
   if (!empty()) {
     addChangeData(ClearChange());
     m_updated = true;
     BaseMap::clear();
   }
+#endif
 }
 
 template <typename BaseMap>
@@ -541,6 +614,49 @@ BaseMap const& NetElementMapWrapper<BaseMap>::baseMap() const {
 
 template <typename BaseMap>
 void NetElementMapWrapper<BaseMap>::reset(BaseMap values) {
+#ifdef STAR_USE_RUST_NET_GROUP
+  NetMapDetail::run(SB_NET_MAP_RESET, [&](uint32_t leaf, uint64_t, SbNetMapReply&) {
+    switch (leaf) {
+    case SB_NET_MAP_RESET_REMOVALS_OP:
+      NetMapDetail::withRange(SB_NET_MAP_RESET_REMOVALS, 0, *this,
+          [&](uint32_t item, uint64_t, auto& current, SbNetMapReply&) {
+        if (item != SB_NET_MAP_RESET_REMOVE_ITEM_OP) throw std::logic_error("Invalid network-map reset removal item");
+        auto const& p = current();
+        NetMapDetail::run(SB_NET_MAP_RESET_REMOVE_ITEM, [&](uint32_t part, uint64_t, SbNetMapReply& reply) {
+          switch (part) {
+          case SB_NET_MAP_RESET_MISSING:
+            if (!values.contains(p.first)) reply.a = 1; else reply.a = 0;
+            break;
+          case SB_NET_MAP_RECORD_CURRENT_REMOVE: addChangeData(RemoveChange{p.first}); break;
+          case SB_NET_MAP_MARK_UPDATED: m_updated = true; break;
+          default: throw std::logic_error("Invalid network-map reset removal leaf");
+          }
+        });
+      });
+      break;
+    case SB_NET_MAP_RESET_SETS_OP:
+      NetMapDetail::withRange(SB_NET_MAP_RESET_SETS, 0, values,
+          [&](uint32_t item, uint64_t, auto& current, SbNetMapReply&) {
+        if (item != SB_NET_MAP_RESET_SET_ITEM_OP) throw std::logic_error("Invalid network-map reset set item");
+        auto const& p = current();
+        auto v = ptr(p.first);
+        NetMapDetail::run(SB_NET_MAP_RESET_SET_ITEM, [&](uint32_t part, uint64_t, SbNetMapReply& reply) {
+          switch (part) {
+          case SB_NET_MAP_RESET_CHANGED:
+            if (!v || !(*v == p.second)) reply.a = 1; else reply.a = 0;
+            break;
+          case SB_NET_MAP_RECORD_CURRENT_SET: addChangeData(SetChange{p.first, p.second}); break;
+          case SB_NET_MAP_MARK_UPDATED: m_updated = true; break;
+          default: throw std::logic_error("Invalid network-map reset set leaf");
+          }
+        });
+      });
+      break;
+    case SB_NET_MAP_RESET_ASSIGN: BaseMap::operator=(std::move(values)); break;
+    default: throw std::logic_error("Invalid network-map reset leaf");
+    }
+  });
+#else
   for (auto const& p : *this) {
     if (!values.contains(p.first)) {
       addChangeData(RemoveChange{p.first});
@@ -557,6 +673,7 @@ void NetElementMapWrapper<BaseMap>::reset(BaseMap values) {
   }
 
   BaseMap::operator=(std::move(values));
+#endif
 }
 
 template <typename BaseMap>
@@ -577,6 +694,25 @@ uint64_t NetElementMapWrapper<BaseMap>::changeDataLastVersion() const {
 
 template <typename BaseMap>
 void NetElementMapWrapper<BaseMap>::writeChange(DataStream& ds, ElementChange const& change) {
+#ifdef STAR_USE_RUST_NET_GROUP
+  SetChange const* sc = nullptr;
+  RemoveChange const* rc = nullptr;
+  NetMapDetail::run(SB_NET_MAP_WRITE_CHANGE, [&](uint32_t leaf, uint64_t argument, SbNetMapReply& reply) {
+    switch (leaf) {
+    case SB_NET_MAP_CHANGE_KIND:
+      if ((sc = change.template ptr<SetChange>())) reply.a = 0;
+      else if ((rc = change.template ptr<RemoveChange>())) reply.a = 1;
+      else reply.a = 2;
+      break;
+    case SB_NET_MAP_WRITE_TAG: ds.write<uint8_t>(argument); break;
+    case SB_NET_MAP_WRITE_KEY:
+      if (sc) ds.write(sc->key); else ds.write(rc->key);
+      break;
+    case SB_NET_MAP_WRITE_VALUE: ds.write(sc->value); break;
+    default: throw std::logic_error("Invalid network-map change writer leaf");
+    }
+  });
+#else
   if (auto sc = change.template ptr<SetChange>()) {
     ds.write<uint8_t>(0);
     ds.write(sc->key);
@@ -587,11 +723,36 @@ void NetElementMapWrapper<BaseMap>::writeChange(DataStream& ds, ElementChange co
   } else {
     ds.write<uint8_t>(2);
   }
+#endif
 }
 
 template <typename BaseMap>
 auto NetElementMapWrapper<BaseMap>::readChange(DataStream& ds) -> ElementChange {
   uint8_t t = ds.read<uint8_t>();
+#ifdef STAR_USE_RUST_NET_GROUP
+  // Rust selects the tag; typed local construction/reads/return conversion stay
+  // in these native branches, with no optional<Variant> or extra value moves.
+  uint32_t kind = 3;
+  NetMapDetail::run(SB_NET_MAP_READ_TYPE, t, [&](uint32_t leaf, uint64_t argument, SbNetMapReply&) {
+    switch (leaf) {
+    case SB_NET_MAP_SELECT_KIND: kind = argument; break;
+    case SB_NET_MAP_THROW_TYPE: throw IOException("Improper type code received in NetElementMapWrapper::readChange");
+    default: throw std::logic_error("Invalid network-map change reader leaf");
+    }
+  });
+  if (kind == 0) {
+    SetChange sc;
+    ds.read(sc.key);
+    ds.read(sc.value);
+    return sc;
+  } else if (kind == 1) {
+    RemoveChange rc;
+    ds.read(rc.key);
+    return rc;
+  } else {
+    return ClearChange();
+  }
+#else
   if (t == 0) {
     SetChange sc;
     ds.read(sc.key);
@@ -606,6 +767,7 @@ auto NetElementMapWrapper<BaseMap>::readChange(DataStream& ds) -> ElementChange 
   } else {
     throw IOException("Improper type code received in NetElementMapWrapper::readChange");
   }
+#endif
 }
 
 template <typename BaseMap>

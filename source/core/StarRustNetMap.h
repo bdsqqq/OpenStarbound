@@ -33,7 +33,19 @@ enum {
   SB_NET_MAP_DECREMENT_RANGE = 16,
   SB_NET_MAP_SHOULD_SCAN = 17,
   SB_NET_MAP_WRITE_SCAN = 18,
-  SB_NET_MAP_COUNT = 19
+  SB_NET_MAP_INSERT = 19,
+  SB_NET_MAP_ADD = 20,
+  SB_NET_MAP_SET = 21,
+  SB_NET_MAP_REMOVE = 22,
+  SB_NET_MAP_CLEAR = 23,
+  SB_NET_MAP_RESET = 24,
+  SB_NET_MAP_RESET_REMOVALS = 25,
+  SB_NET_MAP_RESET_SETS = 26,
+  SB_NET_MAP_WRITE_CHANGE = 27,
+  SB_NET_MAP_READ_TYPE = 28,
+  SB_NET_MAP_RESET_REMOVE_ITEM = 29,
+  SB_NET_MAP_RESET_SET_ITEM = 30,
+  SB_NET_MAP_COUNT = 31
 };
 enum {
   SB_NET_MAP_RECORD_RANGE_OP = 0,
@@ -86,7 +98,33 @@ enum {
   SB_NET_MAP_APPLY_REMOVE = 47,
   SB_NET_MAP_DECREMENT_CURRENT = 48,
   SB_NET_MAP_WRITE_SCAN_OP = 49,
-  SB_NET_MAP_OP_COUNT = 50
+  SB_NET_MAP_INSERTED = 50,
+  SB_NET_MAP_RECORD_INSERTED = 51,
+  SB_NET_MAP_ADD_FAILED = 52,
+  SB_NET_MAP_THROW_DUPLICATE = 53,
+  SB_NET_MAP_FOUND = 54,
+  SB_NET_MAP_VALUE_DIFFERS = 55,
+  SB_NET_MAP_RECORD_EXISTING_SET = 56,
+  SB_NET_MAP_ASSIGN_EXISTING = 57,
+  SB_NET_MAP_RECORD_NEW_SET = 58,
+  SB_NET_MAP_INSERT_NEW = 59,
+  SB_NET_MAP_ERASE_FOUND = 60,
+  SB_NET_MAP_RECORD_REMOVAL = 61,
+  SB_NET_MAP_NONEMPTY = 62,
+  SB_NET_MAP_RESET_REMOVALS_OP = 63,
+  SB_NET_MAP_RESET_SETS_OP = 64,
+  SB_NET_MAP_RESET_ASSIGN = 65,
+  SB_NET_MAP_RESET_MISSING = 66,
+  SB_NET_MAP_RESET_CHANGED = 67,
+  SB_NET_MAP_RECORD_CURRENT_REMOVE = 68,
+  SB_NET_MAP_WRITE_TAG = 69,
+  SB_NET_MAP_WRITE_KEY = 70,
+  SB_NET_MAP_WRITE_VALUE = 71,
+  SB_NET_MAP_SELECT_KIND = 72,
+  SB_NET_MAP_THROW_TYPE = 73,
+  SB_NET_MAP_RESET_REMOVE_ITEM_OP = 74,
+  SB_NET_MAP_RESET_SET_ITEM_OP = 75,
+  SB_NET_MAP_OP_COUNT = 76
 };
 
 typedef SbNetGroupReply SbNetMapReply;
@@ -99,15 +137,18 @@ typedef SbNetGroupHost SbNetMapHost;
  * host/root signature types. Rust never interprets or retains native pointers.
  *
  * Root arguments: SHOULD/WRITE/SHOULD_SCAN/WRITE_SCAN accept any u64 fromVersion;
- * every other mode requires zero. Only those four roots return booleans (0/1);
- * every other successful root writes zero. INVALID=1, HOST_ERROR=2, PANIC=3
+ * READ_TYPE accepts any u8 (0..255); every other mode requires zero. Only those
+ * four version roots and REMOVE return booleans (0/1); every other successful
+ * root writes zero. INVALID=1, HOST_ERROR=2, PANIC=3
  * never write output. Validation precedes root counters and callbacks. Failure
  * preserves native prefix effects; there is no rollback or invented cleanup.
  *
  * All callbacks receive argument zero except SHOULD_SCAN_OP/WRITE_SCAN_OP,
- * which receive the root fromVersion unchanged. Replies are zero-initialized.
+ * which receive the root fromVersion unchanged, and WRITE_TAG/SELECT_KIND,
+ * which receive kind 0..2. Replies are zero-initialized.
  * Strict boolean replies (a<=1,b=0): MORE, FRONT_READY, SHOULD_SCAN_OP,
- * SHOULD_QUEUE, HISTORY_EMPTY, PENDING_EARLIER, WRITE_SCAN_OP.
+ * SHOULD_QUEUE, HISTORY_EMPTY, PENDING_EARLIER, WRITE_SCAN_OP, INSERTED,
+ * ADD_FAILED, FOUND, VALUE_DIFFERS, NONEMPTY, RESET_MISSING, RESET_CHANGED.
  * Scalar replies (any a,b=0): READ_COUNT, HISTORY_FLOOR, ENTRY_VERSION, READ_CODE.
  * HISTORY_BOUNDS permits any a,b (front version,current floor).
  * CHANGE_KIND requires a<=2,b=0. All other replies require a=b=0.
@@ -173,8 +214,54 @@ typedef SbNetGroupHost SbNetMapHost;
  * the whole native append({interpolationTime,std::move(change)}) expression.
  * APPLY: CHANGE_KIND (0 set,1 remove,2 clear), APPLY_SET/APPLY_REMOVE/CLEAR_BASE,
  * MARK_UPDATED. Native variant pointer selection, whole typed move calls and
- * parameter lifetimes remain native. writeChange/readChange codecs and public
- * mutation methods remain C++, invoking the private controllers as appropriate.
+ * parameter lifetimes remain native.
+ *
+ * INSERT: BEFORE entry native auto res=BaseMap::insert(v) uses the named lvalue
+ * v (copy, not move); res/v and return conversion outlive Rust. If INSERTED,
+ * RECORD_INSERTED performs addChangeData(SetChange{move(v.first),move(v.second)})
+ * then MARK_UPDATED. ADD: ADD_FAILED evaluates the WHOLE original native
+ * if(!insert(value_type(move(k),move(v))).second) expression. If true,
+ * THROW_DUPLICATE throws original MapException::format with outputAny(k),
+ * including the already-moved k state. A claimed successful throw is INVALID.
+ * SET: native auto i=BaseMap::find(k) BEFORE entry. If FOUND (whole native
+ * i!=BaseMap::end()), then if VALUE_DIFFERS (whole native !(i->second==v),
+ * including proxy temporary destruction before callback return),
+ * RECORD_EXISTING_SET (SetChange{move(k),v}), ASSIGN_EXISTING (i->second=move(v)),
+ * MARK_UPDATED. Missing: RECORD_NEW_SET (SetChange{k,v}), INSERT_NEW (whole
+ * BaseMap::insert(value_type(move(k),move(v)))), MARK_UPDATED. No predicate
+ * rechecks, extra typed copies, equality conversions or alias repair.
+ * REMOVE: native find scope BEFORE entry. If FOUND: ERASE_FOUND,
+ * RECORD_REMOVAL (RemoveChange{k}), MARK_UPDATED, return true; else false.
+ * Erasure precedes history copy even on failure; no key-alias/domain repair.
+ * CLEAR: NONEMPTY retains whole native if(!empty()); if true, RECORD_CLEAR,
+ * MARK_UPDATED, CLEAR_BASE, in that order.
+ *
+ * RESET: native by-value BaseMap values parameter stays live throughout.
+ * RESET_REMOVALS_OP owns the original this-range and nests RESET_REMOVALS;
+ * RESET_SETS_OP owns the values-range and nests RESET_SETS; then RESET_ASSIGN
+ * performs the whole BaseMap::operator=(move(values)). Both range roots loop
+ * while MORE: RESET_REMOVE_ITEM_OP/RESET_SET_ITEM_OP respectively, ADVANCE.
+ * Each item callback owns const& p=*iterator through the nested item root;
+ * RESET_SET_ITEM additionally captures native auto v=ptr(p.first) BEFORE entry.
+ * RESET_REMOVE_ITEM: if RESET_MISSING (whole !values.contains(p.first)),
+ * RECORD_CURRENT_REMOVE (RemoveChange{p.first}), MARK_UPDATED.
+ * RESET_SET_ITEM: if RESET_CHANGED (whole !v||!(*v==p.second)),
+ * RECORD_CURRENT_SET (SetChange{p.first,p.second}), MARK_UPDATED. Iterator and
+ * per-item/pointer/proxy scopes remain native and close AFTER their subroots,
+ * without an optional/pair/extra iterator move. No delayed predicate recheck.
+ *
+ * WRITE_CHANGE: CHANGE_KIND caches native const SetChange/RemoveChange pointers
+ * before any write, returning 0/1/2. WRITE_TAG(kind), if kind<2 WRITE_KEY,
+ * if kind==0 WRITE_VALUE. Typed DataStream calls/full-expressions stay native.
+ * READ_TYPE: native uint8_t t=ds.read<uint8_t>() BEFORE entry. If argument<3,
+ * SELECT_KIND(argument), otherwise THROW_TYPE throws original IOException
+ * (successful throwing callback is INVALID). Native code captures selected kind
+ * then structurally dispatches ORIGINAL scoped SetChange/RemoveChange locals,
+ * reads and return sc/rc/ClearChange(), preserving default construction, NRVO,
+ * conversions and copy/move timing. No Rust ElementChange or extra result move.
+ * Tag control is NOT typed storage or codec retirement. Public push/erase/take/
+ * maybeTake stay untouched, including unsupported C++17 aggregate-paren domains.
+ * Old modes 0..18/leaves 0..49, signatures and query prefixes stay unchanged.
  *
  * Safety: nonnull live ctx and host; aligned writable u32 output; all borrowed
  * native captures remain live throughout synchronous callbacks/reentry. Host
