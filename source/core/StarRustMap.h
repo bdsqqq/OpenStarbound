@@ -20,7 +20,9 @@ enum {
   SB_MAP_FILTER = 2,
   SB_MAP_REMOVE = 3,
   SB_MAP_PRINT = 4,
-  SB_MAP_COUNT = 5
+  SB_MAP_MERGE = 5,
+  SB_MAP_MERGE_ITEM = 6,
+  SB_MAP_COUNT = 7
 };
 
 enum {
@@ -32,7 +34,11 @@ enum {
   SB_MAP_FIRST_ELEMENT = 5,
   SB_MAP_FIRST_PREFIX = 6,
   SB_MAP_NEXT_PREFIX = 7,
-  SB_MAP_PRINT_VALUE = 8
+  SB_MAP_PRINT_VALUE = 8,
+  SB_MAP_MERGE_ITEM_OP = 9,
+  SB_MAP_INSERTED = 10,
+  SB_MAP_OVERWRITE = 11,
+  SB_MAP_UPDATE = 12
 };
 
 /* The host owns values, storage, iterator lifetimes and native expression scopes.
@@ -42,8 +48,9 @@ enum {
  * temporaries, contextual bool conversion, ADL and exceptions) together, rather
  * than adding value slots/copies or extending native lifetimes across the ABI.
  *
- * Every invocation gets a fresh zero-initialized response. MORE, MATCH and
- * FIRST_ELEMENT must respond with exact 0/1; all other operations require 0.
+ * Every invocation gets a fresh zero-initialized response. MORE, MATCH,
+ * FIRST_ELEMENT, MERGE_ITEM_OP, INSERTED and OVERWRITE must respond with exact
+ * 0/1; all other operations (including UPDATE) require 0.
  * A nonzero host status takes precedence over malformed response, returning
  * HOST_ERROR. A malformed response with host status 0 returns INVALID. Both
  * stop immediately: no later callback is invoked. Host exceptions must be caught
@@ -61,7 +68,17 @@ enum {
  * throws after postfix increment, that native prefix is retained, not repaired.
  * PRINT: MORE -> FIRST_ELEMENT -> FIRST_PREFIX if true, otherwise NEXT_PREFIX
  * -> PRINT_VALUE -> ADVANCE. Opening/closing delimiters stay outside Rust.
- * COLLECT, FILTER and PRINT return result 0 on success.
+ * MERGE: MORE -> MERGE_ITEM_OP -> ADVANCE until exhaustion. Result is 1 iff
+ * ALL item replies were 1 (including empty input); a 0 NEVER short-circuits.
+ * MERGE_ITEM: INSERTED once; true returns 1 without OVERWRITE or UPDATE. False
+ * calls OVERWRITE; true calls UPDATE. Either duplicate path returns 0.
+ * The native MERGE_ITEM_OP leaf owns the complete auto res = targetMap.insert(*i)
+ * expression and keeps res alive through nested MERGE_ITEM and UPDATE. It
+ * destroys res BEFORE root ADVANCE; neither res nor Value crosses into Rust.
+ * INSERTED preserves native !res.second ? 0u : 1u (including operator!). MORE
+ * evaluates sourceMap.end() anew each iteration, not a cached end iterator.
+ * COLLECT, FILTER and PRINT return 0; FIRST, REMOVE, MERGE and MERGE_ITEM return
+ * exact boolean results on success.
  *
  * out_result must designate live writable aligned uint32_t storage. Invalid
  * mode, null context/function/output or output misalignment returns INVALID
@@ -112,13 +129,15 @@ uint32_t sb_map_select(uint32_t mode, uint32_t predicate, uint32_t* out_action);
 
 /* Per-thread wrapping accepted-entry totals, separate for loops and selections.
  * Count host errors, malformed callback replies, panics and each reentrant entry.
- * Rejected calls do not count. Invalid mode queries return zero. These counters
+ * Rejected calls do not count. Loop modes are 0..6; selection modes remain 0..4.
+ * Invalid mode queries return zero. These counters
  * are independent of Set/OrderedSet/FlatHashTable and do not count consumers.
  */
 uint64_t sb_map_count(uint32_t mode);
 uint64_t sb_map_select_count(uint32_t mode);
 
 /* Process-wide wrapping accepted totals: kind 0 loops, kind 1 selections.
+ * Bounds are family-specific: kind 0 accepts 0..6, kind 1 accepts only 0..4.
  * Invalid kind/mode queries return zero. Relaxed atomics are diagnostics only,
  * not synchronized snapshots, program-state barriers or distinct-container counts.
  */

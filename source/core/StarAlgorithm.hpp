@@ -1,6 +1,9 @@
 #pragma once
 
 #include "StarException.hpp"
+#ifdef STAR_USE_RUST_MAP
+#include "StarMapHost.hpp"
+#endif
 
 namespace Star {
 
@@ -112,6 +115,31 @@ Container intersect(Container const& a, Container const& b) {
 template <typename MapType1, typename MapType2>
 bool mapMerge(MapType1& targetMap, MapType2 const& sourceMap, bool overwrite = false) {
   bool noCommonKeys = true;
+#ifdef STAR_USE_RUST_MAP
+  {
+    auto i = sourceMap.begin();
+    noCommonKeys = MapDetail::run(SB_MAP_MERGE, [&](uint32_t operation) -> uint32_t {
+      switch (operation) {
+        case SB_MAP_MORE: return i != sourceMap.end() ? 1u : 0u;
+        case SB_MAP_ADVANCE: ++i; return 0;
+        case SB_MAP_MERGE_ITEM_OP: {
+          // Keep the original insert-result lifetime across its decision and
+          // assignment, including destruction before advancing the source.
+          auto res = targetMap.insert(*i);
+          return MapDetail::run(SB_MAP_MERGE_ITEM, [&](uint32_t operation) -> uint32_t {
+            switch (operation) {
+              case SB_MAP_INSERTED: return !res.second ? 0u : 1u;
+              case SB_MAP_OVERWRITE: return overwrite ? 1u : 0u;
+              case SB_MAP_UPDATE: res.first->second = i->second; return 0;
+              default: MapDetail::invalidOperation();
+            }
+          });
+        }
+        default: MapDetail::invalidOperation();
+      }
+    }) != 0;
+  }
+#else
   for (auto i = sourceMap.begin(); i != sourceMap.end(); ++i) {
     auto res = targetMap.insert(*i);
     if (!res.second) {
@@ -120,6 +148,7 @@ bool mapMerge(MapType1& targetMap, MapType2 const& sourceMap, bool overwrite = f
         res.first->second = i->second;
     }
   }
+#endif
   return noCommonKeys;
 }
 

@@ -4485,18 +4485,24 @@ void ClientApplication::renderBehaviorScenario() {
   metadata = metadata.set("rustUuidCalls", JsonArray{sb_uuid_count(0), sb_uuid_count(1), sb_uuid_count(2)});
 #endif
 #ifdef STAR_USE_RUST_MAP
-  uint64_t mapMain[2][SB_MAP_COUNT], mapAll[2][SB_MAP_COUNT];
-  for (uint32_t kind = 0; kind != 2; ++kind)
-    for (uint32_t mode = 0; mode != SB_MAP_COUNT; ++mode) {
-      mapMain[kind][mode] = kind == 0 ? sb_map_count(mode) : sb_map_select_count(mode);
-      mapAll[kind][mode] = sb_map_global_count(kind, mode);
-    }
+  uint64_t mapMainLoops[SB_MAP_COUNT], mapAllLoops[SB_MAP_COUNT];
+  uint64_t mapMainSelect[SB_MAP_SELECT_COUNT], mapAllSelect[SB_MAP_SELECT_COUNT];
+  for (uint32_t mode = 0; mode != SB_MAP_COUNT; ++mode) {
+    mapMainLoops[mode] = sb_map_count(mode);
+    mapAllLoops[mode] = sb_map_global_count(0, mode);
+  }
+  for (uint32_t mode = 0; mode != SB_MAP_SELECT_COUNT; ++mode) {
+    mapMainSelect[mode] = sb_map_select_count(mode);
+    mapAllSelect[mode] = sb_map_global_count(1, mode);
+  }
   JsonArray mapLoops, mapSelections, allMapLoops, allMapSelections;
   for (uint32_t mode = 0; mode != SB_MAP_COUNT; ++mode) {
-    mapLoops.append(mapMain[0][mode]);
-    mapSelections.append(mapMain[1][mode]);
-    allMapLoops.append(mapAll[0][mode]);
-    allMapSelections.append(mapAll[1][mode]);
+    mapLoops.append(mapMainLoops[mode]);
+    allMapLoops.append(mapAllLoops[mode]);
+  }
+  for (uint32_t mode = 0; mode != SB_MAP_SELECT_COUNT; ++mode) {
+    mapSelections.append(mapMainSelect[mode]);
+    allMapSelections.append(mapAllSelect[mode]);
   }
   metadata = metadata.set("rustMap", JsonObject{
       {"main", JsonObject{{"loops", mapLoops}, {"selections", mapSelections}}},

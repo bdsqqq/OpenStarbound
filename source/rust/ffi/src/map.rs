@@ -13,7 +13,10 @@ const FIRST: u32 = 1;
 const FILTER: u32 = 2;
 const REMOVE: u32 = 3;
 const PRINT: u32 = 4;
-const COUNT: usize = 5;
+const MERGE: u32 = 5;
+const MERGE_ITEM: u32 = 6;
+const COUNT: usize = 7;
+const SELECT_COUNT: usize = 5;
 const MORE: u32 = 0;
 const ADVANCE: u32 = 1;
 const APPEND: u32 = 2;
@@ -23,6 +26,10 @@ const FIRST_ELEMENT: u32 = 5;
 const FIRST_PREFIX: u32 = 6;
 const NEXT_PREFIX: u32 = 7;
 const PRINT_VALUE: u32 = 8;
+const MERGE_ITEM_OP: u32 = 9;
+const INSERTED: u32 = 10;
+const OVERWRITE: u32 = 11;
+const UPDATE: u32 = 12;
 const REQUIRED: u32 = 0;
 const OPTIONAL: u32 = 1;
 const DEFAULT: u32 = 2;
@@ -33,14 +40,14 @@ const THROW: u32 = 1;
 const EMPTY: u32 = 2;
 const DEFAULT_ACTION: u32 = 3;
 const INSERT: u32 = 4;
-const UPDATE: u32 = 5;
+const UPDATE_ACTION: u32 = 5;
 
 pub type Leaf = unsafe extern "C" fn(*mut c_void, u32, *mut u32) -> u32;
 static TOTALS: [AtomicU64; COUNT] = [const { AtomicU64::new(0) }; COUNT];
-static SELECT_TOTALS: [AtomicU64; COUNT] = [const { AtomicU64::new(0) }; COUNT];
+static SELECT_TOTALS: [AtomicU64; SELECT_COUNT] = [const { AtomicU64::new(0) }; SELECT_COUNT];
 thread_local! {
     static COUNTS: Cell<[u64; COUNT]> = const { Cell::new([0; COUNT]) };
-    static SELECT_COUNTS: Cell<[u64; COUNT]> = const { Cell::new([0; COUNT]) };
+    static SELECT_COUNTS: Cell<[u64; SELECT_COUNT]> = const { Cell::new([0; SELECT_COUNT]) };
 }
 
 fn aligned(out: *mut u32) -> bool {
@@ -53,7 +60,7 @@ unsafe fn invoke(ctx: *mut c_void, leaf: Leaf, operation: u32) -> Result<u32, u3
     if leaf(ctx, operation, &mut response) != 0 {
         return Err(HOST_ERROR);
     }
-    let boolean = matches!(operation, MORE | MATCH | FIRST_ELEMENT);
+    let boolean = matches!(operation, MORE | MATCH | FIRST_ELEMENT | MERGE_ITEM_OP | INSERTED | OVERWRITE);
     if response > u32::from(boolean) {
         return Err(INVALID);
     }
@@ -61,7 +68,12 @@ unsafe fn invoke(ctx: *mut c_void, leaf: Leaf, operation: u32) -> Result<u32, u3
 }
 
 unsafe fn run(mode: u32, ctx: *mut c_void, leaf: Leaf) -> Result<u32, u32> {
-    let mut removed = 0;
+    if mode == MERGE_ITEM {
+        if invoke(ctx, leaf, INSERTED)? != 0 { return Ok(1); }
+        if invoke(ctx, leaf, OVERWRITE)? != 0 { invoke(ctx, leaf, UPDATE)?; }
+        return Ok(0);
+    }
+    let mut result = u32::from(mode == MERGE);
     while invoke(ctx, leaf, MORE)? != 0 {
         match mode {
             COLLECT => { invoke(ctx, leaf, APPEND)?; }
@@ -75,7 +87,7 @@ unsafe fn run(mode: u32, ctx: *mut c_void, leaf: Leaf) -> Result<u32, u32> {
                 if invoke(ctx, leaf, MATCH)? != 0 {
                     // ERASE owns the WHOLE native erase(i++), even if erase throws.
                     invoke(ctx, leaf, ERASE)?;
-                    removed = 1;
+                    result = 1;
                     continue;
                 }
             }
@@ -84,21 +96,28 @@ unsafe fn run(mode: u32, ctx: *mut c_void, leaf: Leaf) -> Result<u32, u32> {
                 invoke(ctx, leaf, if first { FIRST_PREFIX } else { NEXT_PREFIX })?;
                 invoke(ctx, leaf, PRINT_VALUE)?;
             }
+            MERGE => {
+                // A duplicate changes the result, never visitation of later items.
+                if invoke(ctx, leaf, MERGE_ITEM_OP)? == 0 { result = 0; }
+            }
             _ => unreachable!(),
         }
         invoke(ctx, leaf, ADVANCE)?;
     }
-    Ok(removed)
+    Ok(result)
 }
 
 fn count_entry(mode: usize, select: bool) {
-    let (totals, counts) = if select { (&SELECT_TOTALS, &SELECT_COUNTS) } else { (&TOTALS, &COUNTS) };
-    totals[mode].fetch_add(1, Ordering::Relaxed);
-    counts.with(|cell| {
-        let mut values = cell.get();
-        values[mode] = values[mode].wrapping_add(1);
-        cell.set(values);
-    });
+    fn increment<const N: usize>(mode: usize, totals: &[AtomicU64; N], counts: &'static std::thread::LocalKey<Cell<[u64; N]>>) {
+        totals[mode].fetch_add(1, Ordering::Relaxed);
+        counts.with(|cell| {
+            let mut values = cell.get();
+            values[mode] = values[mode].wrapping_add(1);
+            cell.set(values);
+        });
+    }
+    if select { increment(mode, &SELECT_TOTALS, &SELECT_COUNTS); }
+    else { increment(mode, &TOTALS, &COUNTS); }
 }
 
 /// Runs only loop/branch policy, without retaining context or native values.
@@ -128,7 +147,7 @@ pub unsafe extern "C" fn sb_map_run(mode: u32, ctx: *mut c_void, leaf: Option<Le
 /// Output must designate live writable aligned u32 storage. Only success writes.
 #[no_mangle]
 pub unsafe extern "C" fn sb_map_select(mode: u32, predicate: u32, out: *mut u32) -> u32 {
-    if mode as usize >= COUNT || predicate > 1 || !aligned(out) { return INVALID; }
+    if mode as usize >= SELECT_COUNT || predicate > 1 || !aligned(out) { return INVALID; }
     catch_unwind(AssertUnwindSafe(|| {
         count_entry(mode as usize, true);
         let yes = predicate != 0;
@@ -136,7 +155,7 @@ pub unsafe extern "C" fn sb_map_select(mode: u32, predicate: u32, out: *mut u32)
             REQUIRED | ADD => if yes { VALUE } else { THROW },
             OPTIONAL => if yes { VALUE } else { EMPTY },
             DEFAULT => if yes { VALUE } else { DEFAULT_ACTION },
-            SET => if yes { UPDATE } else { INSERT },
+            SET => if yes { UPDATE_ACTION } else { INSERT },
             _ => unreachable!(),
         };
         out.write(action);
@@ -154,17 +173,16 @@ pub extern "C" fn sb_map_count(mode: u32) -> u64 {
 /// Wrapping accepted selections on this thread, independent of loop counts.
 #[no_mangle]
 pub extern "C" fn sb_map_select_count(mode: u32) -> u64 {
-    if mode as usize >= COUNT { return 0; }
+    if mode as usize >= SELECT_COUNT { return 0; }
     catch_unwind(|| SELECT_COUNTS.with(|cell| cell.get()[mode as usize])).unwrap_or(0)
 }
 
 /// Relaxed diagnostic totals; not a synchronized snapshot or consumer count.
 #[no_mangle]
 pub extern "C" fn sb_map_global_count(kind: u32, mode: u32) -> u64 {
-    if mode as usize >= COUNT { return 0; }
     match kind {
-        0 => TOTALS[mode as usize].load(Ordering::Relaxed),
-        1 => SELECT_TOTALS[mode as usize].load(Ordering::Relaxed),
+        0 if (mode as usize) < COUNT => TOTALS[mode as usize].load(Ordering::Relaxed),
+        1 if (mode as usize) < SELECT_COUNT => SELECT_TOTALS[mode as usize].load(Ordering::Relaxed),
         _ => 0,
     }
 }
@@ -210,12 +228,22 @@ mod tests {
             (PRINT, vec![s(MORE,1), s(FIRST_ELEMENT,1), s(FIRST_PREFIX,0), s(PRINT_VALUE,0),
                 s(ADVANCE,0), s(MORE,1), s(FIRST_ELEMENT,0), s(NEXT_PREFIX,0),
                 s(PRINT_VALUE,0), s(ADVANCE,0), s(MORE,0)], 0),
+            (MERGE, vec![s(MORE,1), s(MERGE_ITEM_OP,1), s(ADVANCE,0), s(MORE,1),
+                s(MERGE_ITEM_OP,1), s(ADVANCE,0), s(MORE,0)], 1),
+            (MERGE, vec![s(MORE,1), s(MERGE_ITEM_OP,0), s(ADVANCE,0), s(MORE,0)], 0),
+            (MERGE, vec![s(MORE,1), s(MERGE_ITEM_OP,0), s(ADVANCE,0), s(MORE,1),
+                s(MERGE_ITEM_OP,1), s(ADVANCE,0), s(MORE,1), s(MERGE_ITEM_OP,0),
+                s(ADVANCE,0), s(MORE,0)], 0),
+            (MERGE_ITEM, vec![s(INSERTED,1)], 1),
+            (MERGE_ITEM, vec![s(INSERTED,0), s(OVERWRITE,0)], 0),
+            (MERGE_ITEM, vec![s(INSERTED,0), s(OVERWRITE,1), s(UPDATE,0)], 0),
         ]
     }
 
     #[test]
     fn exact_order_empty_short_circuit_and_consecutive_removal() {
-        for mode in 0..COUNT as u32 { execute(mode, &[s(MORE,0)], OK, 0); }
+        for mode in 0..MERGE { execute(mode, &[s(MORE,0)], OK, 0); }
+        execute(MERGE, &[s(MORE,0)], OK, 1);
         for (mode, steps, result) in traces() { execute(mode, &steps, OK, result); }
         execute(FIRST, &[s(MORE,1), s(MATCH,1)], OK, 1);
         execute(FIRST, &[s(MORE,1), s(MATCH,0), s(ADVANCE,0), s(MORE,0)], OK, 0);
@@ -234,10 +262,13 @@ mod tests {
                     prefix[i].2 = status;
                     execute(mode, &prefix, HOST_ERROR, 0);
                 }
-                let mut prefix = steps[..=i].to_vec();
-                let op = prefix[i].0;
-                prefix[i].1 = if matches!(op, MORE | MATCH | FIRST_ELEMENT) { 2 } else { 1 };
-                execute(mode, &prefix, INVALID, 0);
+                let op = steps[i].0;
+                let minimum = if matches!(op, MORE | MATCH | FIRST_ELEMENT | MERGE_ITEM_OP | INSERTED | OVERWRITE) { 2 } else { 1 };
+                for reply in [minimum, u32::MAX] {
+                    let mut prefix = steps[..=i].to_vec();
+                    prefix[i].1 = reply;
+                    execute(mode, &prefix, INVALID, 0);
+                }
             }
         }
     }
@@ -334,8 +365,8 @@ mod tests {
 
     #[test]
     fn selection_table_and_independent_accepted_counts() {
-        let expected = [[THROW,VALUE], [EMPTY,VALUE], [DEFAULT_ACTION,VALUE], [INSERT,UPDATE], [THROW,VALUE]];
-        for mode in 0..COUNT as u32 {
+        let expected = [[THROW,VALUE], [EMPTY,VALUE], [DEFAULT_ACTION,VALUE], [INSERT,UPDATE_ACTION], [THROW,VALUE]];
+        for mode in 0..SELECT_COUNT as u32 {
             let before = sb_map_select_count(mode);
             let loops = sb_map_count(mode);
             for predicate in 0..=1 {
@@ -345,6 +376,72 @@ mod tests {
             }
             assert_eq!(sb_map_select_count(mode), before.wrapping_add(2));
             assert_eq!(sb_map_count(mode), loops);
+        }
+    }
+
+    #[test]
+    fn merge_modes_do_not_extend_selection_bounds() {
+        for mode in [MERGE, MERGE_ITEM] {
+            let loops = sb_map_count(mode);
+            let before = sb_map_global_count(0, mode);
+            execute(mode, if mode == MERGE { &[Step(MORE,0,0)] } else { &[Step(INSERTED,1,0)] }, OK, 1);
+            assert_eq!(sb_map_count(mode), loops.wrapping_add(1));
+            assert!(sb_map_global_count(0, mode).wrapping_sub(before) >= 1);
+            let mut out = 91;
+            for predicate in [0,1] {
+                assert_eq!(unsafe { sb_map_select(mode, predicate, &mut out) }, INVALID);
+            }
+            assert_eq!(out, 91);
+            assert_eq!(sb_map_select_count(mode), 0);
+            assert_eq!(sb_map_global_count(1, mode), 0);
+        }
+    }
+
+    // Models the host's nested error translation, not C++ typed lifetimes.
+    struct MergeHost { index: usize, active: bool, fail: bool, saved_error: u32, updates: usize, trace: Vec<u32> }
+    unsafe extern "C" fn merge_host(ctx: *mut c_void, op: u32, out: *mut u32) -> u32 {
+        let host = ctx.cast::<MergeHost>();
+        (*host).trace.push(op);
+        match op {
+            MORE => *out = u32::from((*host).index < 3),
+            MERGE_ITEM_OP => {
+                (*host).active = true;
+                let mut nested = 91;
+                // No Rust borrow of the host survives this nested call.
+                let status = sb_map_run(MERGE_ITEM, ctx, Some(merge_host), &mut nested);
+                (*host).active = false;
+                if status != OK {
+                    assert_eq!(nested, 91);
+                    return 7; // Host preserves its saved exception for outer rethrow.
+                }
+                *out = nested;
+            }
+            INSERTED => { assert!((*host).active); *out = u32::from((*host).index != 1); }
+            OVERWRITE => { assert!((*host).active); *out = 1; }
+            UPDATE => {
+                assert!((*host).active);
+                (*host).updates += 1;
+                if (*host).fail { (*host).saved_error = 42; return 7; }
+            }
+            ADVANCE => { assert!(!(*host).active); (*host).index += 1; }
+            _ => return 99,
+        }
+        0
+    }
+    #[test]
+    fn nested_merge_counts_prefix_and_saved_host_error() {
+        for fail in [false,true] {
+            let before = [sb_map_count(MERGE), sb_map_count(MERGE_ITEM)];
+            let mut host = MergeHost { index: 0, active: false, fail, saved_error: 0, updates: 0, trace: vec![] };
+            let mut out = 91;
+            let status = unsafe { sb_map_run(MERGE, (&mut host as *mut MergeHost).cast(), Some(merge_host), &mut out) };
+            let mut expected = vec![MORE,MERGE_ITEM_OP,INSERTED,ADVANCE,MORE,MERGE_ITEM_OP,INSERTED,OVERWRITE,UPDATE];
+            if !fail { expected.extend([ADVANCE,MORE,MERGE_ITEM_OP,INSERTED,ADVANCE,MORE]); }
+            assert_eq!(host.trace, expected);
+            assert_eq!((status,out), if fail { (HOST_ERROR,91) } else { (OK,0) });
+            assert_eq!((host.index,host.updates,host.saved_error,host.active), if fail { (1,1,42,false) } else { (3,1,0,false) });
+            assert_eq!(sb_map_count(MERGE), before[0].wrapping_add(1));
+            assert_eq!(sb_map_count(MERGE_ITEM), before[1].wrapping_add(if fail { 2 } else { 3 }));
         }
     }
 

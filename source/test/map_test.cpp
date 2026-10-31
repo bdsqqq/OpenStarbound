@@ -1,4 +1,5 @@
 #include "StarMap.hpp"
+#include "StarOrderedMap.hpp"
 #include "gtest/gtest.h"
 
 #include <exception>
@@ -376,13 +377,183 @@ TEST(MapTest, PrintRealSeparatorWriteFailurePreservesExceptionIdentity) {
 
 #ifdef STAR_USE_RUST_MAP
 TEST(MapTest, RustCountersObserveAllFiveLoopAndSelectionModes) {
-  uint64_t loops[SB_MAP_COUNT], selects[SB_MAP_SELECT_COUNT];
-  for (uint32_t i = 0; i < SB_MAP_COUNT; ++i) loops[i] = sb_map_count(i);
+  uint64_t loops[SB_MAP_PRINT + 1], selects[SB_MAP_SELECT_COUNT];
+  for (uint32_t i = 0; i <= SB_MAP_PRINT; ++i) loops[i] = sb_map_count(i);
   for (uint32_t i = 0; i < SB_MAP_SELECT_COUNT; ++i) selects[i] = sb_map_select_count(i);
   Map<int, int> m{{1, 7}, {2, 8}};
   m.keys(); m.hasValue(7); m.keysOf(8); m.removeValues(8); std::ostringstream out; out << m;
   m.get(1); m.maybe(1); m.value(1); m.set(1, 9); m.add(3, 10);
-  for (uint32_t i = 0; i < SB_MAP_COUNT; ++i) EXPECT_GT(sb_map_count(i), loops[i]);
+  for (uint32_t i = 0; i <= SB_MAP_PRINT; ++i) EXPECT_GT(sb_map_count(i), loops[i]);
   for (uint32_t i = 0; i < SB_MAP_SELECT_COUNT; ++i) EXPECT_GT(sb_map_select_count(i), selects[i]);
+}
+#endif
+
+namespace {
+template <typename M> void mergeCases(char const* name) {
+  for (bool overwrite : {false, true}) {
+    M target, empty;
+    EXPECT_TRUE(target.merge(empty, overwrite));
+    M source{{1, 11}, {2, 22}, {3, 33}};
+    EXPECT_TRUE(target.merge(source, overwrite));
+    EXPECT_TRUE(target.merge(empty, overwrite));
+    M mixed{{1, 101}, {4, 44}, {5, 55}};
+    EXPECT_FALSE(target.merge(mixed, overwrite));
+    EXPECT_EQ(target.size(), 5u);
+    EXPECT_EQ(target.get(1), overwrite ? 101 : 11);
+    EXPECT_EQ(target.get(2), 22); EXPECT_EQ(target.get(3), 33);
+    EXPECT_EQ(target.get(4), 44); EXPECT_EQ(target.get(5), 55);
+    EXPECT_EQ(mixed.get(1), 101); EXPECT_EQ(mixed.size(), 3u);
+    std::cout << "FLAT_MAP_TRACE merge-" << name << '-' << overwrite;
+    for (int k = 1; k <= 5; ++k) std::cout << ' ' << target.get(k);
+    std::cout << '\n';
+  }
+}
+struct MergeState {
+  MapTrace trace;
+  int results = 0, copyFailure = -1, assignFailure = -1;
+};
+struct MergeValue {
+  int n, tail;
+  MergeState* state;
+  MergeValue(int n, MergeState* s) : n(n), tail(n + 100), state(s) {}
+  MergeValue(MergeValue const& v) : n(v.n), tail(v.tail), state(v.state) {
+    state->trace.log("copy" + std::to_string(n));
+    if (state->copyFailure == n) state->trace.raise();
+  }
+  MergeValue& operator=(MergeValue const& v) {
+    EXPECT_EQ(state->results, 1);
+    state->trace.log("assign" + std::to_string(v.n));
+    n = v.n; // A throwing assignment deliberately leaves only this field changed.
+    if (state->assignFailure == n) state->trace.raise();
+    tail = v.tail; return *this;
+  }
+};
+// Private storage prevents accidental dependence on inherited std::map APIs.
+// insert always materializes a typed pair, even for an already-present key;
+// ordinary STL implementations need not copy the mapped value in that case.
+class MergeBase {
+  using Storage = std::map<int, MergeValue>;
+  Storage data;
+public:
+  using key_type = int;
+  using mapped_type = MergeValue;
+  using value_type = Storage::value_type;
+  using iterator = Storage::iterator;
+  MergeState* state = nullptr;
+  struct const_iterator {
+    Storage::const_iterator inner;
+    MergeState* state;
+    bool isEnd;
+    ~const_iterator() { if (isEnd) { EXPECT_EQ(state->results, 0); state->trace.log("end-destroy"); } }
+    value_type const& operator*() const {
+      EXPECT_EQ(state->results, 0); state->trace.log("read"); return *inner;
+    }
+    value_type const* operator->() const { state->trace.log("arrow"); return std::addressof(*inner); }
+    bool operator!=(const_iterator const& b) const {
+      EXPECT_EQ(state->results, 0); state->trace.log("more"); return inner != b.inner;
+    }
+    const_iterator& operator++() {
+      EXPECT_EQ(state->results, 0); state->trace.log("advance"); ++inner; return *this;
+    }
+  };
+  struct Inserted {
+    bool value;
+    MergeState* state;
+    explicit operator bool() const { state->trace.log("bool"); return value; }
+    MapBool operator!() const { state->trace.log("not"); return {!value}; }
+  };
+  struct Result {
+    iterator first;
+    Inserted second;
+    MergeState* state;
+    Result(iterator i, bool inserted, MergeState* s) : first(i), second{inserted, s}, state(s) {
+      ++state->results; state->trace.log("result");
+    }
+    Result(Result const&) = delete;
+    Result(Result&&) = delete;
+    ~Result() { --state->results; state->trace.log("result-destroy"); }
+  };
+  const_iterator begin() const { state->trace.log("begin"); return {data.begin(), state, false}; }
+  const_iterator end() const { state->trace.log("end"); return {data.end(), state, true}; }
+  Result insert(value_type const& p) {
+    state->trace.log("insert" + std::to_string(p.first));
+    value_type copy(p);
+    auto existing = data.find(p.first);
+    if (existing != data.end()) return Result(existing, false, state);
+    auto r = data.insert(copy);
+    return Result(r.first, r.second, state);
+  }
+  void seed(int k, int n) { data.emplace(std::piecewise_construct, std::forward_as_tuple(k), std::forward_as_tuple(n, state)); }
+  MergeValue const& at(int k) const { return data.at(k); }
+  bool has(int k) const { return data.find(k) != data.end(); }
+};
+}
+
+TEST(MapMerge, ConcreteCallersEmptyUniqueAndMixedDuplicates) {
+  mergeCases<Map<int, int>>("sorted");
+  mergeCases<HashMap<int, int>>("flat");
+  mergeCases<StableHashMap<int, int>>("stable");
+  mergeCases<OrderedMap<int, int>>("ordered");
+  // Self merge is safe for node-based std::map; do not assume that of flat storage.
+  Map<int, int> self{{1, 11}, {2, 22}};
+  EXPECT_FALSE(self.merge(self)); EXPECT_FALSE(self.merge(self, true));
+  EXPECT_EQ(self.get(1), 11); EXPECT_EQ(self.get(2), 22);
+}
+
+TEST(MapMerge, NativeInsertResultProxyAndIterationScopes) {
+  for (bool overwrite : {false, true}) {
+    MergeState s; MapMixin<MergeBase> target, source;
+    target.state = source.state = &s;
+    target.seed(1, 10); source.seed(1, 11); source.seed(2, 22);
+    s.trace.events.clear();
+    EXPECT_FALSE(target.merge(source, overwrite));
+    EXPECT_EQ(target.at(1).n, overwrite ? 11 : 10); EXPECT_EQ(target.at(2).n, 22);
+    EXPECT_EQ(s.results, 0);
+    std::string prefix = "begin,end,more,end-destroy,read,insert1,copy11,result,not,";
+    if (overwrite) prefix += "arrow,assign11,";
+    prefix += "result-destroy,advance,end,more,end-destroy,read,insert2,copy22,copy22,result,not,result-destroy,advance,end,more,end-destroy,";
+    EXPECT_EQ(s.trace.events, prefix);
+    s.trace.emit(overwrite ? "merge-proxy-overwrite" : "merge-proxy-keep");
+  }
+}
+
+TEST(MapMerge, DuplicateInsertCopyThrowsBeforeAnyOverwrite) {
+  for (bool overwrite : {false, true}) {
+    MergeState s; MapMixin<MergeBase> target, source;
+    target.state = source.state = &s;
+    target.seed(1, 10); source.seed(1, 11); source.seed(2, 22);
+    auto* original = std::addressof(target.at(1));
+    s.trace.events.clear(); s.copyFailure = 11;
+    mapFailure(s.trace, [&] { target.merge(source, overwrite); });
+    EXPECT_EQ(std::addressof(target.at(1)), original); EXPECT_EQ(target.at(1).n, 10);
+    EXPECT_FALSE(target.has(2)); EXPECT_EQ(source.at(1).n, 11); EXPECT_EQ(s.results, 0);
+    EXPECT_EQ(s.trace.events, "begin,end,more,end-destroy,read,insert1,copy11,caught,");
+    s.trace.emit(overwrite ? "merge-duplicate-copy-overwrite" : "merge-duplicate-copy-keep");
+  }
+}
+
+TEST(MapMerge, CopyAssignmentFailureKeepsMutatedStoredIdentityAndPrefix) {
+  MergeState s; MapMixin<MergeBase> target, source;
+  target.state = source.state = &s;
+  target.seed(2, 20); target.seed(3, 30);
+  source.seed(1, 11); source.seed(2, 22); source.seed(3, 33); source.seed(4, 44);
+  auto* original = std::addressof(target.at(2));
+  s.trace.events.clear(); s.assignFailure = 22;
+  mapFailure(s.trace, [&] { target.merge(source, true); });
+  EXPECT_EQ(target.at(1).n, 11); EXPECT_EQ(std::addressof(target.at(2)), original);
+  EXPECT_EQ(target.at(2).n, 22); EXPECT_EQ(target.at(2).tail, 120);
+  EXPECT_EQ(target.at(3).n, 30); EXPECT_EQ(target.at(3).tail, 130); EXPECT_FALSE(target.has(4));
+  EXPECT_EQ(source.at(2).n, 22); EXPECT_EQ(source.at(2).tail, 122); EXPECT_EQ(s.results, 0);
+  EXPECT_EQ(s.trace.events, "begin,end,more,end-destroy,read,insert1,copy11,copy11,result,not,result-destroy,advance,end,more,end-destroy,read,insert2,copy22,result,not,arrow,assign22,result-destroy,caught,");
+  s.trace.emit("merge-assignment-partial");
+}
+
+#ifdef STAR_USE_RUST_MAP
+TEST(MapMerge, RustMergeCountersAreLoopsNotSelections) {
+  auto merge = sb_map_count(5), item = sb_map_count(6);
+  Map<int, int> target{{1, 10}}, source{{1, 11}, {2, 22}};
+  EXPECT_FALSE(target.merge(source, true));
+  EXPECT_GT(sb_map_count(5), merge); EXPECT_GT(sb_map_count(6), item);
+  EXPECT_EQ(sb_map_select_count(5), 0u); EXPECT_EQ(sb_map_select_count(6), 0u);
 }
 #endif

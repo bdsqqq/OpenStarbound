@@ -107,8 +107,8 @@ using HashMap = MapMixin<FlatHashMap<Key, Value, Hash, Equals, Allocator>>;
 template <typename Key, typename Value, typename Hash = hash<Key>, typename Equals = std::equal_to<Key>, typename Allocator = std::allocator<pair<Key const, Value>>>
 using StableHashMap = MapMixin<std::unordered_map<Key, Value, Hash, Equals, Allocator>>;
 
-// Constructors/storage, from, insert, contains/remove and merge/equality helpers
-// remain native; the Rust selector covers only the typed policies below.
+// Constructors/storage and from/insert/contains/remove primitives stay native.
+// Merge shares the Rust helper policy; equality still delegates to native code.
 template <typename BaseMap>
 template <typename MapType>
 auto MapMixin<BaseMap>::from(MapType const& m) -> MapMixin {
