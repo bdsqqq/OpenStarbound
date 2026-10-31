@@ -236,6 +236,21 @@ void NetElementDynamicGroup<Element>::tickNetInterpolation(float dt) {
 template <typename Element>
 void NetElementDynamicGroup<Element>::netStore(DataStream& ds, NetCompatibilityRules rules) const {
   if (!checkWithRules(rules)) return;
+#ifdef STAR_USE_RUST_NET_DYNAMIC
+  NetDynamicDetail::withRange(SB_NET_DYNAMIC_STORE, m_idMap,
+      [&](uint32_t leaf, uint64_t, auto& current, SbNetDynamicReply& reply) {
+    (void)reply;
+    switch (leaf) {
+    case SB_NET_DYNAMIC_WRITE_STORE_SIZE: ds.writeVlqU(m_idMap.size()); break;
+    case SB_NET_DYNAMIC_SET_BUFFER_RULES: m_buffer.setStreamCompatibilityVersion(rules); break;
+    case SB_NET_DYNAMIC_WRITE_CURRENT_ID: ds.writeVlqU(current().first); break;
+    case SB_NET_DYNAMIC_STORE_CURRENT_BUFFER: current().second->netStore(m_buffer, rules); break;
+    case SB_NET_DYNAMIC_WRITE_BUFFER_TYPED: ds.write(m_buffer.data()); break;
+    case SB_NET_DYNAMIC_CLEAR_BUFFER: m_buffer.clear(); break;
+    default: throw std::logic_error("Invalid dynamic-group store leaf");
+    }
+  });
+#else
   ds.writeVlqU(m_idMap.size());
 
   m_buffer.setStreamCompatibilityVersion(rules);
@@ -245,11 +260,39 @@ void NetElementDynamicGroup<Element>::netStore(DataStream& ds, NetCompatibilityR
     ds.write(m_buffer.data());
     m_buffer.clear();
   }
+#endif
 }
 
 template <typename Element>
 void NetElementDynamicGroup<Element>::netLoad(DataStream& ds, NetCompatibilityRules rules) {
   if (!checkWithRules(rules)) return;
+#ifdef STAR_USE_RUST_NET_DYNAMIC
+  NetDynamicDetail::run(SB_NET_DYNAMIC_LOAD, [&](uint32_t leaf, uint64_t, SbNetDynamicReply& reply) {
+    switch (leaf) {
+    case SB_NET_DYNAMIC_CLEAR_HISTORY: m_changeData.clear(); break;
+    case SB_NET_DYNAMIC_CAPTURE_LAST_VERSION: m_changeDataLastVersion = m_netVersion ? m_netVersion->current() : 0; break;
+    case SB_NET_DYNAMIC_CLEAR_IDMAP: m_idMap.clear(); break;
+    case SB_NET_DYNAMIC_RECORD_RESET: addChangeData(ElementReset()); break;
+    case SB_NET_DYNAMIC_READ_LOAD_COUNT: reply.a = ds.readVlqU(); break;
+    case SB_NET_DYNAMIC_LOAD_ITEM_OP: {
+      ElementId id = ds.readVlqU();
+      DataStreamBuffer storeBuffer(ds.read<ByteArray>());
+      ElementPtr element = make_shared<Element>();
+      NetDynamicDetail::run(SB_NET_DYNAMIC_LOAD_ITEM, [&](uint32_t item, uint64_t, SbNetDynamicReply&) {
+        switch (item) {
+        case SB_NET_DYNAMIC_CHILD_LOAD: element->netLoad(storeBuffer, rules); break;
+        case SB_NET_DYNAMIC_READY_LOADED: readyElement(element); break;
+        case SB_NET_DYNAMIC_ADD_LOADED: m_idMap.add(id, std::move(element)); break;
+        case SB_NET_DYNAMIC_RECORD_LOADED: addChangeData(ElementAddition(id, storeBuffer.takeData())); break;
+        default: throw std::logic_error("Invalid dynamic-group load item leaf");
+        }
+      });
+      break;
+    }
+    default: throw std::logic_error("Invalid dynamic-group load leaf");
+    }
+  });
+#else
   m_changeData.clear();
   m_changeDataLastVersion = m_netVersion ? m_netVersion->current() : 0;
   m_idMap.clear();
@@ -269,11 +312,80 @@ void NetElementDynamicGroup<Element>::netLoad(DataStream& ds, NetCompatibilityRu
     m_idMap.add(id, std::move(element));
     addChangeData(ElementAddition(id, storeBuffer.takeData()));
   }
+#endif
 }
 
 template <typename Element>
 bool NetElementDynamicGroup<Element>::writeNetDelta(DataStream& ds, uint64_t fromVersion, NetCompatibilityRules rules) const {
   if (!checkWithRules(rules)) return false;
+#ifdef STAR_USE_RUST_NET_DYNAMIC
+  using HistoryIterator = decltype(m_changeData.begin());
+  using MapIterator = decltype(m_idMap.begin());
+  std::optional<std::pair<HistoryIterator, HistoryIterator>> history;
+  std::optional<std::pair<MapIterator, MapIterator>> members;
+  bool readingHistory = false;
+  return NetDynamicDetail::evaluate(SB_NET_DYNAMIC_WRITE, fromVersion,
+      [&](uint32_t leaf, uint64_t argument, SbNetDynamicReply& reply) {
+    switch (leaf) {
+    case SB_NET_DYNAMIC_HISTORY_FLOOR: reply.a = m_changeDataLastVersion; break;
+    case SB_NET_DYNAMIC_WRITE_FULL_MARKER: ds.write<bool>(true); break;
+    case SB_NET_DYNAMIC_STORE_FULL: netStore(ds, rules); break;
+    case SB_NET_DYNAMIC_ENTER_CHANGE_RANGE:
+      history.emplace(m_changeData.begin(), m_changeData.end()); readingHistory = true; break;
+    case SB_NET_DYNAMIC_ENTER_RANGE:
+      members.emplace(m_idMap.begin(), m_idMap.end()); readingHistory = false; break;
+    case SB_NET_DYNAMIC_MORE:
+      reply.a = readingHistory ? history->first != history->second : members->first != members->second;
+      break;
+    case SB_NET_DYNAMIC_ADVANCE:
+      if (readingHistory) ++history->first; else ++members->first;
+      break;
+    case SB_NET_DYNAMIC_LEAVE_RANGE:
+      if (readingHistory) history.reset(); else members.reset();
+      break;
+    case SB_NET_DYNAMIC_CHANGE_VERSION: reply.a = history->first->first; break;
+    case SB_NET_DYNAMIC_WRITE_CHANGE_OP: {
+      auto const& p = *history->first;
+      ElementAddition const* addition = nullptr;
+      shared_ptr<Element> const* element = nullptr;
+      ElementId id = NullElementId;
+      reply.a = NetDynamicDetail::evaluate(SB_NET_DYNAMIC_WRITE_CHANGE, argument,
+          [&](uint32_t item, uint64_t, SbNetDynamicReply& result) {
+        switch (item) {
+        case SB_NET_DYNAMIC_QUERY_ADDITION:
+          addition = p.second.template ptr<ElementAddition>();
+          result.a = addition != nullptr;
+          if (addition) id = addition->first;
+          break;
+        case SB_NET_DYNAMIC_FIND_ADDITION: element = m_idMap.ptr(id); result.a = element != nullptr; break;
+        case SB_NET_DYNAMIC_WRITE_DELTA_MARKER: ds.write<bool>(false); break;
+        case SB_NET_DYNAMIC_CHANGE_CODE: ds.writeVlqU(1); break;
+        case SB_NET_DYNAMIC_STORE_ADDITION: {
+          // This local buffer deliberately keeps the native default stream version.
+          DataStreamBuffer storeBuffer;
+          element->get()->netStore(storeBuffer, rules);
+          ds.write((ElementChange)ElementAddition(id, storeBuffer.takeData()));
+          break;
+        }
+        case SB_NET_DYNAMIC_WRITE_CURRENT_CHANGE: ds.write(p.second); break;
+        default: throw std::logic_error("Invalid dynamic-group write change leaf");
+        }
+      });
+      break;
+    }
+    case SB_NET_DYNAMIC_SET_BUFFER_RULES: m_buffer.setStreamCompatibilityVersion(rules); break;
+    case SB_NET_DYNAMIC_WRITE_MEMBER:
+      reply.a = members->first->second->writeNetDelta(m_buffer, fromVersion, rules); break;
+    case SB_NET_DYNAMIC_WRITE_DELTA_MARKER: ds.write<bool>(false); break;
+    // Keep the native u32 wrap: MAX id emits the same zero code as a terminator.
+    case SB_NET_DYNAMIC_WRITE_MEMBER_CODE: ds.writeVlqU(members->first->first + 1); break;
+    case SB_NET_DYNAMIC_WRITE_BUFFER_RAW: ds.writeBytes(m_buffer.data()); break;
+    case SB_NET_DYNAMIC_CLEAR_BUFFER: m_buffer.clear(); break;
+    case SB_NET_DYNAMIC_WRITE_TERMINATOR: ds.writeVlqU(0); break;
+    default: throw std::logic_error("Invalid dynamic-group write leaf");
+    }
+  });
+#else
   if (fromVersion < m_changeDataLastVersion) {
     ds.write<bool>(true);
     netStore(ds, rules);
@@ -322,11 +434,74 @@ bool NetElementDynamicGroup<Element>::writeNetDelta(DataStream& ds, uint64_t fro
 
     return deltaWritten;
   }
+#endif
 }
 
 template <typename Element>
 void NetElementDynamicGroup<Element>::readNetDelta(DataStream& ds, float interpolationTime, NetCompatibilityRules rules) {
   if (!checkWithRules(rules)) return;
+#ifdef STAR_USE_RUST_NET_DYNAMIC
+  NetDynamicDetail::withRange(SB_NET_DYNAMIC_READ, m_idMap,
+      [&](uint32_t leaf, uint64_t argument, auto& current, SbNetDynamicReply& reply) {
+    switch (leaf) {
+    case SB_NET_DYNAMIC_READ_IS_FULL: reply.a = ds.read<bool>(); break;
+    case SB_NET_DYNAMIC_LOAD_FULL: netLoad(ds, rules); break;
+    case SB_NET_DYNAMIC_READ_CODE: reply.a = ds.readVlqU(); break;
+    case SB_NET_DYNAMIC_READ_CHANGE_OP: {
+      auto changeUpdate = ds.read<ElementChange>();
+      ElementAddition* addition = nullptr;
+      ElementRemoval* removal = nullptr;
+      NetDynamicDetail::run(SB_NET_DYNAMIC_READ_CHANGE, [&](uint32_t item, uint64_t, SbNetDynamicReply& result) {
+        switch (item) {
+        case SB_NET_DYNAMIC_RECORD_INCOMING: addChangeData(changeUpdate); break;
+        case SB_NET_DYNAMIC_CHANGE_KIND:
+          if (changeUpdate.template is<ElementReset>()) result.a = 0;
+          else if ((addition = changeUpdate.template ptr<ElementAddition>())) result.a = 1;
+          else if ((removal = changeUpdate.template ptr<ElementRemoval>())) result.a = 2;
+          else result.a = 3;
+          break;
+        case SB_NET_DYNAMIC_CLEAR_IDMAP: m_idMap.clear(); break;
+        case SB_NET_DYNAMIC_REMOVE_INCOMING: m_idMap.remove(*removal); break;
+        case SB_NET_DYNAMIC_READ_ADDITION_OP: {
+          // Unlike full load, native delta-add constructs the element BEFORE its buffer.
+          ElementPtr element = make_shared<Element>();
+          DataStreamBuffer storeBuffer(std::move(get<1>(*addition)));
+          NetDynamicDetail::run(SB_NET_DYNAMIC_READ_ADDITION, [&](uint32_t part, uint64_t, SbNetDynamicReply&) {
+            switch (part) {
+            case SB_NET_DYNAMIC_CHILD_LOAD: element->netLoad(storeBuffer, rules); break;
+            case SB_NET_DYNAMIC_READY_LOADED: readyElement(element); break;
+            case SB_NET_DYNAMIC_ADD_LOADED: m_idMap.add(get<0>(*addition), std::move(element)); break;
+            default: throw std::logic_error("Invalid dynamic-group read addition leaf");
+            }
+          });
+          break;
+        }
+        default: throw std::logic_error("Invalid dynamic-group incoming change leaf");
+        }
+      });
+      break;
+    }
+    case SB_NET_DYNAMIC_READ_MEMBER_OP: {
+      ElementId elementId = argument - 1;
+      auto const& element = m_idMap.get(elementId);
+      NetDynamicDetail::run(SB_NET_DYNAMIC_READ_MEMBER, [&](uint32_t item, uint64_t, SbNetDynamicReply& result) {
+        switch (item) {
+        case SB_NET_DYNAMIC_CHILD_READ: element->readNetDelta(ds, interpolationTime, rules); break;
+        case SB_NET_DYNAMIC_GROUP_ENABLED: result.a = m_interpolationEnabled; break;
+        case SB_NET_DYNAMIC_MARK_RECEIVED: m_receivedDeltaIds.add(elementId); break;
+        default: throw std::logic_error("Invalid dynamic-group read member leaf");
+        }
+      });
+      break;
+    }
+    case SB_NET_DYNAMIC_GROUP_ENABLED: reply.a = m_interpolationEnabled; break;
+    case SB_NET_DYNAMIC_HAS_RECEIVED: reply.a = m_receivedDeltaIds.contains(current().first); break;
+    case SB_NET_DYNAMIC_BLANK_CURRENT: current().second->blankNetDelta(interpolationTime); break;
+    case SB_NET_DYNAMIC_CLEAR_RECEIVED: m_receivedDeltaIds.clear(); break;
+    default: throw std::logic_error("Invalid dynamic-group read leaf");
+    }
+  });
+#else
   bool isFull = ds.read<bool>();
   if (isFull) {
     netLoad(ds, rules);
@@ -369,6 +544,7 @@ void NetElementDynamicGroup<Element>::readNetDelta(DataStream& ds, float interpo
       m_receivedDeltaIds.clear();
     }
   }
+#endif
 }
 
 template <typename Element>

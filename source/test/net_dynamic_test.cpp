@@ -464,11 +464,12 @@ TEST(NetDynamic, OnCounterNaturalLifecycleAndHistoryRoots) {
   EXPECT_EQ(dynamicState(loaded), dynamicState(g));
   dynamicAdvance(v, 101); g.removeNetElement(id); // native floor and real pruning
   g.clearNetElements(); // owned snapshot calls the ordinary remove path
-  for (uint32_t mode = 0; mode < SB_NET_DYNAMIC_COUNT; ++mode) {
+  // This fixture qualifies the original lifecycle prefix, not every appended wire branch.
+  for (uint32_t mode = 0; mode <= SB_NET_DYNAMIC_READY; ++mode) {
     EXPECT_GE(sb_net_dynamic_count(0, mode) - before[mode], uint64_t(1)) << mode;
     EXPECT_GE(sb_net_dynamic_count(1, mode) - globalBefore[mode], uint64_t(1)) << mode;
   }
-  for (uint32_t op = 0; op < SB_NET_DYNAMIC_OP_COUNT; ++op)
+  for (uint32_t op = 0; op <= SB_NET_DYNAMIC_DISABLE_READY; ++op)
     EXPECT_GE(sb_net_dynamic_count(2, op) - leavesBefore[op], uint64_t(1)) << op;
   EXPECT_EQ(sb_net_dynamic_count(0, SB_NET_DYNAMIC_COUNT), uint64_t(0));
   EXPECT_EQ(sb_net_dynamic_count(2, SB_NET_DYNAMIC_OP_COUNT), uint64_t(0));

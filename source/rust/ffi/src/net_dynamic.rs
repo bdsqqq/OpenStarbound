@@ -19,7 +19,16 @@ const TICK: u32 = 6;
 const BLANK: u32 = 7;
 const CHANGE: u32 = 8;
 const READY: u32 = 9;
-const COUNT: usize = 10;
+const STORE: u32 = 10;
+const LOAD: u32 = 11;
+const LOAD_ITEM: u32 = 12;
+const WRITE: u32 = 13;
+const WRITE_CHANGE: u32 = 14;
+const READ: u32 = 15;
+const READ_CHANGE: u32 = 16;
+const READ_MEMBER: u32 = 17;
+const READ_ADDITION: u32 = 18;
+const COUNT: usize = 19;
 const ENTER_RANGE: u32 = 0;
 const MORE: u32 = 1;
 const ADVANCE: u32 = 2;
@@ -46,28 +55,78 @@ const POP_HISTORY: u32 = 22;
 const INIT_READY: u32 = 23;
 const ENABLE_READY: u32 = 24;
 const DISABLE_READY: u32 = 25;
-const OP_COUNT: usize = 26;
+const SET_BUFFER_RULES: u32 = 26;
+const WRITE_CURRENT_ID: u32 = 27;
+const STORE_CURRENT_BUFFER: u32 = 28;
+const WRITE_BUFFER_TYPED: u32 = 29;
+const CLEAR_BUFFER: u32 = 30;
+const CLEAR_HISTORY: u32 = 31;
+const CAPTURE_LAST_VERSION: u32 = 32;
+const CLEAR_IDMAP: u32 = 33;
+const READ_LOAD_COUNT: u32 = 34;
+const LOAD_ITEM_OP: u32 = 35;
+const CHILD_LOAD: u32 = 36;
+const READY_LOADED: u32 = 37;
+const ADD_LOADED: u32 = 38;
+const RECORD_LOADED: u32 = 39;
+const HISTORY_FLOOR: u32 = 40;
+const WRITE_FULL_MARKER: u32 = 41;
+const STORE_FULL: u32 = 42;
+const ENTER_CHANGE_RANGE: u32 = 43;
+const CHANGE_VERSION: u32 = 44;
+const WRITE_CHANGE_OP: u32 = 45;
+const QUERY_ADDITION: u32 = 46;
+const FIND_ADDITION: u32 = 47;
+const STORE_ADDITION: u32 = 48;
+const WRITE_DELTA_MARKER: u32 = 49;
+const CHANGE_CODE: u32 = 50;
+const WRITE_CURRENT_CHANGE: u32 = 51;
+const WRITE_MEMBER: u32 = 52;
+const WRITE_MEMBER_CODE: u32 = 53;
+const WRITE_BUFFER_RAW: u32 = 54;
+const WRITE_TERMINATOR: u32 = 55;
+const READ_IS_FULL: u32 = 56;
+const LOAD_FULL: u32 = 57;
+const READ_CODE: u32 = 58;
+const READ_CHANGE_OP: u32 = 59;
+const RECORD_INCOMING: u32 = 60;
+const CHANGE_KIND: u32 = 61;
+const READ_ADDITION_OP: u32 = 62;
+const REMOVE_INCOMING: u32 = 63;
+const READ_MEMBER_OP: u32 = 64;
+const CHILD_READ: u32 = 65;
+const MARK_RECEIVED: u32 = 66;
+const HAS_RECEIVED: u32 = 67;
+const CLEAR_RECEIVED: u32 = 68;
+const WRITE_STORE_SIZE: u32 = 69;
+const OP_COUNT: usize = 70;
 
 static TOTALS: [AtomicU64; COUNT] = [const { AtomicU64::new(0) }; COUNT];
 static LEAVES: [AtomicU64; OP_COUNT] = [const { AtomicU64::new(0) }; OP_COUNT];
 thread_local! { static COUNTS: Cell<[u64; COUNT]> = const { Cell::new([0; COUNT]) }; }
 
-fn boolean(op: u32) -> bool { matches!(op, MORE | GROUP_ENABLED | HISTORY_EMPTY) }
+fn boolean(op: u32) -> bool {
+    matches!(op, MORE | GROUP_ENABLED | HISTORY_EMPTY | WRITE_CHANGE_OP | QUERY_ADDITION
+        | FIND_ADDITION | WRITE_MEMBER | READ_IS_FULL | HAS_RECEIVED)
+}
 fn valid_reply(op: u32, r: SbNetDynamicReply) -> bool {
     if op == HISTORY_BOUNDS { true }
-    else { r.b == 0 && if boolean(op) { r.a <= 1 } else { r.a == 0 } }
+    else { r.b == 0 && if boolean(op) { r.a <= 1 }
+        else if matches!(op, READ_LOAD_COUNT | HISTORY_FLOOR | CHANGE_VERSION | READ_CODE) { true }
+        else if op == CHANGE_KIND { r.a <= 3 }
+        else { r.a == 0 } }
 }
-unsafe fn invoke(ctx: *mut c_void, host: Host, op: u32) -> Result<SbNetDynamicReply, u32> {
+unsafe fn invoke(ctx: *mut c_void, host: Host, op: u32, argument: u64) -> Result<SbNetDynamicReply, u32> {
     let mut reply = SbNetDynamicReply::default();
     LEAVES[op as usize].fetch_add(1, Ordering::Relaxed);
-    match host(ctx, op, 0, &mut reply) {
+    match host(ctx, op, argument, &mut reply) {
         OK if valid_reply(op, reply) => Ok(reply),
         HOST_ERROR => Err(HOST_ERROR),
         _ => Err(INVALID),
     }
 }
-unsafe fn run(mode: u32, ctx: *mut c_void, host: Host) -> Result<(), u32> {
-    let call = |op| invoke(ctx, host, op);
+unsafe fn run(mode: u32, ctx: *mut c_void, host: Host, argument: u64) -> Result<u32, u32> {
+    let call = |op| invoke(ctx, host, op, 0);
     match mode {
         ADD => { call(READY_NEW)?; call(ADD_NEW)?; call(RECORD_ADD)?; }
         REMOVE => { call(REMOVE_ID)?; call(RECORD_REMOVE)?; }
@@ -93,7 +152,7 @@ unsafe fn run(mode: u32, ctx: *mut c_void, host: Host) -> Result<(), u32> {
         }
         INIT | ENABLE | DISABLE | TICK | BLANK => {
             if mode == INIT { call(RECORD_RESET)?; }
-            if mode == BLANK && call(GROUP_ENABLED)?.a == 0 { return Ok(()); }
+            if mode == BLANK && call(GROUP_ENABLED)?.a == 0 { return Ok(0); }
             call(ENTER_RANGE)?;
             while call(MORE)?.a != 0 {
                 match mode {
@@ -108,9 +167,118 @@ unsafe fn run(mode: u32, ctx: *mut c_void, host: Host) -> Result<(), u32> {
             }
             call(LEAVE_RANGE)?;
         }
+        STORE => {
+            call(WRITE_STORE_SIZE)?;
+            call(SET_BUFFER_RULES)?;
+            call(ENTER_RANGE)?;
+            while call(MORE)?.a != 0 {
+                call(WRITE_CURRENT_ID)?;
+                call(STORE_CURRENT_BUFFER)?;
+                call(WRITE_BUFFER_TYPED)?;
+                call(CLEAR_BUFFER)?;
+                call(ADVANCE)?;
+            }
+            call(LEAVE_RANGE)?;
+        }
+        LOAD => {
+            call(CLEAR_HISTORY)?;
+            call(CAPTURE_LAST_VERSION)?;
+            call(CLEAR_IDMAP)?;
+            call(RECORD_RESET)?;
+            let count = call(READ_LOAD_COUNT)?.a;
+            for _ in 0..count { call(LOAD_ITEM_OP)?; }
+        }
+        LOAD_ITEM | READ_ADDITION => {
+            call(CHILD_LOAD)?;
+            call(READY_LOADED)?;
+            call(ADD_LOADED)?;
+            if mode == LOAD_ITEM { call(RECORD_LOADED)?; }
+        }
+        WRITE => {
+            if argument < call(HISTORY_FLOOR)?.a {
+                call(WRITE_FULL_MARKER)?;
+                call(STORE_FULL)?;
+                return Ok(1);
+            }
+            let mut delta = false;
+            call(ENTER_CHANGE_RANGE)?;
+            while call(MORE)?.a != 0 {
+                if call(CHANGE_VERSION)?.a >= argument {
+                    let emitted = invoke(ctx, host, WRITE_CHANGE_OP, u64::from(delta))?.a != 0;
+                    delta |= emitted;
+                }
+                call(ADVANCE)?;
+            }
+            call(LEAVE_RANGE)?;
+            call(SET_BUFFER_RULES)?;
+            call(ENTER_RANGE)?;
+            while call(MORE)?.a != 0 {
+                if call(WRITE_MEMBER)?.a != 0 {
+                    if !delta {
+                        delta = true;
+                        call(WRITE_DELTA_MARKER)?;
+                    }
+                    call(WRITE_MEMBER_CODE)?;
+                    call(WRITE_BUFFER_RAW)?;
+                    call(CLEAR_BUFFER)?;
+                }
+                call(ADVANCE)?;
+            }
+            call(LEAVE_RANGE)?;
+            if delta { call(WRITE_TERMINATOR)?; }
+            return Ok(u32::from(delta));
+        }
+        WRITE_CHANGE => {
+            let addition = call(QUERY_ADDITION)?.a != 0;
+            if addition && call(FIND_ADDITION)?.a == 0 { return Ok(0); }
+            if argument == 0 { call(WRITE_DELTA_MARKER)?; }
+            call(CHANGE_CODE)?;
+            // Native creates/destroys the typed temporary inside STORE_ADDITION,
+            // after the marker and code, never across this callback boundary.
+            call(if addition { STORE_ADDITION } else { WRITE_CURRENT_CHANGE })?;
+            return Ok(1);
+        }
+        READ => {
+            if call(READ_IS_FULL)?.a != 0 {
+                call(LOAD_FULL)?;
+                return Ok(0);
+            }
+            loop {
+                let code = call(READ_CODE)?.a;
+                match code {
+                    0 => break,
+                    1 => { call(READ_CHANGE_OP)?; }
+                    _ => { invoke(ctx, host, READ_MEMBER_OP, code)?; }
+                }
+            }
+            if call(GROUP_ENABLED)?.a != 0 {
+                call(ENTER_RANGE)?;
+                while call(MORE)?.a != 0 {
+                    if call(HAS_RECEIVED)?.a == 0 { call(BLANK_CURRENT)?; }
+                    call(ADVANCE)?;
+                }
+                call(LEAVE_RANGE)?;
+                call(CLEAR_RECEIVED)?;
+            }
+        }
+        READ_CHANGE => {
+            // Native records a COPY before inspecting/moving the incoming variant.
+            call(RECORD_INCOMING)?;
+            match call(CHANGE_KIND)?.a {
+                0 => { call(CLEAR_IDMAP)?; }
+                1 => { call(READ_ADDITION_OP)?; }
+                2 => { call(REMOVE_INCOMING)?; }
+                3 => {}
+                _ => unreachable!(),
+            }
+        }
+        READ_MEMBER => {
+            call(CHILD_READ)?;
+            if call(GROUP_ENABLED)?.a != 0 { call(MARK_RECEIVED)?; }
+        }
         _ => return Err(INVALID),
     }
-    Ok(())
+    Ok(0)
 }
 fn barrier(f: impl FnOnce() -> u32) -> u32 {
     catch_unwind(AssertUnwindSafe(f)).unwrap_or(PANIC)
@@ -122,7 +290,13 @@ fn barrier(f: impl FnOnce() -> u32) -> u32 {
 pub unsafe extern "C" fn sb_net_dynamic_run(
     mode: u32, ctx: *mut c_void, host: Option<Host>, argument: u64, out_result: *mut u32,
 ) -> u32 {
-    if mode >= COUNT as u32 || argument != 0 || ctx.is_null() || host.is_none()
+    let valid_argument = match mode {
+        WRITE => true,
+        WRITE_CHANGE => argument <= 1,
+        _ => argument == 0,
+    };
+    if mode >= COUNT as u32 || !valid_argument
+        || ctx.is_null() || host.is_none()
         || out_result.is_null() || (out_result as usize) % std::mem::align_of::<u32>() != 0 {
         return INVALID;
     }
@@ -133,8 +307,8 @@ pub unsafe extern "C" fn sb_net_dynamic_run(
             counts[mode as usize] = counts[mode as usize].wrapping_add(1);
             cell.set(counts);
         });
-        match run(mode, ctx, host.unwrap()) {
-            Ok(()) => { out_result.write(0); OK }
+        match run(mode, ctx, host.unwrap(), argument) {
+            Ok(result) => { out_result.write(result); OK }
             Err(status) => status,
         }
     })
@@ -361,7 +535,7 @@ mod tests {
 
     fn scenarios() -> Vec<(Mock,u32)> {
         let mut cases = vec![];
-        for mode in 0..COUNT as u32 {
+        for mode in ADD..=READY {
             let mut m = Mock::new(); m.prepare(mode); cases.push((m,mode));
         }
         let mut disabled = Mock::new(); disabled.enabled = false;
@@ -392,10 +566,216 @@ mod tests {
                 }
             }
         }
-        assert!(coverage.into_iter().all(|v|v));
+        assert!(coverage[..SET_BUFFER_RULES as usize].iter().all(|&v|v));
         for op in 0..OP_COUNT as u32 {
             assert_eq!(valid_reply(op,SbNetDynamicReply {a:u64::MAX,b:u64::MAX}),op==HISTORY_BOUNDS);
         }
+    }
+
+    #[derive(Clone)]
+    struct Step {
+        op: u32, argument: u64, reply: SbNetDynamicReply,
+        nested: Option<(u32, u64, u32)>,
+    }
+    fn step(op: u32) -> Step { value(op, 0) }
+    fn value(op: u32, a: u64) -> Step {
+        Step { op, argument: 0, reply: SbNetDynamicReply { a, b: 0 }, nested: None }
+    }
+    fn with_arg(op: u32, argument: u64, a: u64) -> Step {
+        Step { argument, ..value(op, a) }
+    }
+    fn reenter(op: u32, mode: u32, argument: u64, result: u32) -> Step {
+        Step { nested: Some((mode, argument, result)), ..step(op) }
+    }
+    #[derive(Clone)]
+    struct WireMock {
+        steps: VecDeque<Step>, events: Vec<(u32, u64)>,
+        fault: Option<(usize, u32, SbNetDynamicReply)>,
+    }
+    impl WireMock {
+        fn new(steps: Vec<Step>) -> Self {
+            Self { steps: steps.into(), events: vec![], fault: None }
+        }
+        fn call(&mut self, mode: u32, argument: u64, out: &mut u32) -> u32 {
+            unsafe { sb_net_dynamic_run(mode, self as *mut _ as _, Some(wire_host), argument, out) }
+        }
+    }
+    // A callback may reenter on the same context. Pop/copy its script frame first;
+    // no mutable fixture borrow may span the nested FFI call.
+    unsafe extern "C" fn wire_host(
+        ctx: *mut c_void, op: u32, argument: u64, out: *mut SbNetDynamicReply,
+    ) -> u32 {
+        let frame = {
+            let m = &mut *(ctx as *mut WireMock);
+            let at = m.events.len();
+            m.events.push((op, argument));
+            let Some(frame) = m.steps.pop_front() else { return HOST_ERROR; };
+            if frame.op != op || frame.argument != argument || (*out).a != 0 || (*out).b != 0 {
+                return HOST_ERROR;
+            }
+            if let Some((n, status, reply)) = m.fault {
+                if at == n { out.write(reply); return status; }
+            }
+            frame
+        };
+        if let Some((mode, arg, expected)) = frame.nested {
+            let mut result = 77;
+            let status = sb_net_dynamic_run(mode, ctx, Some(wire_host), arg, &mut result);
+            if status != OK { return status; }
+            if result != expected { return HOST_ERROR; }
+        }
+        out.write(frame.reply);
+        OK
+    }
+    fn wire_success(mode: u32, argument: u64, result: u32, steps: Vec<Step>) -> WireMock {
+        let mut m = WireMock::new(steps);
+        let mut out = 77;
+        assert_eq!(m.call(mode, argument, &mut out), OK);
+        assert_eq!(out, result);
+        assert!(m.steps.is_empty());
+        m
+    }
+    fn wire_cases() -> Vec<(u32, u64, u32, Vec<Step>)> {
+        vec![
+            (STORE, 0, 0, vec![step(WRITE_STORE_SIZE), step(SET_BUFFER_RULES), step(ENTER_RANGE),
+                value(MORE,1), step(WRITE_CURRENT_ID), step(STORE_CURRENT_BUFFER),
+                step(WRITE_BUFFER_TYPED), step(CLEAR_BUFFER), step(ADVANCE),
+                value(MORE,0), step(LEAVE_RANGE)]),
+            (LOAD, 0, 0, vec![step(CLEAR_HISTORY), step(CAPTURE_LAST_VERSION), step(CLEAR_IDMAP),
+                step(RECORD_RESET), value(READ_LOAD_COUNT,2), step(LOAD_ITEM_OP), step(LOAD_ITEM_OP)]),
+            (LOAD_ITEM, 0, 0, vec![step(CHILD_LOAD), step(READY_LOADED), step(ADD_LOADED), step(RECORD_LOADED)]),
+            (READ_ADDITION, 0, 0, vec![step(CHILD_LOAD), step(READY_LOADED), step(ADD_LOADED)]),
+            (WRITE, 0, 1, vec![value(HISTORY_FLOOR,1), step(WRITE_FULL_MARKER), step(STORE_FULL)]),
+            (WRITE_CHANGE, 0, 0, vec![value(QUERY_ADDITION,1), value(FIND_ADDITION,0)]),
+            (WRITE_CHANGE, 0, 1, vec![value(QUERY_ADDITION,1), value(FIND_ADDITION,1),
+                step(WRITE_DELTA_MARKER), step(CHANGE_CODE), step(STORE_ADDITION)]),
+            (WRITE_CHANGE, 1, 1, vec![value(QUERY_ADDITION,0), step(CHANGE_CODE), step(WRITE_CURRENT_CHANGE)]),
+            (READ, 0, 0, vec![value(READ_IS_FULL,1), step(LOAD_FULL)]),
+            (READ, 0, 0, vec![value(READ_IS_FULL,0), value(READ_CODE,1), step(READ_CHANGE_OP),
+                value(READ_CODE,u64::MAX), with_arg(READ_MEMBER_OP,u64::MAX,0), value(READ_CODE,0),
+                value(GROUP_ENABLED,1), step(ENTER_RANGE), value(MORE,1), value(HAS_RECEIVED,1),
+                step(ADVANCE), value(MORE,1), value(HAS_RECEIVED,0), step(BLANK_CURRENT),
+                step(ADVANCE), value(MORE,0), step(LEAVE_RANGE), step(CLEAR_RECEIVED)]),
+            (READ, 0, 0, vec![value(READ_IS_FULL,0), value(READ_CODE,0), value(GROUP_ENABLED,0)]),
+            (READ_CHANGE, 0, 0, vec![step(RECORD_INCOMING), value(CHANGE_KIND,0), step(CLEAR_IDMAP)]),
+            (READ_CHANGE, 0, 0, vec![step(RECORD_INCOMING), value(CHANGE_KIND,1), step(READ_ADDITION_OP)]),
+            (READ_CHANGE, 0, 0, vec![step(RECORD_INCOMING), value(CHANGE_KIND,2), step(REMOVE_INCOMING)]),
+            (READ_CHANGE, 0, 0, vec![step(RECORD_INCOMING), value(CHANGE_KIND,3)]),
+            (READ_MEMBER, 0, 0, vec![step(CHILD_READ), value(GROUP_ENABLED,1), step(MARK_RECEIVED)]),
+            (READ_MEMBER, 0, 0, vec![step(CHILD_READ), value(GROUP_ENABLED,0)]),
+            // Skip a stale change; forward both false/true delta arguments. Member
+            // false intentionally leaves its buffer untouched, even after emission.
+            (WRITE, u64::MAX, 1, vec![value(HISTORY_FLOOR,u64::MAX), step(ENTER_CHANGE_RANGE),
+                value(MORE,1), value(CHANGE_VERSION,0), step(ADVANCE),
+                value(MORE,1), value(CHANGE_VERSION,u64::MAX), with_arg(WRITE_CHANGE_OP,0,0), step(ADVANCE),
+                value(MORE,1), value(CHANGE_VERSION,u64::MAX), with_arg(WRITE_CHANGE_OP,0,1), step(ADVANCE),
+                value(MORE,1), value(CHANGE_VERSION,u64::MAX), with_arg(WRITE_CHANGE_OP,1,0), step(ADVANCE),
+                value(MORE,0), step(LEAVE_RANGE), step(SET_BUFFER_RULES), step(ENTER_RANGE),
+                value(MORE,1), value(WRITE_MEMBER,0), step(ADVANCE),
+                value(MORE,1), value(WRITE_MEMBER,1), step(WRITE_MEMBER_CODE), step(WRITE_BUFFER_RAW),
+                step(CLEAR_BUFFER), step(ADVANCE), value(MORE,0), step(LEAVE_RANGE), step(WRITE_TERMINATOR)]),
+            (WRITE, 0, 1, vec![value(HISTORY_FLOOR,0), step(ENTER_CHANGE_RANGE), value(MORE,0),
+                step(LEAVE_RANGE), step(SET_BUFFER_RULES), step(ENTER_RANGE),
+                value(MORE,1), value(WRITE_MEMBER,0), step(ADVANCE),
+                value(MORE,1), value(WRITE_MEMBER,1), step(WRITE_DELTA_MARKER), step(WRITE_MEMBER_CODE),
+                step(WRITE_BUFFER_RAW), step(CLEAR_BUFFER), step(ADVANCE), value(MORE,0),
+                step(LEAVE_RANGE), step(WRITE_TERMINATOR)]),
+            (WRITE, 0, 0, vec![value(HISTORY_FLOOR,0), step(ENTER_CHANGE_RANGE), value(MORE,0),
+                step(LEAVE_RANGE), step(SET_BUFFER_RULES), step(ENTER_RANGE), value(MORE,1),
+                value(WRITE_MEMBER,0), step(ADVANCE), value(MORE,0), step(LEAVE_RANGE)]),
+        ]
+    }
+    #[test]
+    fn wire_schedules_emission_order_false_buffers_and_failure_prefixes() {
+        let mut coverage = [false; OP_COUNT];
+        for (mode, arg, result, steps) in wire_cases() {
+            let baseline = wire_success(mode, arg, result, steps.clone());
+            for (at, &(op, _)) in baseline.events.iter().enumerate() {
+                coverage[op as usize] = true;
+                let mut faults = vec![
+                    (HOST_ERROR, SbNetDynamicReply { a: 99, b: 99 }, HOST_ERROR),
+                    (77, SbNetDynamicReply::default(), INVALID),
+                    (INVALID, SbNetDynamicReply::default(), INVALID),
+                    (PANIC, SbNetDynamicReply::default(), INVALID),
+                    (OK, SbNetDynamicReply { a: 0, b: 1 }, INVALID),
+                ];
+                if !matches!(op, READ_LOAD_COUNT | HISTORY_FLOOR | CHANGE_VERSION | READ_CODE) {
+                    faults.push((OK, SbNetDynamicReply {
+                        a: if boolean(op) { 2 } else if op == CHANGE_KIND { 4 } else { 1 }, b: 0,
+                    }, INVALID));
+                }
+                for (status, reply, expected) in faults {
+                    let mut m = WireMock::new(steps.clone());
+                    m.fault = Some((at, status, reply));
+                    let mut out = 77;
+                    assert_eq!(m.call(mode, arg, &mut out), expected);
+                    assert_eq!(out, 77);
+                    assert_eq!(m.events, baseline.events[..=at]);
+                }
+            }
+        }
+        assert!(coverage[SET_BUFFER_RULES as usize..].iter().all(|&v| v));
+    }
+    #[test]
+    fn wire_reentry_full_reset_and_received_persistence() {
+        wire_success(LOAD, 0, 0, vec![step(CLEAR_HISTORY), step(CAPTURE_LAST_VERSION),
+            step(CLEAR_IDMAP), step(RECORD_RESET), value(READ_LOAD_COUNT,1),
+            reenter(LOAD_ITEM_OP,LOAD_ITEM,0,0), step(CHILD_LOAD),
+            reenter(READY_LOADED,READY,0,0), step(INIT_READY), value(GROUP_ENABLED,0),
+            step(DISABLE_READY), step(ADD_LOADED), step(RECORD_LOADED)]);
+        wire_success(WRITE, 0, 1, vec![value(HISTORY_FLOOR,1), step(WRITE_FULL_MARKER),
+            reenter(STORE_FULL,STORE,0,0), step(WRITE_STORE_SIZE), step(SET_BUFFER_RULES),
+            step(ENTER_RANGE), value(MORE,0), step(LEAVE_RANGE)]);
+        wire_success(WRITE, 0, 1, vec![value(HISTORY_FLOOR,0), step(ENTER_CHANGE_RANGE),
+            value(MORE,1), value(CHANGE_VERSION,0),
+            Step { reply: SbNetDynamicReply { a: 1, b: 0 },
+                ..reenter(WRITE_CHANGE_OP,WRITE_CHANGE,0,1) },
+            value(QUERY_ADDITION,1), value(FIND_ADDITION,1), step(WRITE_DELTA_MARKER),
+            step(CHANGE_CODE), step(STORE_ADDITION), step(ADVANCE), value(MORE,0),
+            step(LEAVE_RANGE), step(SET_BUFFER_RULES), step(ENTER_RANGE), value(MORE,0),
+            step(LEAVE_RANGE), step(WRITE_TERMINATOR)]);
+        // Reuse the context: disabled READ and full READ must leave the native
+        // received set alone; the final enabled READ still observes the old id.
+        let mut m = WireMock::new(vec![
+            step(CHILD_READ), value(GROUP_ENABLED,1), step(MARK_RECEIVED),
+            value(READ_IS_FULL,0), value(READ_CODE,0), value(GROUP_ENABLED,0),
+            value(READ_IS_FULL,1), reenter(LOAD_FULL,LOAD,0,0), step(CLEAR_HISTORY),
+            step(CAPTURE_LAST_VERSION), step(CLEAR_IDMAP), step(RECORD_RESET), value(READ_LOAD_COUNT,0),
+            value(READ_IS_FULL,0), value(READ_CODE,0), value(GROUP_ENABLED,1),
+            step(ENTER_RANGE), value(MORE,1), value(HAS_RECEIVED,1), step(ADVANCE),
+            value(MORE,0), step(LEAVE_RANGE), step(CLEAR_RECEIVED),
+        ]);
+        for mode in [READ_MEMBER, READ, READ, READ] {
+            let mut out = 77;
+            assert_eq!(m.call(mode,0,&mut out),OK);
+            assert_eq!(out,0);
+        }
+        assert!(m.steps.is_empty());
+        wire_success(READ,0,0,vec![value(READ_IS_FULL,0), value(READ_CODE,1),
+            reenter(READ_CHANGE_OP,READ_CHANGE,0,0), step(RECORD_INCOMING), value(CHANGE_KIND,1),
+            reenter(READ_ADDITION_OP,READ_ADDITION,0,0), step(CHILD_LOAD), step(READY_LOADED),
+            step(ADD_LOADED), value(READ_CODE,2),
+            Step { argument: 2, ..reenter(READ_MEMBER_OP,READ_MEMBER,0,0) },
+            step(CHILD_READ), value(GROUP_ENABLED,0), value(READ_CODE,0), value(GROUP_ENABLED,0)]);
+    }
+
+    #[test]
+    fn wire_nested_error_keeps_marker_code_prefix_without_cleanup_or_output() {
+        let steps = vec![value(HISTORY_FLOOR,0), step(ENTER_CHANGE_RANGE),
+            value(MORE,1), value(CHANGE_VERSION,0),
+            Step { reply: SbNetDynamicReply { a: 1, b: 0 },
+                ..reenter(WRITE_CHANGE_OP,WRITE_CHANGE,0,1) },
+            value(QUERY_ADDITION,1), value(FIND_ADDITION,1), step(WRITE_DELTA_MARKER),
+            step(CHANGE_CODE), step(STORE_ADDITION)];
+        let expected: Vec<_> = steps.iter().map(|s| (s.op,s.argument)).collect();
+        let mut m = WireMock::new(steps);
+        m.fault = Some((expected.len()-1,HOST_ERROR,SbNetDynamicReply {a:99,b:99}));
+        let mut out = 77;
+        assert_eq!(m.call(WRITE,0,&mut out),HOST_ERROR);
+        assert_eq!(out,77);
+        assert_eq!(m.events,expected);
+        assert!(!m.events.iter().any(|&(op,_)| matches!(op,
+            LEAVE_RANGE | ADVANCE | CLEAR_BUFFER | WRITE_TERMINATOR)));
     }
 
     #[test]
@@ -405,8 +785,11 @@ mod tests {
         let roots_before: Vec<_> = (0..COUNT as u32).map(|i| sb_net_dynamic_count(0,i)).collect();
         unsafe {
             for mode in 0..COUNT as u32 {
-                assert_eq!(sb_net_dynamic_run(mode,ctx,Some(host),1,&mut out),INVALID);
+                if mode != WRITE && mode != WRITE_CHANGE {
+                    assert_eq!(sb_net_dynamic_run(mode,ctx,Some(host),1,&mut out),INVALID);
+                }
             }
+            assert_eq!(sb_net_dynamic_run(WRITE_CHANGE,ctx,Some(host),2,&mut out),INVALID);
             assert_eq!(sb_net_dynamic_run(COUNT as u32,ctx,Some(host),0,&mut out),INVALID);
             assert_eq!(sb_net_dynamic_run(ADD,std::ptr::null_mut(),Some(host),0,&mut out),INVALID);
             assert_eq!(sb_net_dynamic_run(ADD,ctx,None,0,&mut out),INVALID);
@@ -445,8 +828,9 @@ mod tests {
         let atomic = AtomicU64::new(u64::MAX); atomic.fetch_add(1,Ordering::Relaxed);
         assert_eq!(atomic.load(Ordering::Relaxed),0);
         assert_eq!(barrier(|| panic!("ordinary Rust panic, not an extern callback")),PANIC);
-        assert_eq!(sb_net_dynamic_count(3,0),0); assert_eq!(sb_net_dynamic_count(0,10),0);
-        assert_eq!(sb_net_dynamic_count(1,10),0); assert_eq!(sb_net_dynamic_count(2,26),0);
+        assert_eq!(sb_net_dynamic_count(3,0),0); assert_eq!(sb_net_dynamic_count(0,COUNT as u32),0);
+        assert_eq!(sb_net_dynamic_count(1,COUNT as u32),0);
+        assert_eq!(sb_net_dynamic_count(2,OP_COUNT as u32),0);
         assert_eq!(std::mem::size_of::<SbNetDynamicReply>(),16);
         assert_eq!(std::mem::align_of::<SbNetDynamicReply>(),8);
     }
