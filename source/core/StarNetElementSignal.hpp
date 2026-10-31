@@ -33,6 +33,9 @@ public:
   List<Signal> receive();
 
 private:
+#ifdef STAR_USE_RUST_NET_SIGNAL
+  void flushPendingSignals();
+#endif
   struct SignalEntry {
     uint64_t version;
     Signal signal;
@@ -72,17 +75,46 @@ void NetElementSignal<Signal>::enableNetInterpolation(float) {
 template <typename Signal>
 void NetElementSignal<Signal>::disableNetInterpolation() {
   m_netInterpolationEnabled = false;
+#ifdef STAR_USE_RUST_NET_SIGNAL
+  flushPendingSignals();
+#else
   for (auto& p : take(m_pendingSignals))
     send(std::move(p.second));
+#endif
 }
 
 template <typename Signal>
 void NetElementSignal<Signal>::tickNetInterpolation(float dt) {
+#ifdef STAR_USE_RUST_NET_SIGNAL
+  using Iterator = typename Deque<pair<float, Signal>>::iterator;
+  std::optional<std::pair<Iterator, Iterator>> range;
+  NetSignalDetail::run(SB_NET_SIGNAL_TICK, 0,
+      [&](uint32_t leaf, uint64_t, SbNetSignalReply& reply) {
+    switch (leaf) {
+    case SB_NET_SIGNAL_ENTER_RANGE: {
+      auto begin = m_pendingSignals.begin();
+      auto end = m_pendingSignals.end();
+      range.emplace(begin, end);
+      break;
+    }
+    case SB_NET_SIGNAL_MORE: reply.a = range->first != range->second; break;
+    case SB_NET_SIGNAL_DECREMENT_TIME: range->first->first -= dt; break;
+    case SB_NET_SIGNAL_ADVANCE: ++range->first; break;
+    case SB_NET_SIGNAL_LEAVE_RANGE: range.reset(); break;
+    case SB_NET_SIGNAL_NEXT_PENDING_READY:
+      reply.a = !m_pendingSignals.empty() && m_pendingSignals.first().first <= 0.0f;
+      break;
+    case SB_NET_SIGNAL_EMIT_PENDING_FRONT: send(m_pendingSignals.takeFirst().second); break;
+    default: throw std::logic_error("Invalid NetElementSignal tick leaf");
+    }
+  });
+#else
   for (auto& p : m_pendingSignals)
     p.first -= dt;
 
   while (!m_pendingSignals.empty() && m_pendingSignals.first().first <= 0.0f)
     send(m_pendingSignals.takeFirst().second);
+#endif
 }
 
 template <typename Signal>
@@ -133,6 +165,32 @@ template <typename Signal>
 void NetElementSignal<Signal>::readNetDelta(DataStream& ds, float interpolationTime, NetCompatibilityRules rules) {
   if (!checkWithRules(rules)) return;
   size_t numToRead = ds.readVlqU();
+#ifdef STAR_USE_RUST_NET_SIGNAL
+  NetSignalDetail::run(SB_NET_SIGNAL_READ, numToRead,
+      [&](uint32_t leaf, uint64_t, SbNetSignalReply&) {
+    if (leaf != SB_NET_SIGNAL_READ_ITEM_OP)
+      throw std::logic_error("Invalid NetElementSignal read leaf");
+    // The typed signal lives across its nested policy, but is destroyed before
+    // the outer controller advances, including on read/append/send failures.
+    Signal s;
+    ds.read(s);
+    NetSignalDetail::run(SB_NET_SIGNAL_READ_ITEM, 0,
+        [&](uint32_t itemLeaf, uint64_t, SbNetSignalReply& reply) {
+      switch (itemLeaf) {
+      case SB_NET_SIGNAL_INTERPOLATING:
+        reply.a = m_netInterpolationEnabled && interpolationTime > 0.0f;
+        break;
+      case SB_NET_SIGNAL_NEEDS_FLUSH:
+        reply.a = !m_pendingSignals.empty() && m_pendingSignals.last().first > interpolationTime;
+        break;
+      case SB_NET_SIGNAL_FLUSH_PENDING: flushPendingSignals(); break;
+      case SB_NET_SIGNAL_APPEND_PENDING: m_pendingSignals.append({interpolationTime, std::move(s)}); break;
+      case SB_NET_SIGNAL_EMIT_READ: send(std::move(s)); break;
+      default: throw std::logic_error("Invalid NetElementSignal read-item leaf");
+      }
+    });
+  });
+#else
   for (size_t i = 0; i < numToRead; ++i) {
     Signal s;
     ds.read(s);
@@ -146,8 +204,29 @@ void NetElementSignal<Signal>::readNetDelta(DataStream& ds, float interpolationT
       send(std::move(s));
     }
   }
+#endif
 }
 
+#ifdef STAR_USE_RUST_NET_SIGNAL
+template <typename Signal>
+void NetElementSignal<Signal>::flushPendingSignals() {
+  // Match the native range-for's owned take() temporary, not a borrowed queue.
+  // On a throwing send, all remaining taken signals die before the caller resumes.
+  auto&& pending = take(m_pendingSignals);
+  auto begin = pending.begin();
+  auto end = pending.end();
+  NetSignalDetail::run(SB_NET_SIGNAL_FLUSH, 0,
+      [&](uint32_t leaf, uint64_t, SbNetSignalReply& reply) {
+    switch (leaf) {
+    case SB_NET_SIGNAL_MORE: reply.a = begin != end; break;
+    case SB_NET_SIGNAL_EMIT_PENDING_MOVE: send(std::move(begin->second)); break;
+    case SB_NET_SIGNAL_ADVANCE: ++begin; break;
+    default: throw std::logic_error("Invalid NetElementSignal flush leaf");
+    }
+  });
+}
+
+#endif
 template <typename Signal>
 void NetElementSignal<Signal>::send(Signal signal) {
 #ifdef STAR_USE_RUST_NET_SIGNAL

@@ -23,6 +23,7 @@ struct SignalTrace {
   std::exception_ptr error = std::make_exception_ptr(DerivedSignalMarker{});
   int copyFailure = -999;
   int writeFailure = -999;
+  int readFailure = -999;
   int live = 0;
   std::function<void(int)> copied;
 
@@ -75,8 +76,11 @@ DataStream& operator>>(DataStream& stream, TrackedSignal& signal) {
   uint8_t value;
   stream >> value;
   signal.value = value;
-  if (TrackedSignal::trace)
+  if (TrackedSignal::trace) {
     TrackedSignal::trace->log("R" + std::to_string(signal.value));
+    if (TrackedSignal::trace->readFailure == signal.value)
+      TrackedSignal::trace->raise();
+  }
   return stream;
 }
 
@@ -388,7 +392,357 @@ TEST(NetSignalPolicy, RustCountersObserveNaturalRootsAndAttemptedLeaves) {
   // Kind 2 is all-thread ATTEMPTED leaves, not completed jobs or TLS roots.
   EXPECT_GT(sb_net_signal_count(2, SB_NET_SIGNAL_APPEND_SIGNAL), append);
   EXPECT_GT(sb_net_signal_count(2, SB_NET_SIGNAL_WRITE_HEADER), header);
-  EXPECT_EQ(sb_net_signal_count(0, 3), 0u);
+  EXPECT_EQ(sb_net_signal_count(0, SB_NET_SIGNAL_COUNT), 0u);
   EXPECT_EQ(sb_net_signal_count(2, SB_NET_SIGNAL_OP_COUNT), 0u);
 }
+TEST(NetSignalPolicy, RustCountersObserveReadFlushAndTickWithoutRustFloatingPoint) {
+  uint64_t before[4];
+  for (unsigned i = 0; i != 4; ++i)
+    before[i] = sb_net_signal_count(0, SB_NET_SIGNAL_READ + i);
+  auto decrement = sb_net_signal_count(2, SB_NET_SIGNAL_DECREMENT_TIME);
+  DataStreamBuffer wire;
+  wire.writeVlqU(1);
+  wire.write(17);
+  wire.seek(0);
+  NetElementSignal<int> signal;
+  signal.enableNetInterpolation();
+  signal.readNetDelta(wire, 0.5f);
+  signal.tickNetInterpolation(0.25f);
+  signal.disableNetInterpolation();
+  EXPECT_EQ(signal.receive(), List<int>({17}));
+  for (unsigned i = 0; i != 4; ++i)
+    EXPECT_EQ(sb_net_signal_count(0, SB_NET_SIGNAL_READ + i) - before[i], 1u);
+  EXPECT_EQ(sb_net_signal_count(2, SB_NET_SIGNAL_DECREMENT_TIME) - decrement, 1u);
+}
 #endif
+
+namespace {
+// Keep fixture serialization (and its temporary lifetimes) out of the receive
+// trace. Failure injection belongs to the read/queue operation, not setup.
+void enqueueSignalWire(DataStreamBuffer& wire, List<int> const& values) {
+  SignalTrace setup;
+  {
+    SignalTracing writing(setup);
+    wire.clear();
+    wire.writeVlqU(values.size());
+    for (int value : values)
+      wire.write(TrackedSignal(value));
+    wire.seek(0);
+  }
+  EXPECT_EQ(setup.live, 0);
+}
+}
+
+TEST(NetSignalPolicy, ReadDelayRequiresEnabledInterpolationAndPositiveTime) {
+  SignalTrace trace;
+  SignalTracing tracing(trace);
+  {
+    NetElementSignal<TrackedSignal> signal;
+    DataStreamBuffer wire;
+    enqueueSignalWire(wire, {11});
+    signal.readNetDelta(wire, 1.0f); // Disabled: immediate despite positive time.
+    EXPECT_TRUE(wire.atEnd());
+    EXPECT_EQ(signalValues(signal.receive()), List<int>({11}));
+    signal.enableNetInterpolation(-7.0f); // The finite hint does not gate reads.
+    for (float delay : {0.0f, -0.25f}) {
+      enqueueSignalWire(wire, {22});
+      signal.readNetDelta(wire, delay);
+      EXPECT_EQ(signalValues(signal.receive()), List<int>({22}));
+    }
+    enqueueSignalWire(wire, {33, 44});
+    signal.readNetDelta(wire, 0.5f);
+    trace.log("delayed-read-return");
+    EXPECT_TRUE(wire.atEnd());
+    EXPECT_TRUE(signal.receive().empty());
+    signal.tickNetInterpolation(0.25f);
+    EXPECT_TRUE(signal.receive().empty());
+    signal.tickNetInterpolation(0.25f);
+    EXPECT_EQ(signalValues(signal.receive()), List<int>({33, 44}));
+  }
+  EXPECT_EQ(trace.live, 0);
+  trace.emit("read-delay-branches");
+}
+
+TEST(NetSignalPolicy, TickNegativeEqualAndGreaterStepsKeepFrontFifoOrder) {
+  SignalTrace trace;
+  SignalTracing tracing(trace);
+  {
+    NetElementSignal<TrackedSignal> signal;
+    signal.enableNetInterpolation();
+    DataStreamBuffer wire;
+    enqueueSignalWire(wire, {33, 11});
+    signal.readNetDelta(wire, 0.5f);
+    enqueueSignalWire(wire, {22});
+    signal.readNetDelta(wire, 1.0f);
+    trace.log("before-negative");
+    signal.tickNetInterpolation(-0.25f);
+    signal.tickNetInterpolation(0.5f);
+    EXPECT_TRUE(signal.receive().empty());
+    trace.log("before-equal");
+    signal.tickNetInterpolation(0.25f);
+    EXPECT_EQ(signalValues(signal.receive()), List<int>({33, 11}));
+    trace.log("before-greater");
+    signal.tickNetInterpolation(1.0f);
+    EXPECT_EQ(signalValues(signal.receive()), List<int>({22}));
+    signal.tickNetInterpolation(0.0f);
+    EXPECT_TRUE(signal.receive().empty());
+
+    // A native Signal copy hook can enqueue during an owned flush: the
+    // original incoming signal is appended AFTER that hook's pending entry.
+    // This makes genuinely out-of-time-order pending entries through public
+    // operations, so a due tail cannot be mistaken for a sorted timer queue.
+    signal.initNetVersion();
+    enqueueSignalWire(wire, {55});
+    signal.readNetDelta(wire, 1.0f);
+    bool injected = false;
+    trace.copied = [&](int value) {
+      if (value == 55 && !injected) {
+        injected = true;
+        trace.log("enqueue-from-copy");
+        DataStreamBuffer nested;
+        enqueueSignalWire(nested, {44});
+        signal.readNetDelta(nested, 1.0f);
+      }
+    };
+    enqueueSignalWire(wire, {33});
+    signal.readNetDelta(wire, 0.5f);
+    trace.copied = {};
+    EXPECT_TRUE(injected);
+    EXPECT_EQ(signalValues(signal.receive()), List<int>({55}));
+    signal.tickNetInterpolation(0.5f);
+    EXPECT_TRUE(signal.receive().empty()); // 33 is due, but 44 at the front isn't.
+    signal.tickNetInterpolation(0.5f);
+    EXPECT_EQ(signalValues(signal.receive()), List<int>({44, 33}));
+  }
+  EXPECT_EQ(trace.live, 0);
+  trace.emit("tick-finite-front-fifo");
+}
+
+TEST(NetSignalPolicy, SmallerDelayFlushesOldPendingBeforeAppendingNewSignal) {
+  SignalTrace trace;
+  SignalTracing tracing(trace);
+  {
+    NetElementSignal<TrackedSignal> signal;
+    signal.enableNetInterpolation();
+    DataStreamBuffer wire;
+    enqueueSignalWire(wire, {11, 22});
+    signal.readNetDelta(wire, 1.0f);
+    trace.events.clear(); // Both pending objects stay alive across this boundary.
+    enqueueSignalWire(wire, {33});
+    signal.readNetDelta(wire, 0.5f);
+    trace.log("smaller-read-return");
+    EXPECT_EQ(signalValues(signal.receive()), List<int>({11, 22}));
+    EXPECT_LT(trace.events.find("R33,"), trace.events.find("C11,"));
+    EXPECT_LT(trace.events.find("C22,"), trace.events.find("M33,"));
+    signal.tickNetInterpolation(0.25f);
+    EXPECT_TRUE(signal.receive().empty());
+    signal.tickNetInterpolation(0.25f);
+    EXPECT_EQ(signalValues(signal.receive()), List<int>({33}));
+  }
+  EXPECT_EQ(trace.live, 0);
+  trace.emit("read-smaller-flush-before-append");
+}
+
+TEST(NetSignalPolicy, EqualDelayDoesNotFlushPendingOrExposeSignalsEarly) {
+  SignalTrace trace;
+  SignalTracing tracing(trace);
+  {
+    NetElementSignal<TrackedSignal> signal;
+    signal.enableNetInterpolation();
+    DataStreamBuffer wire;
+    enqueueSignalWire(wire, {22});
+    signal.readNetDelta(wire, 0.5f);
+    enqueueSignalWire(wire, {11});
+    signal.readNetDelta(wire, 0.5f);
+    trace.log("equal-read-return");
+    EXPECT_TRUE(signal.receive().empty());
+    signal.tickNetInterpolation(0.5f);
+    EXPECT_EQ(signalValues(signal.receive()), List<int>({22, 11}));
+  }
+  EXPECT_EQ(trace.live, 0);
+  trace.emit("read-equal-no-flush");
+}
+
+TEST(NetSignalPolicy, DisableFailureDestroysOwnedRemainderAndLeavesInterpolationDisabled) {
+  SignalTrace trace;
+  SignalTracing tracing(trace);
+  {
+    NetElementSignal<TrackedSignal> signal;
+    signal.enableNetInterpolation();
+    DataStreamBuffer wire;
+    enqueueSignalWire(wire, {11, 22, 33});
+    signal.readNetDelta(wire, 1.0f);
+    trace.events.clear();
+    trace.copyFailure = 22;
+    signalFailure(trace, [&] { signal.disableNetInterpolation(); });
+    // The successful prefix remains in m_signals. The whole taken deque,
+    // including 33, has died; it is not an incrementally popped source queue.
+    EXPECT_EQ(trace.live, 1);
+    EXPECT_NE(trace.events.find("D33,"), std::string::npos);
+    EXPECT_EQ(trace.events.find("C33,"), std::string::npos);
+    trace.copyFailure = -999;
+    EXPECT_EQ(signalValues(signal.receive()), List<int>({11}));
+    enqueueSignalWire(wire, {44});
+    signal.readNetDelta(wire, 1.0f);
+    EXPECT_EQ(signalValues(signal.receive()), List<int>({44}));
+    signal.enableNetInterpolation();
+    signal.tickNetInterpolation(1.0f);
+    signal.disableNetInterpolation();
+    EXPECT_TRUE(signal.receive().empty());
+  }
+  EXPECT_EQ(trace.live, 0);
+  trace.emit("disable-owned-flush-failure");
+}
+
+TEST(NetSignalPolicy, SmallerDelayFlushFailureConsumesIncomingButDoesNotAppendIt) {
+  SignalTrace trace;
+  SignalTracing tracing(trace);
+  {
+    NetElementSignal<TrackedSignal> signal;
+    signal.enableNetInterpolation();
+    DataStreamBuffer wire;
+    enqueueSignalWire(wire, {11, 22, 33});
+    signal.readNetDelta(wire, 1.0f);
+    enqueueSignalWire(wire, {44});
+    trace.events.clear();
+    trace.copyFailure = 22;
+    signalFailure(trace, [&] { signal.readNetDelta(wire, 0.5f); });
+    EXPECT_TRUE(wire.atEnd());
+    EXPECT_EQ(trace.live, 1);
+    EXPECT_NE(trace.events.find("R44,"), std::string::npos);
+    EXPECT_NE(trace.events.find("D44,"), std::string::npos);
+    EXPECT_NE(trace.events.find("D33,"), std::string::npos);
+    EXPECT_EQ(trace.events.find("M44,"), std::string::npos);
+    trace.copyFailure = -999;
+    EXPECT_EQ(signalValues(signal.receive()), List<int>({11}));
+    signal.tickNetInterpolation(1.0f);
+    EXPECT_TRUE(signal.receive().empty());
+    // A flush during read does not disable interpolation, even when it throws.
+    enqueueSignalWire(wire, {55});
+    signal.readNetDelta(wire, 0.25f);
+    EXPECT_TRUE(signal.receive().empty());
+    signal.tickNetInterpolation(0.25f);
+    EXPECT_EQ(signalValues(signal.receive()), List<int>({55}));
+  }
+  EXPECT_EQ(trace.live, 0);
+  trace.emit("read-owned-flush-failure");
+}
+
+TEST(NetSignalPolicy, TickFailureLosesPoppedSignalButKeepsLaterAlreadyDecrementedTimers) {
+  SignalTrace trace;
+  SignalTracing tracing(trace);
+  {
+    NetElementSignal<TrackedSignal> signal;
+    signal.enableNetInterpolation();
+    DataStreamBuffer wire;
+    enqueueSignalWire(wire, {11});
+    signal.readNetDelta(wire, 0.25f);
+    enqueueSignalWire(wire, {22});
+    signal.readNetDelta(wire, 0.5f);
+    enqueueSignalWire(wire, {33});
+    signal.readNetDelta(wire, 1.0f);
+    trace.events.clear();
+    trace.copyFailure = 22;
+    signalFailure(trace, [&] { signal.tickNetInterpolation(0.5f); });
+    EXPECT_EQ(trace.live, 2); // Sent 11 and pending 33; popped 22 is gone.
+    EXPECT_NE(trace.events.find("C22,"), std::string::npos);
+    EXPECT_EQ(trace.events.find("C33,"), std::string::npos);
+    trace.copyFailure = -999;
+    EXPECT_EQ(signalValues(signal.receive()), List<int>({11}));
+    signal.tickNetInterpolation(0.0f);
+    EXPECT_TRUE(signal.receive().empty());
+    signal.tickNetInterpolation(0.5f);
+    // 33's timer was decremented before the earlier send threw, not lazily
+    // when 33 reached the front. Equal-to-zero is due, not strictly negative.
+    EXPECT_EQ(signalValues(signal.receive()), List<int>({33}));
+    signal.disableNetInterpolation();
+    EXPECT_TRUE(signal.receive().empty());
+  }
+  EXPECT_EQ(trace.live, 0);
+  trace.emit("tick-pop-prvalue-copy-failure");
+}
+
+TEST(NetSignalPolicy, DeserializationFailureKeepsConsumedPrefixAndDestroysLocalSignal) {
+  SignalTrace trace;
+  SignalTracing tracing(trace);
+  {
+    NetElementSignal<TrackedSignal> signal;
+    DataStreamBuffer wire;
+    enqueueSignalWire(wire, {11, 22, 33});
+    trace.readFailure = 22;
+    signalFailure(trace, [&] { signal.readNetDelta(wire, 0.5f); });
+    EXPECT_EQ(wire.pos(), 3u); // One count byte, successful 11, failing 22.
+    EXPECT_EQ(wire.size(), 4u);
+    EXPECT_EQ(trace.live, 1);
+    EXPECT_NE(trace.events.find("N0,R22,D22,caught,"), std::string::npos);
+    EXPECT_EQ(signalValues(signal.receive()), List<int>({11}));
+    trace.readFailure = -999;
+    // The old count is not restartable. Explicitly frame the remaining byte
+    // with count 1, consuming it from the original stream without rewinding.
+    DataStreamBuffer remaining;
+    remaining.writeVlqU(1);
+    remaining << wire.read<uint8_t>();
+    EXPECT_TRUE(wire.atEnd());
+    remaining.seek(0);
+    signal.readNetDelta(remaining, 0.5f);
+    EXPECT_TRUE(remaining.atEnd());
+    EXPECT_EQ(signalValues(signal.receive()), List<int>({33}));
+    signalBytes("read-failure-consumed-wire", wire);
+
+    // A separate failure in send's named-parameter copy happens AFTER read
+    // and the move into send, not during deserialization or caller setup.
+    signal.initNetVersion();
+    enqueueSignalWire(wire, {44, 55});
+    trace.copyFailure = 44;
+    trace.log("before-immediate-send-failure");
+    signalFailure(trace, [&] { signal.readNetDelta(wire, 0.5f); });
+    EXPECT_EQ(wire.pos(), 2u);
+    EXPECT_EQ(wire.size(), 3u);
+    EXPECT_EQ(trace.live, 0);
+    trace.copyFailure = -999;
+    remaining.clear();
+    remaining.writeVlqU(1);
+    remaining << wire.read<uint8_t>();
+    remaining.seek(0);
+    signal.readNetDelta(remaining, 0.5f);
+    EXPECT_TRUE(wire.atEnd());
+    EXPECT_TRUE(remaining.atEnd());
+    EXPECT_EQ(signalValues(signal.receive()), List<int>({55}));
+  }
+  EXPECT_EQ(trace.live, 0);
+  trace.emit("deserialize-byte-failure-resume");
+}
+
+TEST(NetSignalPolicy, VersionResetPreservesPendingAndStoreLoadAreNoopsIncludingZeroCapacity) {
+  for (size_t capacity : {size_t(0), size_t(3)}) {
+    SignalTrace trace;
+    SignalTracing tracing(trace);
+    {
+      NetElementSignal<TrackedSignal> signal(capacity);
+      signal.send(TrackedSignal(11));
+      signal.enableNetInterpolation(7.0f);
+      DataStreamBuffer wire;
+      enqueueSignalWire(wire, {22, 33});
+      signal.readNetDelta(wire, 0.5f);
+      signal.initNetVersion(); // Clears the sent queue ONLY.
+      EXPECT_TRUE(signal.receive().empty());
+      EXPECT_EQ(trace.live, 2);
+      DataStreamBuffer unused;
+      unused << uint8_t(77);
+      unused.seek(0);
+      signal.netStore(unused);
+      signal.netLoad(unused, {});
+      EXPECT_EQ(unused.pos(), 0u);
+      EXPECT_EQ(unused.size(), 1u);
+      EXPECT_EQ(static_cast<unsigned char>(unused.ptr()[0]), 77u);
+      EXPECT_EQ(trace.live, 2);
+      signal.tickNetInterpolation(0.5f);
+      EXPECT_EQ(signalValues(signal.receive()), capacity ? List<int>({22, 33}) : List<int>());
+      EXPECT_EQ(trace.live, capacity ? 2 : 0);
+      signal.disableNetInterpolation();
+      EXPECT_TRUE(signal.receive().empty());
+    }
+    EXPECT_EQ(trace.live, 0);
+    trace.emit(capacity ? "reset-pending-noop-store-load" : "pending-zero-capacity");
+  }
+}
